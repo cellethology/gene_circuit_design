@@ -26,6 +26,12 @@ from utils.sequence_utils import (
     trim_sequences_to_length
 )
 
+from utils.metrics import (
+    top_10_ratio_intersection_metric,
+    get_best_value_metric,
+    normalized_to_best_val_metric
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +102,7 @@ class ActiveLearningExperiment:
         # Model and results
         self.model = LinearRegression()
         self.results: List[Dict[str, Any]] = []
+        self.custom_metrics: List[Dict[str, Any]] = []
 
         # Load and prepare data
         self._load_and_prepare_data(trim_sequences=self.trim_sequences)
@@ -108,7 +115,7 @@ class ActiveLearningExperiment:
 
         # Check if this is the combined dataset with log likelihood or the original expression-only dataset
         df = pd.read_csv(self.data_path)
-        
+
         if 'Log_Likelihood' in df.columns:
             # Combined dataset with log likelihood
             sequences = df['Sequence'].tolist()
@@ -273,7 +280,7 @@ class ActiveLearningExperiment:
 
         # Get log likelihood values for unlabeled sequences
         unlabeled_log_likelihoods = self.all_log_likelihoods[self.unlabeled_indices]
-        
+
         # Filter out NaN values
         valid_mask = ~np.isnan(unlabeled_log_likelihoods)
         valid_unlabeled_indices = [self.unlabeled_indices[i] for i in range(len(self.unlabeled_indices)) if valid_mask[i]]
@@ -319,6 +326,35 @@ class ActiveLearningExperiment:
         else:
             raise ValueError(f"Unknown selection strategy: {self.selection_strategy}")
 
+    def _intermediate_evaluation_custom_metrics(self, next_batch: List[int]) -> None:
+        """
+        Evaluate the model on the test set and store the results.
+        """
+        # Get predictions for the next batch
+        X_next_batch = self._encode_sequences(next_batch)
+        y_pred = self.model.predict(X_next_batch)
+
+        # Custom metrics
+        top_10_ratio_intersection_pred = top_10_ratio_intersection_metric(y_pred, self.all_expressions)
+        best_value_pred = get_best_value_metric(y_pred)
+        normalized_predictions_pred = normalized_to_best_val_metric(y_pred, self.all_expressions)
+
+        # Get true values for the next batch
+        y_true = self.all_expressions[next_batch]
+        top_10_ratio_intersection_true = top_10_ratio_intersection_metric(y_true, self.all_expressions)
+        best_value_true = get_best_value_metric(y_true)
+        normalized_predictions_true = normalized_to_best_val_metric(y_true, self.all_expressions)
+
+        # Store custom metrics
+        self.custom_metrics.append({
+            'top_10_ratio_intersection_pred': top_10_ratio_intersection_pred,
+            'best_value_pred': best_value_pred,
+            'normalized_predictions_pred': normalized_predictions_pred,
+            'top_10_ratio_intersection_true': top_10_ratio_intersection_true,
+            'best_value_true': best_value_true,
+            'normalized_predictions_true': normalized_predictions_true
+        })
+
     def run_experiment(self, max_rounds: int = 20) -> List[Dict[str, Any]]:
         """
         Run the active learning experiment.
@@ -362,9 +398,13 @@ class ActiveLearningExperiment:
                 logger.info("No more sequences to select. Stopping.")
                 break
 
+            # Evaluate custom metrics
+            self._intermediate_evaluation_custom_metrics(next_batch)
+            logger.info(f"Custom metrics: {self.custom_metrics} evaluated")
+
             # Update training set
             self.train_indices.extend(next_batch)
-            self.unlabeled_indices = [idx for idx in self.unlabeled_indices 
+            self.unlabeled_indices = [idx for idx in self.unlabeled_indices
                                     if idx not in next_batch]
 
             logger.info(f"Added {len(next_batch)} sequences to training set")
@@ -383,6 +423,23 @@ class ActiveLearningExperiment:
         results_df.to_csv(output_path, index=False)
         logger.info(f"Results saved to {output_path}")
 
+        # Save custom metrics if available
+        if self.custom_metrics:
+            custom_metrics_path = output_path.replace('.csv', '_custom_metrics.csv')
+            custom_metrics_df = pd.DataFrame(self.custom_metrics)
+
+            # Add metadata columns to match with main results
+            custom_metrics_df['strategy'] = self.selection_strategy.value
+            custom_metrics_df['seed'] = self.random_seed
+            custom_metrics_df['round'] = range(1, len(self.custom_metrics) + 1)
+
+            # Reorder columns to put metadata first
+            cols = ['round', 'strategy', 'seed'] + [col for col in custom_metrics_df.columns if col not in ['round', 'strategy', 'seed']]
+            custom_metrics_df = custom_metrics_df[cols]
+
+            custom_metrics_df.to_csv(custom_metrics_path, index=False)
+            logger.info(f"Custom metrics saved to {custom_metrics_path}")
+
     def get_final_performance(self) -> Dict[str, float]:
         """
         Get final performance metrics.
@@ -393,7 +450,7 @@ class ActiveLearningExperiment:
         if not self.results:
             return {}
 
-        return {k: v for k, v in self.results[-1].items() 
+        return {k: v for k, v in self.results[-1].items()
                 if k not in ['round', 'strategy', 'seed', 'train_size', 'unlabeled_size']}
 
 
@@ -424,6 +481,7 @@ def run_controlled_experiment(
         Dictionary mapping strategy names to their results across all seeds
     """
     all_results = {}
+    all_custom_metrics = {}  # Add storage for custom metrics
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -433,6 +491,7 @@ def run_controlled_experiment(
     # Initialize results storage
     for strategy in strategies:
         all_results[strategy.value] = []
+        all_custom_metrics[strategy.value] = []  # Initialize custom metrics storage
 
     # Create progress bar for total experiments
     total_experiments = len(strategies) * len(seeds)
@@ -460,7 +519,19 @@ def run_controlled_experiment(
                 results = experiment.run_experiment(max_rounds=max_rounds)
                 all_results[strategy.value].extend(results)
 
-                # Save individual seed results
+                # Collect custom metrics
+                if experiment.custom_metrics:
+                    # Add metadata to custom metrics
+                    for i, metrics in enumerate(experiment.custom_metrics):
+                        metrics_with_metadata = {
+                            'round': i + 1,
+                            'strategy': strategy.value,
+                            'seed': seed,
+                            **metrics
+                        }
+                        all_custom_metrics[strategy.value].append(metrics_with_metadata)
+
+                # Save individual seed results (this now also saves custom metrics)
                 seed_output_path = output_path / f"{strategy.value}_seed_{seed}_results.csv"
                 experiment.save_results(str(seed_output_path))
 
@@ -479,6 +550,14 @@ def run_controlled_experiment(
         strategy_df.to_csv(strategy_output_path, index=False)
         logger.info(f"Combined {strategy} results saved to {strategy_output_path}")
 
+    # Save combined custom metrics for each strategy
+    for strategy, custom_metrics in all_custom_metrics.items():
+        if custom_metrics:  # Only save if custom metrics exist
+            custom_metrics_df = pd.DataFrame(custom_metrics)
+            custom_metrics_output_path = output_path / f"{strategy}_all_seeds_custom_metrics.csv"
+            custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
+            logger.info(f"Combined {strategy} custom metrics saved to {custom_metrics_output_path}")
+
     # Create overall combined results file
     combined_results = []
     for strategy, results in all_results.items():
@@ -488,6 +567,17 @@ def run_controlled_experiment(
     combined_output_path = output_path / "combined_all_results.csv"
     combined_df.to_csv(combined_output_path, index=False)
     logger.info(f"All combined results saved to {combined_output_path}")
+
+    # Create overall combined custom metrics file
+    combined_custom_metrics = []
+    for strategy, custom_metrics in all_custom_metrics.items():
+        combined_custom_metrics.extend(custom_metrics)
+
+    if combined_custom_metrics:  # Only save if there are custom metrics
+        combined_custom_metrics_df = pd.DataFrame(combined_custom_metrics)
+        combined_custom_metrics_output_path = output_path / "combined_all_custom_metrics.csv"
+        combined_custom_metrics_df.to_csv(combined_custom_metrics_output_path, index=False)
+        logger.info(f"All combined custom metrics saved to {combined_custom_metrics_output_path}")
 
     return all_results
 
