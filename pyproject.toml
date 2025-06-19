@@ -93,5 +93,6 @@ dev = [
     "matplotlib>=3.7.5",
     "safetensors>=0.5.3",
     "seaborn>=0.13.2",
+    "torch>=2.5.1",
     "tqdm>=4.67.1",
 ]
