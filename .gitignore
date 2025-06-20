@@ -83,3 +83,5 @@ site/
 .env.development.local
 .env.test.local
 .env.production.local
+run_experiments.py
+setting.json

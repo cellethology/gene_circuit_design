@@ -14,10 +14,10 @@ from tqdm import tqdm  # noqa: I001
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Lasso, LinearRegression
 from sklearn.metrics import root_mean_squared_error, r2_score
 from scipy.stats import pearsonr, spearmanr
-
+from safetensors.torch import load_file
 from utils.sequence_utils import (
     load_sequence_data,
     one_hot_encode_sequences,
@@ -27,16 +27,23 @@ from utils.sequence_utils import (
 )
 
 from utils.metrics import (
-    top_10_ratio_intersection_metric,
+    top_10_ratio_intersected_indices_metric,
     get_best_value_metric,
     normalized_to_best_val_metric
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+# Create a file handler
+log_path = Path("logs") / "experiment.log"
+log_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
+file_handler = logging.FileHandler(log_path, mode='w')  # 'a' to append instead of overwrite
+file_handler.setLevel(logging.INFO)
+
+# Optional: set formatter for file logs
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+
+# Add the handler to the root logger
+logging.getLogger().addHandler(file_handler)
 logger = logging.getLogger(__name__)
 
 
@@ -95,12 +102,13 @@ class ActiveLearningExperiment:
         self.all_sequences: List[str] = []
         self.all_expressions: np.ndarray = np.array([])
         self.all_log_likelihoods: np.ndarray = np.array([])  # Add log likelihood storage
+        self.embeddings: np.ndarray = None  # Add embeddings storage
         self.train_indices: List[int] = []
         self.test_indices: List[int] = []
         self.unlabeled_indices: List[int] = []
 
         # Model and results
-        self.model = LinearRegression()
+        self.model = Lasso(random_state=random_seed)
         self.results: List[Dict[str, Any]] = []
         self.custom_metrics: List[Dict[str, Any]] = []
 
@@ -113,24 +121,55 @@ class ActiveLearningExperiment:
         """Load data and create train/test/unlabeled splits."""
         logger.info(f"Loading data from {self.data_path}")
 
-        # Check if this is the combined dataset with log likelihood or the original expression-only dataset
-        df = pd.read_csv(self.data_path)
+        # Check if this is a safetensors file or CSV file
+        if self.data_path.endswith('.safetensors'):
+            # Load from safetensors file
+            tensors = load_file(self.data_path)
+            self.embeddings = tensors["embeddings"].float().numpy()  # Convert to float32 then numpy
+            self.all_expressions = tensors["expressions"].float().numpy()  # Convert to float32 then numpy
+            self.all_log_likelihoods = tensors["log_likelihoods"].float().numpy()  # Convert to float32 then numpy
+            sequences = tensors["sequences"]
 
-        if 'Log_Likelihood' in df.columns:
-            # Combined dataset with log likelihood
-            sequences = df['Sequence'].tolist()
-            if trim_sequences:
-                sequences = trim_sequences_to_length(sequences)
-                logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-            self.all_sequences = sequences
-            self.all_expressions = df['Expression'].values
-            self.all_log_likelihoods = df['Log_Likelihood'].values
-            logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
+            # Convert sequences to list of strings
+            if hasattr(sequences, 'numpy'):
+                # If it's a torch tensor, convert to numpy first
+                sequences_np = sequences.numpy()
+            else:
+                sequences_np = sequences
+
+            # Handle different sequence formats
+            if sequences_np.dtype.kind in ['S', 'U']:  # String or Unicode
+                self.all_sequences = [seq.decode('utf-8') if isinstance(seq, bytes) else str(seq) for seq in sequences_np]
+            elif sequences_np.dtype == object:  # Object array (might contain strings)
+                self.all_sequences = [str(seq) for seq in sequences_np]
+            else:
+                # Try to convert each element to string
+                self.all_sequences = [str(seq) for seq in sequences_np]
+
+            logger.info(f"Loaded safetensors dataset with {len(self.all_sequences)} sequences")
+            logger.info(f"Embeddings shape: {self.embeddings.shape}")
         else:
-            # Original expression-only dataset
-            self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, trim_sequences=trim_sequences)
-            self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
-            logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
+            # Load from CSV file (existing logic)
+            df = pd.read_csv(self.data_path)
+
+            if 'Log_Likelihood' in df.columns:
+                # Combined dataset with log likelihood
+                sequences = df['Sequence'].tolist()
+                if trim_sequences:
+                    sequences = trim_sequences_to_length(sequences)
+                    logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+                self.all_sequences = sequences
+                self.all_expressions = df['Expression'].values
+                self.all_log_likelihoods = df['Log_Likelihood'].values
+                logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
+            else:
+                # Original expression-only dataset
+                self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, trim_sequences=trim_sequences)
+                self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
+                logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
+
+            # For CSV files, embeddings will be None (will be computed via one-hot encoding)
+            self.embeddings = None
 
         total_samples = len(self.all_sequences)
 
@@ -161,17 +200,22 @@ class ActiveLearningExperiment:
 
     def _encode_sequences(self, indices: List[int]) -> np.ndarray:
         """
-        One-hot encode sequences at given indices.
+        Encode sequences at given indices using pre-computed embeddings or one-hot encoding.
 
         Args:
             indices: List of sequence indices to encode
 
         Returns:
-            Flattened one-hot encoded sequences
+            Encoded sequences (either pre-computed embeddings or flattened one-hot encoded sequences)
         """
-        sequences = [self.all_sequences[i] for i in indices]
-        encoded = one_hot_encode_sequences(sequences)
-        return flatten_one_hot_sequences(encoded)
+        if self.embeddings is not None:
+            # Use pre-computed embeddings from safetensors file
+            return self.embeddings[indices]
+        else:
+            # Fall back to one-hot encoding for CSV files
+            sequences = [self.all_sequences[i] for i in indices]
+            encoded = one_hot_encode_sequences(sequences)
+            return flatten_one_hot_sequences(encoded)
 
     def _train_model(self) -> None:
         """Train the linear regression model on current training data."""
@@ -335,27 +379,26 @@ class ActiveLearningExperiment:
         y_pred = self.model.predict(X_next_batch)
 
         # Custom metrics
-        top_10_ratio_intersection_pred = top_10_ratio_intersection_metric(y_pred, self.all_expressions)
+        top_10_ratio_intersection_pred = top_10_ratio_intersected_indices_metric(next_batch, self.all_expressions)
         best_value_pred = get_best_value_metric(y_pred)
         normalized_predictions_pred = normalized_to_best_val_metric(y_pred, self.all_expressions)
 
         # Get true values for the next batch
         y_true = self.all_expressions[next_batch]
-        top_10_ratio_intersection_true = top_10_ratio_intersection_metric(y_true, self.all_expressions)
+        # top_10_ratio_intersection_true = top_10_ratio_intersected_indices_metric(next_batch, self.all_expressions)
         best_value_true = get_best_value_metric(y_true)
         normalized_predictions_true = normalized_to_best_val_metric(y_true, self.all_expressions)
 
         # Store custom metrics
         self.custom_metrics.append({
-            'top_10_ratio_intersection_pred': top_10_ratio_intersection_pred,
-            'best_value_pred': best_value_pred,
-            'normalized_predictions_pred': normalized_predictions_pred,
-            'top_10_ratio_intersection_true': top_10_ratio_intersection_true,
-            'best_value_true': best_value_true,
-            'normalized_predictions_true': normalized_predictions_true
+            'top_10_ratio_intersected_indices': top_10_ratio_intersection_pred,
+            'best_value_predictions_values': best_value_pred,
+            'normalized_predictions_predictions_values': normalized_predictions_pred,
+            'best_value_ground_truth_values': best_value_true,
+            'normalized_predictions_ground_truth_values': normalized_predictions_true
         })
 
-    def run_experiment(self, max_rounds: int = 20) -> List[Dict[str, Any]]:
+    def run_experiment(self, max_rounds: int = 30) -> List[Dict[str, Any]]:
         """
         Run the active learning experiment.
 
@@ -386,6 +429,11 @@ class ActiveLearningExperiment:
                 **metrics
             }
             self.results.append(round_results)
+
+            # first round custom_evaluation
+            # NOTE: double check
+            if round_num == 0:
+                self._intermediate_evaluation_custom_metrics(self.train_indices)
 
             # Check stopping criteria
             if len(self.unlabeled_indices) == 0:
@@ -432,9 +480,10 @@ class ActiveLearningExperiment:
             custom_metrics_df['strategy'] = self.selection_strategy.value
             custom_metrics_df['seed'] = self.random_seed
             custom_metrics_df['round'] = range(1, len(self.custom_metrics) + 1)
+            custom_metrics_df['train_size'] = len(self.train_indices)
 
             # Reorder columns to put metadata first
-            cols = ['round', 'strategy', 'seed'] + [col for col in custom_metrics_df.columns if col not in ['round', 'strategy', 'seed']]
+            cols = ['round', 'strategy', 'seed', 'train_size'] + [col for col in custom_metrics_df.columns if col not in ['round', 'strategy', 'seed', 'train_size']]
             custom_metrics_df = custom_metrics_df[cols]
 
             custom_metrics_df.to_csv(custom_metrics_path, index=False)
@@ -523,10 +572,15 @@ def run_controlled_experiment(
                 if experiment.custom_metrics:
                     # Add metadata to custom metrics
                     for i, metrics in enumerate(experiment.custom_metrics):
+                        # Calculate train_size for this round
+                        # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
+                        train_size_for_round = initial_sample_size + ((i + 1) * batch_size)
+
                         metrics_with_metadata = {
                             'round': i + 1,
                             'strategy': strategy.value,
                             'seed': seed,
+                            'train_size': train_size_for_round,
                             **metrics
                         }
                         all_custom_metrics[strategy.value].append(metrics_with_metadata)
@@ -677,6 +731,28 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
 def main() -> None:
     """Main function to run controlled active learning experiments with multiple seeds."""
     # Configuration
+    # config = {
+    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.csv',
+    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
+    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
+    #     'initial_sample_size': 8,
+    #     'batch_size': 8,
+    #     'test_size': 50,
+    #     'max_rounds': 20,
+    #     'output_dir': 'results_all_strategies'
+    # }
+
+    # config = {
+    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
+    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
+    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
+    #     'initial_sample_size': 8,
+    #     'batch_size': 8,
+    #     'test_size': 50,
+    #     'max_rounds': 20,
+    #     'output_dir': 'results_all_strategies_evo2_embeddings'
+    # }
+
     config = {
         'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
         'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
@@ -685,8 +761,9 @@ def main() -> None:
         'batch_size': 8,
         'test_size': 50,
         'max_rounds': 20,
-        'output_dir': 'results_all_strategies'
+        'output_dir': 'results_all_strategies_ori_log_likelihood'
     }
+
 
     logger.info("Starting Multi-Seed Controlled Active Learning Experiments with Log Likelihood Strategy")
     logger.info(f"Configuration: {config}")
