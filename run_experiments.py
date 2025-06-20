@@ -7,6 +7,7 @@ from DNA sequences using linear regression with one-hot encoded features.
 
 import logging
 import random
+from collections import defaultdict
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
@@ -25,10 +26,12 @@ from utils.metrics import (
     top_10_ratio_intersected_indices_metric,
 )
 from utils.sequence_utils import (
+    SequenceModificationMethod,
     calculate_sequence_statistics,
     flatten_one_hot_sequences,
     load_sequence_data,
     one_hot_encode_sequences,
+    pad_sequences_to_length,
     trim_sequences_to_length,
 )
 
@@ -72,7 +75,7 @@ class ActiveLearningExperiment:
         batch_size: int = 8,
         test_size: int = 50,
         random_seed: int = 42,
-        trim_sequences: bool = True
+        seq_mod_method: str = "trim"
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -92,7 +95,7 @@ class ActiveLearningExperiment:
         self.batch_size = batch_size
         self.test_size = test_size
         self.random_seed = random_seed
-        self.trim_sequences = trim_sequences
+        self.seq_mod_method = seq_mod_method
 
         # Set random seeds for reproducibility
         random.seed(random_seed)
@@ -113,11 +116,11 @@ class ActiveLearningExperiment:
         self.custom_metrics: List[Dict[str, Any]] = []
 
         # Load and prepare data
-        self._load_and_prepare_data(trim_sequences=self.trim_sequences)
+        self._load_and_prepare_data(seq_mod_method=self.seq_mod_method)
 
         logger.info(f"Experiment initialized with {self.selection_strategy.value} selection strategy (seed={random_seed})")
 
-    def _load_and_prepare_data(self, trim_sequences: bool = True) -> None:
+    def _load_and_prepare_data(self, seq_mod_method: str = "trim") -> None:
         """Load data and create train/test/unlabeled splits."""
         logger.info(f"Loading data from {self.data_path}")
 
@@ -155,16 +158,19 @@ class ActiveLearningExperiment:
             if 'Log_Likelihood' in df.columns:
                 # Combined dataset with log likelihood
                 sequences = df['Sequence'].tolist()
-                if trim_sequences:
+                if seq_mod_method == "trim":
                     sequences = trim_sequences_to_length(sequences)
                     logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+                elif seq_mod_method == "pad":
+                    sequences = pad_sequences_to_length(sequences)
+                    logger.info(f"Padded sequences to length {len(sequences[0])}")
                 self.all_sequences = sequences
                 self.all_expressions = df['Expression'].values
                 self.all_log_likelihoods = df['Log_Likelihood'].values
                 logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
             else:
                 # Original expression-only dataset
-                self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, trim_sequences=trim_sequences)
+                self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, seq_mod_method=seq_mod_method)
                 self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
                 logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
 
@@ -423,6 +429,7 @@ class ActiveLearningExperiment:
             round_results = {
                 'round': round_num + 1,
                 'strategy': self.selection_strategy.value,
+                'seq_mod_method': self.seq_mod_method,
                 'seed': self.random_seed,
                 'train_size': len(self.train_indices),
                 'unlabeled_size': len(self.unlabeled_indices),
@@ -478,6 +485,7 @@ class ActiveLearningExperiment:
 
             # Add metadata columns to match with main results
             custom_metrics_df['strategy'] = self.selection_strategy.value
+            custom_metrics_df['seq_mod_method'] = self.seq_mod_method
             custom_metrics_df['seed'] = self.random_seed
             custom_metrics_df['round'] = range(1, len(self.custom_metrics) + 1)
             custom_metrics_df['train_size'] = len(self.train_indices)
@@ -506,12 +514,13 @@ class ActiveLearningExperiment:
 def run_controlled_experiment(
     data_path: str,
     strategies: List[SelectionStrategy],
+    seq_mod_methods: List[SequenceModificationMethod],
     seeds: List[int],
     initial_sample_size: int = 8,
     batch_size: int = 8,
     test_size: int = 50,
     max_rounds: int = 20,
-    output_dir: str = "results"
+    output_dir: str = "results",
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds.
@@ -519,6 +528,7 @@ def run_controlled_experiment(
     Args:
         data_path: Path to CSV file with sequence and expression data
         strategies: List of selection strategies to compare
+        seq_mod_methods: List of sequence modification methods to compare
         seeds: List of random seeds for multiple replicates
         initial_sample_size: Number of sequences to start with
         batch_size: Number of sequences to select in each round
@@ -539,83 +549,97 @@ def run_controlled_experiment(
 
     # Initialize results storage
     for strategy in strategies:
-        all_results[strategy.value] = []
-        all_custom_metrics[strategy.value] = []  # Initialize custom metrics storage
+        all_results[strategy.value] = {}
+        all_custom_metrics[strategy.value] = {}
+        for seq_mod_method in seq_mod_methods:
+            all_results[strategy.value][seq_mod_method.value] = []
+            all_custom_metrics[strategy.value][seq_mod_method.value] = []
 
     # Create progress bar for total experiments
-    total_experiments = len(strategies) * len(seeds)
+    total_experiments = len(strategies) * len(seq_mod_methods) * len(seeds)
     with tqdm(total=total_experiments, desc="Running experiments") as pbar:
 
         for strategy in strategies:
-            logger.info(f"\n{'='*60}")
-            logger.info(f"Running {strategy.value.upper()} strategy with {len(seeds)} seeds")
-            logger.info(f"{'='*60}")
+            for seq_mod_method in seq_mod_methods:
+                logger.info(f"\n{'='*60}")
+                logger.info(f"Running {strategy.value.upper()} strategy with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method")
+                logger.info(f"{'='*60}")
 
-            for seed_idx, seed in enumerate(seeds):
-                logger.info(f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---")
+                for seed_idx, seed in enumerate(seeds):
+                    logger.info(f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---")
 
-                # Create experiment with specific strategy and seed
-                experiment = ActiveLearningExperiment(
-                    data_path=data_path,
-                    selection_strategy=strategy,
-                    initial_sample_size=initial_sample_size,
-                    batch_size=batch_size,
-                    test_size=test_size,
-                    random_seed=seed
-                )
+                    # Create experiment with specific strategy and seed
+                    experiment = ActiveLearningExperiment(
+                        data_path=data_path,
+                        selection_strategy=strategy,
+                        initial_sample_size=initial_sample_size,
+                        batch_size=batch_size,
+                        test_size=test_size,
+                        random_seed=seed,
+                        seq_mod_method=seq_mod_method.value
+                    )
 
-                # Run experiment
-                results = experiment.run_experiment(max_rounds=max_rounds)
-                all_results[strategy.value].extend(results)
+                    # Run experiment
+                    results = experiment.run_experiment(max_rounds=max_rounds)
+                    all_results[strategy.value][seq_mod_method.value].extend(results)
 
-                # Collect custom metrics
-                if experiment.custom_metrics:
-                    # Add metadata to custom metrics
-                    for i, metrics in enumerate(experiment.custom_metrics):
-                        # Calculate train_size for this round
-                        # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
-                        train_size_for_round = initial_sample_size + ((i + 1) * batch_size)
+                    # Collect custom metrics
+                    if experiment.custom_metrics:
+                        # Add metadata to custom metrics
+                        for i, metrics in enumerate(experiment.custom_metrics):
+                            # Calculate train_size for this round
+                            # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
+                            train_size_for_round = initial_sample_size + (i * batch_size)
 
-                        metrics_with_metadata = {
-                            'round': i + 1,
-                            'strategy': strategy.value,
-                            'seed': seed,
-                            'train_size': train_size_for_round,
-                            **metrics
-                        }
-                        all_custom_metrics[strategy.value].append(metrics_with_metadata)
+                            metrics_with_metadata = {
+                                'round': i,
+                                'strategy': strategy.value,
+                                'seed': seed,
+                                'train_size': train_size_for_round,
+                                **metrics
+                            }
+                            all_custom_metrics[strategy.value][seq_mod_method.value].append(metrics_with_metadata)
 
-                # Save individual seed results (this now also saves custom metrics)
-                seed_output_path = output_path / f"{strategy.value}_seed_{seed}_results.csv"
-                experiment.save_results(str(seed_output_path))
+                    # Save individual seed results (this now also saves custom metrics)
+                    seed_output_path = output_path / f"{strategy.value}_seed_{seed}_results.csv"
+                    experiment.save_results(str(seed_output_path))
 
-                # Log final performance for this seed
-                final_performance = experiment.get_final_performance()
-                logger.info(f"Seed {seed} final performance - "
-                           f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-                           f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}")
+                    # Log final performance for this seed
+                    final_performance = experiment.get_final_performance()
+                    logger.info(f"Seed {seed} final performance - "
+                            f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
+                            f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}")
 
-                pbar.update(1)
-
-    # Save combined results for each strategy
-    for strategy, results in all_results.items():
-        strategy_df = pd.DataFrame(results)
-        strategy_output_path = output_path / f"{strategy}_all_seeds_results.csv"
+                    pbar.update(1)
+    # Save combined results for each strategy (Pearson and Spearman correlation, R2, RMSE)
+    for strategy in all_results.keys():
+        for seq_mod_method in all_results[strategy].keys():
+            results = all_results[strategy][seq_mod_method]
+            strategy_df = pd.DataFrame(results)
+            strategy_output_path = output_path / f"{strategy}_{seq_mod_method}_all_seeds_results.csv"
         strategy_df.to_csv(strategy_output_path, index=False)
-        logger.info(f"Combined {strategy} results saved to {strategy_output_path}")
+        logger.info(f"Combined {strategy} {seq_mod_method} results saved to {strategy_output_path}")
 
-    # Save combined custom metrics for each strategy
-    for strategy, custom_metrics in all_custom_metrics.items():
-        if custom_metrics:  # Only save if custom metrics exist
-            custom_metrics_df = pd.DataFrame(custom_metrics)
-            custom_metrics_output_path = output_path / f"{strategy}_all_seeds_custom_metrics.csv"
-            custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
-            logger.info(f"Combined {strategy} custom metrics saved to {custom_metrics_output_path}")
+    # Save combined custom metrics for each strategy (top_10_ratio_intersected_indices, best_value_predictions_values, normalized_predictions_predictions_values, best_value_ground_truth_values, normalized_predictions_ground_truth_values)
+    for strategy in all_custom_metrics.keys():
+        for seq_mod_method in all_custom_metrics[strategy].keys():
+            custom_metrics = all_custom_metrics[strategy][seq_mod_method]
+            if custom_metrics:  # Only save if custom metrics exist
+                custom_metrics_df = pd.DataFrame(custom_metrics)
+                custom_metrics_output_path = output_path / f"{strategy}_{seq_mod_method}_all_seeds_custom_metrics.csv"
+                custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
+                logger.info(f"Combined {strategy} {seq_mod_method} custom metrics saved to {custom_metrics_output_path}")
 
     # Create overall combined results file
     combined_results = []
-    for strategy, results in all_results.items():
-        combined_results.extend(results)
+    for strategy in all_results.keys():
+        for seq_mod_method in all_results[strategy].keys():
+            results = all_results[strategy][seq_mod_method]
+            # Add seq_mod_method to each result dictionary (in case it's missing)
+            for result_dict in results:
+                result_dict_with_seq_mod = result_dict.copy()  # Create a copy to avoid modifying original
+                result_dict_with_seq_mod['seq_mod_method'] = seq_mod_method
+                combined_results.append(result_dict_with_seq_mod)
 
     combined_df = pd.DataFrame(combined_results)
     combined_output_path = output_path / "combined_all_results.csv"
@@ -624,8 +648,14 @@ def run_controlled_experiment(
 
     # Create overall combined custom metrics file
     combined_custom_metrics = []
-    for strategy, custom_metrics in all_custom_metrics.items():
-        combined_custom_metrics.extend(custom_metrics)
+    for strategy in all_custom_metrics.keys():
+        for seq_mod_method in all_custom_metrics[strategy].keys():
+            custom_metrics = all_custom_metrics[strategy][seq_mod_method]
+            # Add seq_mod_method to each custom metric dictionary
+            for metric_dict in custom_metrics:
+                metric_dict_with_seq_mod = metric_dict.copy()  # Create a copy to avoid modifying original
+                metric_dict_with_seq_mod['seq_mod_method'] = seq_mod_method
+                combined_custom_metrics.append(metric_dict_with_seq_mod)
 
     if combined_custom_metrics:  # Only save if there are custom metrics
         combined_custom_metrics_df = pd.DataFrame(combined_custom_metrics)
@@ -646,48 +676,50 @@ def analyze_multi_seed_results(results: Dict[str, List[Dict[str, Any]]]) -> Dict
     Returns:
         Dictionary with aggregated statistics for each strategy
     """
-    analysis = {}
+    # dict within dict
+    analysis = defaultdict(lambda: defaultdict(dict))
 
     for strategy, strategy_results in results.items():
-        if not strategy_results:
-            continue
+        for seq_mod_method, seq_mod_method_results in strategy_results.items():
+            if not seq_mod_method_results:
+                continue
 
-        # Convert to DataFrame for easier analysis
-        df = pd.DataFrame(strategy_results)
+            # Convert to DataFrame for easier analysis
+            df = pd.DataFrame(seq_mod_method_results)
 
-        # Group by round to get statistics across seeds
-        round_stats = df.groupby('round').agg({
-            'pearson_correlation': ['mean', 'std', 'min', 'max'],
-            'spearman_correlation': ['mean', 'std', 'min', 'max'],
-            'r2': ['mean', 'std', 'min', 'max'],
-            'rmse': ['mean', 'std', 'min', 'max'],
-            'train_size': 'first'  # Should be same across seeds for same round
-        }).round(4)
+            # Group by round to get statistics across seeds
+            round_stats = df.groupby('round').agg({
+                'pearson_correlation': ['mean', 'std', 'min', 'max'],
+                'spearman_correlation': ['mean', 'std', 'min', 'max'],
+                'r2': ['mean', 'std', 'min', 'max'],
+                'rmse': ['mean', 'std', 'min', 'max'],
+                'train_size': 'first'  # Should be same across seeds for same round
+            }).round(4)
 
-        # Final round statistics
-        final_round = df['round'].max()
-        final_results = df[df['round'] == final_round]
+            # Final round statistics
+            final_round = df['round'].max()
+            final_results = df[df['round'] == final_round]
 
-        final_stats = {
-            'final_pearson_mean': final_results['pearson_correlation'].mean(),
-            'final_pearson_std': final_results['pearson_correlation'].std(),
-            'final_spearman_mean': final_results['spearman_correlation'].mean(),
-            'final_spearman_std': final_results['spearman_correlation'].std(),
-            'final_r2_mean': final_results['r2'].mean(),
-            'final_r2_std': final_results['r2'].std(),
-            'final_rmse_mean': final_results['rmse'].mean(),
-            'final_rmse_std': final_results['rmse'].std(),
-            'final_train_size': final_results['train_size'].iloc[0],
-            'n_seeds': len(final_results),
-            'n_rounds': final_round
-        }
+            final_stats = {
+                'final_pearson_mean': final_results['pearson_correlation'].mean(),
+                'final_pearson_std': final_results['pearson_correlation'].std(),
+                'final_spearman_mean': final_results['spearman_correlation'].mean(),
+                'final_spearman_std': final_results['spearman_correlation'].std(),
+                'final_r2_mean': final_results['r2'].mean(),
+                'final_r2_std': final_results['r2'].std(),
+                'final_rmse_mean': final_results['rmse'].mean(),
+                'final_rmse_std': final_results['rmse'].std(),
+                'final_train_size': final_results['train_size'].iloc[0],
+                'n_seeds': len(final_results),
+                'n_rounds': final_round
+            }
 
-        analysis[strategy] = {
-            'round_statistics': round_stats,
-            'final_statistics': final_stats
-        }
+            analysis[strategy][seq_mod_method] = {
+                'round_statistics': round_stats,
+                'final_statistics': final_stats
+            }
 
-    return analysis
+        return analysis
 
 
 def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> None:
@@ -703,15 +735,16 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
 
     analysis = analyze_multi_seed_results(results)
 
-    for strategy, strategy_analysis in analysis.items():
-        final_stats = strategy_analysis['final_statistics']
+    for strategy, seq_mod_methods in analysis.items():
+        for seq_mod_method, seq_mod_method_analysis in seq_mod_methods.items():
+            final_stats = seq_mod_method_analysis['final_statistics']
 
-        logger.info(f"\n{strategy.upper()} Strategy (across {final_stats['n_seeds']} seeds):")
-        logger.info(f"  Final Training Size: {final_stats['final_train_size']}")
-        logger.info(f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}")
-        logger.info(f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}")
-        logger.info(f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}")
-        logger.info(f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}")
+            logger.info(f"\n{strategy.upper()} {seq_mod_method.upper()} Strategy (across {final_stats['n_seeds']} seeds):")
+            logger.info(f"  Final Training Size: {final_stats['final_train_size']}")
+            logger.info(f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}")
+            logger.info(f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}")
+            logger.info(f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}")
+            logger.info(f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}")
 
     # Statistical comparison between strategies
     if len(analysis) == 2:
@@ -756,12 +789,13 @@ def main() -> None:
     config = {
         'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
         'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-        'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
+        'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
+        'seeds': [42, 123],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
         'initial_sample_size': 8,
         'batch_size': 8,
         'test_size': 50,
-        'max_rounds': 20,
-        'output_dir': 'results_all_strategies_ori_log_likelihood'
+        'max_rounds': 5,
+        'output_dir': 'results_all_strategies_ori_log_likelihood_pad'
     }
 
 
@@ -780,20 +814,22 @@ def main() -> None:
     # Create summary DataFrame
     summary_data = []
     for strategy, strategy_analysis in analysis.items():
-        final_stats = strategy_analysis['final_statistics']
-        summary_data.append({
-            'strategy': strategy,
-            'n_seeds': final_stats['n_seeds'],
-            'final_pearson_mean': final_stats['final_pearson_mean'],
-            'final_pearson_std': final_stats['final_pearson_std'],
-            'final_spearman_mean': final_stats['final_spearman_mean'],
-            'final_spearman_std': final_stats['final_spearman_std'],
-            'final_r2_mean': final_stats['final_r2_mean'],
-            'final_r2_std': final_stats['final_r2_std'],
-            'final_rmse_mean': final_stats['final_rmse_mean'],
-            'final_rmse_std': final_stats['final_rmse_std'],
-            'final_train_size': final_stats['final_train_size']
-        })
+        for seq_mod_method, seq_mod_method_analysis in strategy_analysis.items():
+            final_stats = seq_mod_method_analysis['final_statistics']
+            summary_data.append({
+                'strategy': strategy,
+                'seq_mod_method': seq_mod_method,
+                'n_seeds': final_stats['n_seeds'],
+                'final_pearson_mean': final_stats['final_pearson_mean'],
+                'final_pearson_std': final_stats['final_pearson_std'],
+                'final_spearman_mean': final_stats['final_spearman_mean'],
+                'final_spearman_std': final_stats['final_spearman_std'],
+                'final_r2_mean': final_stats['final_r2_mean'],
+                'final_r2_std': final_stats['final_r2_std'],
+                'final_rmse_mean': final_stats['final_rmse_mean'],
+                'final_rmse_std': final_stats['final_rmse_std'],
+                'final_train_size': final_stats['final_train_size']
+            })
 
     summary_df = pd.DataFrame(summary_data)
     summary_path = Path(config['output_dir']) / "summary_statistics.csv"

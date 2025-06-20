@@ -12,8 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import torch
-from torch.nn.utils.rnn import pad_sequence
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +28,7 @@ def one_hot_encode_sequence(sequence: str) -> np.ndarray:
     Convert a DNA sequence to one-hot encoding.
 
     Args:
-        sequence: DNA sequence string (A, T, G, C)
+        sequence: DNA sequence string (A, T, G, C, N)
 
     Returns:
         One-hot encoded array of shape (length, 4)
@@ -45,7 +43,7 @@ def one_hot_encode_sequence(sequence: str) -> np.ndarray:
     nucleotide_map = {"A": 0, "T": 1, "G": 2, "C": 3}
 
     # Check for invalid characters
-    invalid_chars = set(sequence.upper()) - set(nucleotide_map.keys())
+    invalid_chars = set(sequence.upper()) - set(nucleotide_map.keys()) - {"N"}
     if invalid_chars:
         raise ValueError(f"Invalid nucleotides found: {invalid_chars}")
 
@@ -54,7 +52,8 @@ def one_hot_encode_sequence(sequence: str) -> np.ndarray:
     one_hot = np.zeros((len(sequence_upper), 4), dtype=np.float32)
 
     for i, nucleotide in enumerate(sequence_upper):
-        one_hot[i, nucleotide_map[nucleotide]] = 1.0
+        if nucleotide != "N":
+            one_hot[i, nucleotide_map[nucleotide]] = 1.0
 
     return one_hot
 
@@ -80,8 +79,8 @@ def one_hot_encode_sequences(sequences: List[str]) -> List[np.ndarray]:
         try:
             encoded = one_hot_encode_sequence(sequence)
             encoded_sequences.append(encoded)
-        except ValueError as e:
-            raise ValueError(f"Error encoding sequence {i}: {e}")
+        except ValueError as err:
+            raise ValueError(f"Error encoding sequence {i}: {err}") from err
 
     return encoded_sequences
 
@@ -172,14 +171,19 @@ def load_sequence_data(
         logger.info(f"Loaded {len(sequences)} sequences with {data_type} targets")
 
         # Trim sequences if requested
-        if trim_sequences:
+        if seq_mod_method == SequenceModificationMethod.TRIM:
             sequences = trim_sequences_to_length(sequences, max_length)
             logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+        elif seq_mod_method == SequenceModificationMethod.PAD:
+            sequences = pad_sequences_to_length(sequences, max_length)
+            logger.info(f"Padded sequences to length {len(sequences[0])}")
+        else:
+            raise ValueError(f"Invalid sequence modification method: {seq_mod_method}")
 
         return sequences, targets.astype(np.float32)
 
     except Exception as e:
-        raise ValueError(f"Error loading data from {file_path}: {e}")
+        raise ValueError(f"Error loading data from {file_path}: {e}") from e
 
 
 def load_log_likelihood_data(
@@ -234,27 +238,36 @@ def load_log_likelihood_data(
         return sequences, log_likelihoods.astype(np.float32)
 
     except Exception as e:
-        raise ValueError(f"Error loading log likelihood data from {file_path}: {e}")
+        raise ValueError(f"Error loading log likelihood data from {file_path}: {e}") from e
 
 
-# NOTE: pad sequences after encoding
 def pad_sequences_to_length(
-    sequences: List[np.ndarray], max_length: Optional[int] = None
-) -> List[np.ndarray]:
+    sequences: List[str], max_length: Optional[int] = None
+) -> List[str]:
     """
-    Pad all sequences to the same length.
+    Pad all sequences to the same length by adding N characters.
+
+    Args:
+        sequences: List of DNA sequences
+        max_length: Maximum length to pad to (uses maximum sequence length if None)
+
+    Returns:
+        List of padded sequences
+
+    Raises:
+        ValueError: If sequences list is empty
     """
     if not sequences:
         raise ValueError("Sequences list cannot be empty")
 
-    # Convert to tensor and pad
-    sequences_tensor = torch.tensor(sequences)
-    padded_sequences = pad_sequence(
-        sequences_tensor, batch_first=True, padding_value=0.0
-    )
+    # Determine target length
+    if max_length is None:
+        max_length = max(len(seq) for seq in sequences)
 
-    # Convert back to numpy
-    padded_sequences = padded_sequences.numpy()
+    # Pad sequences with N
+    padded_sequences = [
+        seq + "N" * (max_length - len(seq)) for seq in sequences
+    ]
 
     return padded_sequences
 
