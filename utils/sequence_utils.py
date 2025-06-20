@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 class SequenceModificationMethod(Enum):
     TRIM = "trim"
     PAD = "pad"
+    EMBEDDING = "embedding"
 
 
 def one_hot_encode_sequence(sequence: str) -> np.ndarray:

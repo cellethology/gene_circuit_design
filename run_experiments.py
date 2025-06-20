@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 from scipy.stats import pearsonr, spearmanr
-from sklearn.linear_model import Lasso
+from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
@@ -75,7 +75,9 @@ class ActiveLearningExperiment:
         batch_size: int = 8,
         test_size: int = 50,
         random_seed: int = 42,
-        seq_mod_method: str = "trim"
+        seq_mod_method: str = "trim",
+        no_test: bool = True,
+        normalize_expression: bool = True
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -88,6 +90,7 @@ class ActiveLearningExperiment:
             test_size: Number of sequences reserved for testing
             random_seed: Random seed for reproducibility
             trim_sequences: Whether to trim sequences to same length
+            no_test: Whether to use the test set
         """
         self.data_path = data_path
         self.selection_strategy = selection_strategy
@@ -96,7 +99,8 @@ class ActiveLearningExperiment:
         self.test_size = test_size
         self.random_seed = random_seed
         self.seq_mod_method = seq_mod_method
-
+        self.no_test = no_test
+        self.normalize_expression = normalize_expression
         # Set random seeds for reproducibility
         random.seed(random_seed)
         np.random.seed(random_seed)
@@ -111,7 +115,7 @@ class ActiveLearningExperiment:
         self.unlabeled_indices: List[int] = []
 
         # Model and results
-        self.model = Lasso(random_state=random_seed)
+        self.model = LinearRegression()
         self.results: List[Dict[str, Any]] = []
         self.custom_metrics: List[Dict[str, Any]] = []
 
@@ -126,6 +130,7 @@ class ActiveLearningExperiment:
 
         # Check if this is a safetensors file or CSV file
         if self.data_path.endswith('.safetensors'):
+            logger.info("Loading from safetensors file")
             # Load from safetensors file
             tensors = load_file(self.data_path)
             self.embeddings = tensors["embeddings"].float().numpy()  # Convert to float32 then numpy
@@ -148,6 +153,11 @@ class ActiveLearningExperiment:
             else:
                 # Try to convert each element to string
                 self.all_sequences = [str(seq) for seq in sequences_np]
+
+            if self.normalize_expression:
+                self.all_expressions = (self.all_expressions - self.all_expressions.mean(axis=0, keepdims=True)) / (self.all_expressions.std(axis=0, keepdims=True) + 1e-30)
+                self.embeddings = (self.embeddings - self.embeddings.mean(axis=0, keepdims=True)) / (self.embeddings.std(axis=0, keepdims=True) + 1e-30)
+                logger.info(f"Normalized expression data with mean {self.all_expressions.mean()} and std {self.all_expressions.std()}")
 
             logger.info(f"Loaded safetensors dataset with {len(self.all_sequences)} sequences")
             logger.info(f"Embeddings shape: {self.embeddings.shape}")
@@ -188,9 +198,19 @@ class ActiveLearningExperiment:
             ll_stats = pd.Series(self.all_log_likelihoods).describe()
             logger.info(f"Log likelihood statistics:\n{ll_stats}")
 
+        # If no test set is used, set test size to 0 and test indices to empty list
+        # NOTE: NO SPLIT ON DIFFERENT SEEDS
+        if self.no_test:
+            self.test_size = 0
+            self.test_indices = []
+
         # Create indices for all samples
         all_indices = list(range(total_samples))
-        random.shuffle(all_indices)
+        # NOTE: DEBUG CODE: FIX SEED FOR SHUFFLING
+        if self.selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
+            random.Random(0).shuffle(all_indices)
+        else:
+            random.shuffle(all_indices)
 
         # Reserve test set
         self.test_indices = all_indices[:self.test_size]
@@ -201,8 +221,8 @@ class ActiveLearningExperiment:
         self.unlabeled_indices = remaining_indices[self.initial_sample_size:]
 
         logger.info(f"Data split - Train: {len(self.train_indices)}, "
-                   f"Test: {len(self.test_indices)}, "
-                   f"Unlabeled: {len(self.unlabeled_indices)}")
+                f"Test: {len(self.test_indices)}, "
+                f"Unlabeled: {len(self.unlabeled_indices)}")
 
     def _encode_sequences(self, indices: List[int]) -> np.ndarray:
         """
@@ -222,6 +242,12 @@ class ActiveLearningExperiment:
             sequences = [self.all_sequences[i] for i in indices]
             encoded = one_hot_encode_sequences(sequences)
             return flatten_one_hot_sequences(encoded)
+            # # Flatten first, then apply PCA to reduce dimensionality, keeping 90% of variance
+            # flattened = flatten_one_hot_sequences(encoded)
+            # pca = PCA(n_components=0.9)  # 0.9 = 90% variance explained
+            # reduced = pca.fit_transform(flattened)
+            # logger.info(f"PCA reduced dimensions from {flattened.shape[1]} to {reduced.shape[1]} (90% variance explained)")
+            # return reduced
 
     def _train_model(self) -> None:
         """Train the linear regression model on current training data."""
@@ -246,6 +272,9 @@ class ActiveLearningExperiment:
         Returns:
             Dictionary with evaluation metrics
         """
+        if self.no_test:
+            return {}
+
         X_test = self._encode_sequences(self.test_indices)
         y_test = self.all_expressions[self.test_indices]
 
@@ -388,6 +417,10 @@ class ActiveLearningExperiment:
         top_10_ratio_intersection_pred = top_10_ratio_intersected_indices_metric(next_batch, self.all_expressions)
         best_value_pred = get_best_value_metric(y_pred)
         normalized_predictions_pred = normalized_to_best_val_metric(y_pred, self.all_expressions)
+        if len(self.custom_metrics) > 0:
+            top_10_ratio_intersection_pred_cumulative = self.custom_metrics[-1]['top_10_ratio_intersected_indices_cumulative'] + top_10_ratio_intersection_pred
+        else:
+            top_10_ratio_intersection_pred_cumulative = top_10_ratio_intersection_pred
 
         # Get true values for the next batch
         y_true = self.all_expressions[next_batch]
@@ -398,6 +431,7 @@ class ActiveLearningExperiment:
         # Store custom metrics
         self.custom_metrics.append({
             'top_10_ratio_intersected_indices': top_10_ratio_intersection_pred,
+            'top_10_ratio_intersected_indices_cumulative': top_10_ratio_intersection_pred_cumulative,
             'best_value_predictions_values': best_value_pred,
             'normalized_predictions_predictions_values': normalized_predictions_pred,
             'best_value_ground_truth_values': best_value_true,
@@ -519,8 +553,10 @@ def run_controlled_experiment(
     initial_sample_size: int = 8,
     batch_size: int = 8,
     test_size: int = 50,
+    no_test: bool = True,
     max_rounds: int = 20,
     output_dir: str = "results",
+    normalize_expression: bool = True
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds.
@@ -533,6 +569,7 @@ def run_controlled_experiment(
         initial_sample_size: Number of sequences to start with
         batch_size: Number of sequences to select in each round
         test_size: Number of sequences reserved for testing
+        no_test: Whether to use the test set
         max_rounds: Maximum number of rounds per experiment
         output_dir: Directory to save results
 
@@ -576,7 +613,9 @@ def run_controlled_experiment(
                         batch_size=batch_size,
                         test_size=test_size,
                         random_seed=seed,
-                        seq_mod_method=seq_mod_method.value
+                        seq_mod_method=seq_mod_method.value,
+                        no_test=no_test,
+                        normalize_expression=normalize_expression
                     )
 
                     # Run experiment
@@ -775,28 +814,33 @@ def main() -> None:
     #     'output_dir': 'results_all_strategies'
     # }
 
-    # config = {
-    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
-    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
-    #     'initial_sample_size': 8,
-    #     'batch_size': 8,
-    #     'test_size': 50,
-    #     'max_rounds': 20,
-    #     'output_dir': 'results_all_strategies_evo2_embeddings'
-    # }
-
     config = {
-        'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
+        'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
         'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-        'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
-        'seeds': [42, 123],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+        'seq_mod_methods': [SequenceModificationMethod.EMBEDDING],
+        'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
         'initial_sample_size': 8,
         'batch_size': 8,
-        'test_size': 50,
-        'max_rounds': 5,
-        'output_dir': 'results_all_strategies_ori_log_likelihood_pad'
+        'test_size': 30,
+        'max_rounds': 20,
+        'normalize_expression': True,
+        'output_dir': 'results_all_strategies_evo2_embeddings_no_test_normalization',
+        'no_test': True
     }
+
+    # config = {
+    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
+    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
+    #     'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
+    #     'seeds': [42, 123, 456, 789, 999],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+    #     'initial_sample_size': 8,
+    #     'batch_size': 8,
+    #     'test_size': 30,
+    #     'max_rounds': 20,
+    #     'output_dir': 'results_all_strategies_ori_log_likelihood_pad_no_test',
+    #     'no_test': True
+    # }
+
 
 
     logger.info("Starting Multi-Seed Controlled Active Learning Experiments with Log Likelihood Strategy")
@@ -804,39 +848,40 @@ def main() -> None:
 
     # Run controlled experiments
     all_results = run_controlled_experiment(**config)
+    if not config['no_test']:
+        # Analyze and compare performance across strategies
+        # NOTE: only compare performance if test set is used
+        compare_strategies_performance(all_results)
 
-    # Analyze and compare performance across strategies
-    compare_strategies_performance(all_results)
+        # Save summary analysis
+        analysis = analyze_multi_seed_results(all_results)
 
-    # Save summary analysis
-    analysis = analyze_multi_seed_results(all_results)
+        # Create summary DataFrame
+        summary_data = []
+        for strategy, strategy_analysis in analysis.items():
+            for seq_mod_method, seq_mod_method_analysis in strategy_analysis.items():
+                final_stats = seq_mod_method_analysis['final_statistics']
+                summary_data.append({
+                    'strategy': strategy,
+                    'seq_mod_method': seq_mod_method,
+                    'n_seeds': final_stats['n_seeds'],
+                    'final_pearson_mean': final_stats['final_pearson_mean'],
+                    'final_pearson_std': final_stats['final_pearson_std'],
+                    'final_spearman_mean': final_stats['final_spearman_mean'],
+                    'final_spearman_std': final_stats['final_spearman_std'],
+                    'final_r2_mean': final_stats['final_r2_mean'],
+                    'final_r2_std': final_stats['final_r2_std'],
+                    'final_rmse_mean': final_stats['final_rmse_mean'],
+                    'final_rmse_std': final_stats['final_rmse_std'],
+                    'final_train_size': final_stats['final_train_size']
+                })
 
-    # Create summary DataFrame
-    summary_data = []
-    for strategy, strategy_analysis in analysis.items():
-        for seq_mod_method, seq_mod_method_analysis in strategy_analysis.items():
-            final_stats = seq_mod_method_analysis['final_statistics']
-            summary_data.append({
-                'strategy': strategy,
-                'seq_mod_method': seq_mod_method,
-                'n_seeds': final_stats['n_seeds'],
-                'final_pearson_mean': final_stats['final_pearson_mean'],
-                'final_pearson_std': final_stats['final_pearson_std'],
-                'final_spearman_mean': final_stats['final_spearman_mean'],
-                'final_spearman_std': final_stats['final_spearman_std'],
-                'final_r2_mean': final_stats['final_r2_mean'],
-                'final_r2_std': final_stats['final_r2_std'],
-                'final_rmse_mean': final_stats['final_rmse_mean'],
-                'final_rmse_std': final_stats['final_rmse_std'],
-                'final_train_size': final_stats['final_train_size']
-            })
+        summary_df = pd.DataFrame(summary_data)
+        summary_path = Path(config['output_dir']) / "summary_statistics.csv"
+        summary_df.to_csv(summary_path, index=False)
+        logger.info(f"Summary statistics saved to {summary_path}")
 
-    summary_df = pd.DataFrame(summary_data)
-    summary_path = Path(config['output_dir']) / "summary_statistics.csv"
-    summary_df.to_csv(summary_path, index=False)
-    logger.info(f"Summary statistics saved to {summary_path}")
-
-    logger.info("\nAll multi-seed experiments completed successfully!")
+        logger.info("\nAll multi-seed experiments completed successfully!")
 
 
 if __name__ == "__main__":
