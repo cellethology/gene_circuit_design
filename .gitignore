@@ -65,6 +65,7 @@ data/
 models/
 checkpoints/
 results/
+results_*/
 wandb/
 
 # Environment management
