@@ -54,6 +54,7 @@ packages = ["utils"]
 [tool.ruff]
 line-length = 88
 target-version = "py38"
+fix = true
 
 [tool.ruff.lint]
 select = [
@@ -91,6 +92,7 @@ markers = [
 dev = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.7.5",
+    "ruff>=0.11.13",
     "safetensors>=0.5.3",
     "seaborn>=0.13.2",
     "torch>=2.5.1",

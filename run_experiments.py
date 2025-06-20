@@ -5,31 +5,31 @@ This script implements an active learning approach to predict gene expression
 from DNA sequences using linear regression with one-hot encoded features.
 """
 
-import logging  # noqa: I001
+import logging
 import random
-from typing import List, Dict, Any
-from pathlib import Path
 from enum import Enum
-from tqdm import tqdm  # noqa: I001
+from pathlib import Path
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import Lasso, LinearRegression
-from sklearn.metrics import root_mean_squared_error, r2_score
-from scipy.stats import pearsonr, spearmanr
 from safetensors.torch import load_file
-from utils.sequence_utils import (
-    load_sequence_data,
-    one_hot_encode_sequences,
-    flatten_one_hot_sequences,
-    calculate_sequence_statistics,
-    trim_sequences_to_length
-)
+from scipy.stats import pearsonr, spearmanr
+from sklearn.linear_model import Lasso
+from sklearn.metrics import r2_score, root_mean_squared_error
+from tqdm import tqdm
 
 from utils.metrics import (
-    top_10_ratio_intersected_indices_metric,
     get_best_value_metric,
-    normalized_to_best_val_metric
+    normalized_to_best_val_metric,
+    top_10_ratio_intersected_indices_metric,
+)
+from utils.sequence_utils import (
+    calculate_sequence_statistics,
+    flatten_one_hot_sequences,
+    load_sequence_data,
+    one_hot_encode_sequences,
+    trim_sequences_to_length,
 )
 
 # Create a file handler
@@ -721,7 +721,7 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
         stats1 = analysis[strategy1]['final_statistics']
         stats2 = analysis[strategy2]['final_statistics']
 
-        logger.info(f"\nSTATISTICAL COMPARISON:")
+        logger.info("\nSTATISTICAL COMPARISON:")
         logger.info(f"Pearson Correlation Difference ({strategy1} - {strategy2}): "
                    f"{stats1['final_pearson_mean'] - stats2['final_pearson_mean']:.4f}")
         logger.info(f"Spearman Correlation Difference ({strategy1} - {strategy2}): "

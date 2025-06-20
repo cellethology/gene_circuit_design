@@ -4,6 +4,7 @@ Utility functions for calculating metrics.
 
 import numpy as np
 
+
 def normalized_to_best_val_metric(y_pred, all_y_true):
     """
     Normalize the predicted values to the best possible value in the sequence pool.
@@ -27,7 +28,9 @@ def top_10_ratio_intersected_indices_metric(y_pred_indices, all_y_true):
     """
     # Get indices of top 10% values
     num_top_precent = 0.1  # Take top 10% values
-    num_top = int(len(all_y_true) * num_top_precent) # rounded down to the nearest integer
+    num_top = int(
+        len(all_y_true) * num_top_precent
+    )  # rounded down to the nearest integer
     # top_pred_indices = np.argsort(y_pred_indices)[-num_top:]
     top_true_indices = np.argsort(all_y_true)[-num_top:]
 
@@ -37,6 +40,7 @@ def top_10_ratio_intersected_indices_metric(y_pred_indices, all_y_true):
     # Calculate ratio of intersection size to total size
     intersection_ratio = len(intersection) / num_top
     return intersection_ratio
+
 
 def get_best_value_metric(y_pred):
     """
