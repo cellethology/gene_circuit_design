@@ -8,6 +8,8 @@ from typing import List, Optional, Tuple
 import matplotlib.pyplot as plt
 import pandas as pd
 
+FONT_SIZE = 14
+
 
 def plot_active_learning_metrics(
     results_folder_path: str,
@@ -102,9 +104,11 @@ def plot_active_learning_metrics(
             )
 
         # Format the plot
-        ax.set_title(f'{metric.replace("_", " ").title()} vs Train Size')
-        ax.set_xlabel("Train Size")
-        ax.set_ylabel(metric.replace("_", " ").title())
+        ax.set_title(
+            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+        )
+        ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
+        ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -188,9 +192,11 @@ def plot_top10_ratio_metrics(
             )
 
         # Format the plot
-        ax.set_title(f'{metric.replace("_", " ").title()} vs Train Size')
-        ax.set_xlabel("Train Size")
-        ax.set_ylabel(metric.replace("_", " ").title())
+        ax.set_title(
+            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+        )
+        ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
+        ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -294,9 +300,11 @@ def plot_value_metrics(
             )
 
         # Format the plot
-        ax.set_title(f'{metric.replace("_", " ").title()} vs Train Size')
-        ax.set_xlabel("Train Size")
-        ax.set_ylabel(metric.replace("_", " ").title())
+        ax.set_title(
+            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+        )
+        ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
+        ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
         ax.legend()
         ax.grid(True, alpha=0.3)
 
@@ -416,9 +424,11 @@ def plot_custom_metrics(
             )
 
         # Format the plot
-        ax.set_title(f'{metric.replace("_", " ").title()} vs Train Size')
-        ax.set_xlabel("Train Size")
-        ax.set_ylabel(metric.replace("_", " ").title())
+        ax.set_title(
+            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+        )
+        ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
+        ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
         ax.legend()
         ax.grid(True, alpha=0.3)
 
