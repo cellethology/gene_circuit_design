@@ -502,13 +502,6 @@ class ActiveLearningExperiment:
         normalized_predictions_pred = normalized_to_best_val_metric(
             y_pred, self.all_expressions
         )
-        if len(self.custom_metrics) > 0:
-            top_10_ratio_intersection_pred_cumulative = (
-                self.custom_metrics[-1]["top_10_ratio_intersected_indices_cumulative"]
-                + top_10_ratio_intersection_pred
-            )
-        else:
-            top_10_ratio_intersection_pred_cumulative = top_10_ratio_intersection_pred
 
         # Get true values for the next batch
         y_true = self.all_expressions[next_batch]
@@ -517,6 +510,40 @@ class ActiveLearningExperiment:
         normalized_predictions_true = normalized_to_best_val_metric(
             y_true, self.all_expressions
         )
+
+        if len(self.custom_metrics) > 0:
+            # Calculate cumulative metrics by adding current value to previous cumulative value
+            top_10_ratio_intersection_pred_cumulative = (
+                self.custom_metrics[-1]["top_10_ratio_intersected_indices_cumulative"]
+                + top_10_ratio_intersection_pred
+            )
+            best_value_pred_cumulative = (
+                self.custom_metrics[-1]["best_value_predictions_values_cumulative"]
+                + best_value_pred
+            )
+            normalized_predictions_pred_cumulative = (
+                self.custom_metrics[-1][
+                    "normalized_predictions_predictions_values_cumulative"
+                ]
+                + normalized_predictions_pred
+            )
+            best_value_true_cumulative = (
+                self.custom_metrics[-1]["best_value_ground_truth_values_cumulative"]
+                + best_value_true
+            )
+            normalized_predictions_true_cumulative = (
+                self.custom_metrics[-1][
+                    "normalized_predictions_ground_truth_values_cumulative"
+                ]
+                + normalized_predictions_true
+            )
+        else:
+            # For first round, cumulative equals current value
+            top_10_ratio_intersection_pred_cumulative = top_10_ratio_intersection_pred
+            best_value_pred_cumulative = best_value_pred
+            normalized_predictions_pred_cumulative = normalized_predictions_pred
+            best_value_true_cumulative = best_value_true
+            normalized_predictions_true_cumulative = normalized_predictions_true
 
         # Store custom metrics
         self.custom_metrics.append(
@@ -527,6 +554,10 @@ class ActiveLearningExperiment:
                 "normalized_predictions_predictions_values": normalized_predictions_pred,
                 "best_value_ground_truth_values": best_value_true,
                 "normalized_predictions_ground_truth_values": normalized_predictions_true,
+                "best_value_predictions_values_cumulative": best_value_pred_cumulative,
+                "normalized_predictions_predictions_values_cumulative": normalized_predictions_pred_cumulative,
+                "best_value_ground_truth_values_cumulative": best_value_true_cumulative,
+                "normalized_predictions_ground_truth_values_cumulative": normalized_predictions_true_cumulative,
             }
         )
 
@@ -1040,7 +1071,7 @@ def main() -> None:
                 if args.dry_run:
                     run_experiment_from_config(exp_name, args.config, dry_run=True)
                 else:
-                    # results = run_experiment_from_config(exp_name, args.config)
+                    results = run_experiment_from_config(exp_name, args.config)
                     logger.info(f"Completed experiment: {exp_name}")
             except Exception as e:
                 logger.error(f"Error running experiment {exp_name}: {e}")
@@ -1055,8 +1086,9 @@ def main() -> None:
             if args.dry_run:
                 run_experiment_from_config(args.experiment, args.config, dry_run=True)
             else:
-                # results = run_experiment_from_config(args.experiment, args.config)
+                results = run_experiment_from_config(args.experiment, args.config)
                 logger.info(f"Experiment {args.experiment} completed successfully!")
+                logger.info(f"Results: {results}")
         except Exception as e:
             logger.error(f"Error running experiment {args.experiment}: {e}")
         return
