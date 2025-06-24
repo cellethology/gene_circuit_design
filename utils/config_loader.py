@@ -1,0 +1,230 @@
+"""
+Configuration loading utilities for active learning experiments.
+"""
+
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import yaml
+
+from run_experiments import SelectionStrategy, SequenceModificationMethod
+
+
+def load_experiment_config(
+    config_file: str = "configs/experiment_configs.yaml",
+    experiment_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Load experiment configuration from YAML file.
+
+    Args:
+        config_file: Path to the YAML configuration file
+        experiment_name: Specific experiment to load. If None, returns all experiments.
+
+    Returns:
+        Dictionary containing experiment configuration(s)
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        KeyError: If experiment_name doesn't exist in config
+        ValueError: If config format is invalid
+    """
+    config_path = Path(config_file)
+
+    if not config_path.exists():
+        raise FileNotFoundError(f"Configuration file not found: {config_path}")
+
+    with open(config_path) as f:
+        config_data = yaml.safe_load(f)
+
+    if "experiments" not in config_data:
+        raise ValueError("Configuration file must contain 'experiments' section")
+
+    experiments = config_data["experiments"]
+
+    if experiment_name is None:
+        return experiments
+
+    if experiment_name not in experiments:
+        available = list(experiments.keys())
+        raise KeyError(
+            f"Experiment '{experiment_name}' not found. Available: {available}"
+        )
+
+    return experiments[experiment_name]
+
+
+def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert string values in config to appropriate enum types.
+
+    Args:
+        config: Raw configuration dictionary
+
+    Returns:
+        Configuration with enums converted
+    """
+    # Convert strategies from strings to enums
+    if "strategies" in config:
+        strategy_map = {
+            "HIGH_EXPRESSION": SelectionStrategy.HIGH_EXPRESSION,
+            "RANDOM": SelectionStrategy.RANDOM,
+            "LOG_LIKELIHOOD": SelectionStrategy.LOG_LIKELIHOOD,
+            "UNCERTAINTY": SelectionStrategy.UNCERTAINTY,
+        }
+        config["strategies"] = [
+            strategy_map[strategy] for strategy in config["strategies"]
+        ]
+
+    # Convert sequence modification methods from strings to enums
+    if "seq_mod_methods" in config:
+        seq_mod_map = {
+            "TRIM": SequenceModificationMethod.TRIM,
+            "PAD": SequenceModificationMethod.PAD,
+            "EMBEDDING": SequenceModificationMethod.EMBEDDING,
+            "CAR": SequenceModificationMethod.CAR,
+        }
+        config["seq_mod_methods"] = [
+            seq_mod_map[method] for method in config["seq_mod_methods"]
+        ]
+
+    return config
+
+
+def list_available_experiments(
+    config_file: str = "configs/experiment_configs.yaml"
+) -> List[str]:
+    """
+    List all available experiment configurations.
+
+    Args:
+        config_file: Path to the YAML configuration file
+
+    Returns:
+        List of experiment names
+    """
+    try:
+        experiments = load_experiment_config(config_file)
+        return list(experiments.keys())
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return []
+
+
+def get_experiment_config(
+    experiment_name: str, config_file: str = "configs/experiment_configs.yaml"
+) -> Dict[str, Any]:
+    """
+    Get a complete experiment configuration ready for use.
+
+    Args:
+        experiment_name: Name of the experiment to load
+        config_file: Path to the YAML configuration file
+
+    Returns:
+        Complete experiment configuration with enums converted
+    """
+    # Load the raw config
+    raw_config = load_experiment_config(config_file, experiment_name)
+
+    # Convert strings to enums
+    config = convert_config_to_enums(raw_config)
+
+    return config
+
+
+def run_experiment_from_config(
+    experiment_name: str,
+    config_file: str = "configs/experiment_configs.yaml",
+    dry_run: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Run an experiment from configuration.
+
+    Args:
+        experiment_name: Name of the experiment to run
+        config_file: Path to the YAML configuration file
+        dry_run: If True, only print what would be run without executing
+
+    Returns:
+        Experiment results if executed, None if dry_run
+    """
+    from run_experiments import run_controlled_experiment
+
+    # Get the configuration
+    config = get_experiment_config(experiment_name, config_file)
+
+    if dry_run:
+        print(f"Would run experiment '{experiment_name}' with config:")
+        for key, value in config.items():
+            print(f"  {key}: {value}")
+        return None
+
+    print(f"Running experiment: {experiment_name}")
+    print(f"Configuration: {config}")
+
+    # Run the experiment
+    results = run_controlled_experiment(**config)
+
+    return results
+
+
+def create_custom_config(
+    name: str,
+    data_path: str,
+    strategies: List[str],
+    seq_mod_methods: List[str],
+    output_dir: str,
+    seeds: Optional[List[int]] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """
+    Create a custom experiment configuration.
+
+    Args:
+        name: Name for the experiment
+        data_path: Path to the data file
+        strategies: List of strategy names
+        seq_mod_methods: List of sequence modification method names
+        output_dir: Output directory for results
+        seeds: List of random seeds
+        **kwargs: Additional configuration parameters
+
+    Returns:
+        Configuration dictionary
+    """
+    if seeds is None:
+        seeds = [42, 123, 456, 789, 999]
+
+    config = {
+        "data_path": data_path,
+        "strategies": strategies,
+        "seq_mod_methods": seq_mod_methods,
+        "output_dir": output_dir,
+        "seeds": seeds,
+        "initial_sample_size": kwargs.get("initial_sample_size", 8),
+        "batch_size": kwargs.get("batch_size", 8),
+        "test_size": kwargs.get("test_size", 30),
+        "max_rounds": kwargs.get("max_rounds", 20),
+        "normalize_expression": kwargs.get("normalize_expression", False),
+        "no_test": kwargs.get("no_test", True),
+    }
+
+    # Add any additional parameters
+    config.update(kwargs)
+
+    return config
+
+
+if __name__ == "__main__":
+    # Example usage
+    print("Available experiments:")
+    experiments = list_available_experiments()
+    for exp in experiments:
+        print(f"  - {exp}")
+
+    if experiments:
+        print(f"\nExample config for '{experiments[0]}':")
+        config = get_experiment_config(experiments[0])
+        for key, value in config.items():
+            print(f"  {key}: {value}")

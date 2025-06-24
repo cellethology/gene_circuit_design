@@ -5,6 +5,7 @@ This script implements an active learning approach to predict gene expression
 from DNA sequences using linear regression with one-hot encoded features.
 """
 
+import argparse
 import logging
 import random
 from collections import defaultdict
@@ -28,6 +29,7 @@ from utils.metrics import (
 from utils.sequence_utils import (
     SequenceModificationMethod,
     calculate_sequence_statistics,
+    ensure_sequence_modification_method,
     flatten_one_hot_sequences,
     load_sequence_data,
     one_hot_encode_sequences,
@@ -103,7 +105,8 @@ class ActiveLearningExperiment:
         self.batch_size = batch_size
         self.test_size = test_size
         self.random_seed = random_seed
-        self.seq_mod_method = seq_mod_method
+        # Convert string to enum if necessary
+        self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
         self.no_test = no_test
         self.normalize_expression = normalize_expression
         # Set random seeds for reproducibility
@@ -133,7 +136,10 @@ class ActiveLearningExperiment:
             f"Experiment initialized with {self.selection_strategy.value} selection strategy (seed={random_seed})"
         )
 
-    def _load_and_prepare_data(self, seq_mod_method: str = "trim") -> None:
+    def _load_and_prepare_data(
+        self,
+        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
+    ) -> None:
         """Load data and create train/test/unlabeled splits."""
         logger.info(f"Loading data from {self.data_path}")
 
@@ -203,7 +209,7 @@ class ActiveLearningExperiment:
                 )
             else:
                 # Load standard CSV data
-                df = pd.read_csv(self.data_path)
+                df = pd.read_csv(self.data_path, encoding="latin-1")
 
                 if "Log_Likelihood" in df.columns:
                     # Combined dataset with log likelihood
@@ -954,75 +960,132 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
         )
 
 
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Create command line argument parser."""
+    parser = argparse.ArgumentParser(
+        description="Run active learning experiments for DNA sequence-expression prediction"
+    )
+
+    parser.add_argument(
+        "--config",
+        "-c",
+        type=str,
+        default="configs/experiment_configs.yaml",
+        help="Path to YAML configuration file",
+    )
+
+    parser.add_argument(
+        "--experiment",
+        "-e",
+        type=str,
+        help="Name of specific experiment to run from config file",
+    )
+
+    parser.add_argument(
+        "--list-experiments",
+        "-l",
+        action="store_true",
+        help="List all available experiments in config file",
+    )
+
+    parser.add_argument(
+        "--run-all", action="store_true", help="Run all experiments in config file"
+    )
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be run without executing",
+    )
+
+    return parser
+
+
 def main() -> None:
     """Main function to run controlled active learning experiments with multiple seeds."""
-    # Configuration
-    # config = {
-    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.csv',
-    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
-    #     'initial_sample_size': 8,
-    #     'batch_size': 8,
-    #     'test_size': 50,
-    #     'max_rounds': 20,
-    #     'output_dir': 'results_all_strategies'
-    # }
+    parser = create_argument_parser()
+    args = parser.parse_args()
 
-    # config = {
-    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
-    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-    #     'seq_mod_methods': [SequenceModificationMethod.EMBEDDING],
-    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
-    #     'initial_sample_size': 8,
-    #     'batch_size': 8,
-    #     'test_size': 30,
-    #     'max_rounds': 20,
-    #     'normalize_expression': True,
-    #     'output_dir': 'results_all_strategies_evo2_embeddings_no_test_normalization',
-    #     'no_test': True
-    # }
+    # Import config loader (avoid circular import)
+    try:
+        from utils.config_loader import (
+            list_available_experiments,
+            run_experiment_from_config,
+        )
+    except ImportError:
+        logger.error(
+            "Could not import config_loader. Make sure PyYAML is installed: pip install pyyaml"
+        )
+        return
 
-    # config for trim and pad
-    # config = {
-    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
-    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-    #     'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
-    #     'seeds': [42, 123, 456, 789, 999],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
-    #     'initial_sample_size': 8,
-    # }
-    # config = {
-    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
-    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-    #     'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
-    #     'seeds': [42, 123, 456, 789, 999],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
-    #     'initial_sample_size': 8,
-    #     'batch_size': 8,
-    #     'test_size': 30,
-    #     'max_rounds': 20,
-    #     'output_dir': 'results_all_strategies_ori_log_likelihood_pad_no_test',
-    #     'no_test': True
-    # }
+    # Handle list experiments
+    if args.list_experiments:
+        print("Available experiments:")
+        experiments = list_available_experiments(args.config)
+        for exp in experiments:
+            print(f"  - {exp}")
+        return
 
-    # config for CAR-based sequence modification
+    # Handle run all experiments
+    if args.run_all:
+        experiments = list_available_experiments(args.config)
+        logger.info(f"Running all {len(experiments)} experiments...")
+
+        for exp_name in experiments:
+            logger.info(f"\n{'='*60}")
+            logger.info(f"Running experiment: {exp_name}")
+            logger.info(f"{'='*60}")
+
+            try:
+                if args.dry_run:
+                    run_experiment_from_config(exp_name, args.config, dry_run=True)
+                else:
+                    # results = run_experiment_from_config(exp_name, args.config)
+                    logger.info(f"Completed experiment: {exp_name}")
+            except Exception as e:
+                logger.error(f"Error running experiment {exp_name}: {e}")
+                continue
+
+        logger.info("All experiments completed!")
+        return
+
+    # Handle single experiment
+    if args.experiment:
+        try:
+            if args.dry_run:
+                run_experiment_from_config(args.experiment, args.config, dry_run=True)
+            else:
+                # results = run_experiment_from_config(args.experiment, args.config)
+                logger.info(f"Experiment {args.experiment} completed successfully!")
+        except Exception as e:
+            logger.error(f"Error running experiment {args.experiment}: {e}")
+        return
+
+    # Fallback to hardcoded config if no arguments provided
+    logger.warning("No experiment specified. Using hardcoded config...")
+    logger.warning(
+        "Use --help to see available options or --list-experiments to see available configs"
+    )
+
     config = {
-        "data_path": "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv",
-        "strategies": [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM],
-        "seq_mod_methods": [SequenceModificationMethod.CAR],
-        "seeds": [
-            42
-        ],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+        "data_path": "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0_ori_log_likelihood.safetensors",
+        "strategies": [
+            SelectionStrategy.HIGH_EXPRESSION,
+            SelectionStrategy.RANDOM,
+            SelectionStrategy.LOG_LIKELIHOOD,
+        ],
+        "seq_mod_methods": [SequenceModificationMethod.EMBEDDING],
+        "seeds": [42, 123, 456, 789, 999],
         "initial_sample_size": 8,
         "batch_size": 8,
         "test_size": 30,
         "max_rounds": 20,
         "normalize_expression": False,
-        "output_dir": "results_all_strategies_CAR_no_test_no_normalization",
+        "output_dir": "results_all_strategies_ori_log_likelihood_embeddings_no_test_normalization",
         "no_test": True,
     }
 
-    logger.info(
-        "Starting Multi-Seed Controlled Active Learning Experiments with Log Likelihood Strategy"
-    )
+    logger.info("Starting Multi-Seed Controlled Active Learning Experiments")
     logger.info(f"Configuration: {config}")
 
     # Run controlled experiments

@@ -27,6 +27,26 @@ class SequenceModificationMethod(Enum):
     CAR = "car"
 
 
+def ensure_sequence_modification_method(
+    seq_mod_method: "str | SequenceModificationMethod",
+) -> SequenceModificationMethod:
+    """
+    Convert string to SequenceModificationMethod enum if necessary.
+
+    Args:
+        seq_mod_method: Either a string or SequenceModificationMethod enum
+
+    Returns:
+        SequenceModificationMethod enum
+
+    Raises:
+        ValueError: If string is not a valid enum value
+    """
+    if isinstance(seq_mod_method, str):
+        return SequenceModificationMethod(seq_mod_method)
+    return seq_mod_method
+
+
 def one_hot_encode_sequence(sequence: str) -> np.ndarray:
     """
     Convert a DNA sequence to one-hot encoding.
@@ -105,6 +125,9 @@ def one_hot_encode_sequences(
     """
     if len(sequences) == 0:
         raise ValueError("Sequences cannot be empty")
+
+    # Convert string to enum if necessary
+    seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
 
     encoded_sequences = []
 
@@ -227,8 +250,16 @@ def load_sequence_data(
 
     logger.info(f"Loading data from {file_path}")
 
+    # Convert string to enum if necessary
+    seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
+
     # NOTE: rewrite this function to handle CAR-based sequence modifications with grace
     try:
+        # Initialize variables
+        sequences = None
+        targets = None
+        data_type = None
+
         if (
             seq_mod_method == SequenceModificationMethod.TRIM
             or seq_mod_method == SequenceModificationMethod.PAD
@@ -287,6 +318,14 @@ def load_sequence_data(
                 f"Loaded CAR-T cell data with {len(motif_cols)} motif columns and {len(sequences)} samples"
             )
             logger.info(f"Motif value range: {sequences.min()} to {sequences.max()}")
+        else:
+            raise ValueError(
+                f"Unsupported sequence modification method: {seq_mod_method}"
+            )
+
+        # Verify data was loaded
+        if sequences is None or targets is None:
+            raise ValueError("Failed to load sequences and targets from file")
 
         logger.info(f"Loaded {len(sequences)} sequences with {data_type} targets")
 
