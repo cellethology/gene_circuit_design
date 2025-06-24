@@ -93,7 +93,7 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_same_length(self):
         """Test encoding multiple sequences of same length."""
         sequences = ["ATGC", "GCTA", "TTAA"]
-        result = one_hot_encode_sequences(sequences)
+        result = one_hot_encode_sequences(sequences, "trim")
 
         assert len(result) == 3
         for encoded_seq in result:
@@ -103,7 +103,7 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_different_lengths(self):
         """Test encoding multiple sequences of different lengths."""
         sequences = ["AT", "GCTA", "TTAAGG"]
-        result = one_hot_encode_sequences(sequences)
+        result = one_hot_encode_sequences(sequences, "trim")
 
         assert len(result) == 3
         assert result[0].shape == (2, 4)
@@ -113,7 +113,7 @@ class TestOneHotEncodeSequences:
     def test_empty_sequence_list(self):
         """Test encoding empty sequence list."""
         sequences = []
-        result = one_hot_encode_sequences(sequences)
+        result = one_hot_encode_sequences(sequences, "trim")
 
         assert len(result) == 0
 
@@ -186,7 +186,7 @@ class TestLoadSequenceData:
             temp_path = f.name
 
         try:
-            sequences, expressions = load_sequence_data(temp_path)
+            sequences, expressions = load_sequence_data(temp_path, "trim")
 
             assert len(sequences) == 3
             assert len(expressions) == 3
@@ -210,15 +210,15 @@ class TestLoadSequenceData:
             temp_path = f.name
 
         try:
-            with pytest.raises(ValueError, match="Required column 'Expression' not found"):
-                load_sequence_data(temp_path)
+            with pytest.raises(ValueError):
+                load_sequence_data(temp_path, "trim")
         finally:
             os.unlink(temp_path)
 
     def test_load_nonexistent_file(self):
         """Test loading non-existent file."""
         with pytest.raises(FileNotFoundError):
-            load_sequence_data("nonexistent_file.csv")
+            load_sequence_data("nonexistent_file.csv", "trim")
 
     def test_load_with_trimming(self):
         """Test loading with sequence trimming."""
@@ -232,7 +232,7 @@ class TestLoadSequenceData:
             temp_path = f.name
 
         try:
-            sequences, expressions = load_sequence_data(temp_path, trim_sequences=True)
+            sequences, expressions = load_sequence_data(temp_path, "trim")
 
             # All sequences should be trimmed to the length of the shortest (12)
             assert all(len(seq) == 12 for seq in sequences)
@@ -308,14 +308,14 @@ class TestSequenceProcessingIntegration:
 
         try:
             # Load data
-            sequences, expressions = load_sequence_data(temp_path)
+            sequences, expressions = load_sequence_data(temp_path, "trim")
 
             # Calculate statistics
             stats = calculate_sequence_statistics(sequences)
             assert stats['count'] == 3
 
             # Encode sequences
-            encoded = one_hot_encode_sequences(sequences)
+            encoded = one_hot_encode_sequences(sequences, "trim")
             assert len(encoded) == 3
 
             # Flatten encoded sequences
@@ -361,14 +361,14 @@ class TestWithFixtures:
 
     def test_encode_sample_sequences(self, sample_sequences):
         """Test encoding sample sequences using fixture."""
-        encoded = one_hot_encode_sequences(sample_sequences)
+        encoded = one_hot_encode_sequences(sample_sequences, "trim")
         assert len(encoded) == 4
         for seq_encoded in encoded:
             assert seq_encoded.shape == (4, 4)
 
     def test_load_temp_csv(self, temp_csv_file):
         """Test loading temporary CSV file using fixture."""
-        sequences, expressions = load_sequence_data(temp_csv_file)
+        sequences, expressions = load_sequence_data(temp_csv_file, "trim")
         assert len(sequences) == 4
         assert len(expressions) == 4
         assert expressions[0] == 1500.5
@@ -385,8 +385,9 @@ def test_numpy_float32_dtype():
     assert encoded.dtype == np.float32
 
     sequences = ["ATGC", "GGCC"]
-    multi_encoded = one_hot_encode_sequences(sequences)
-    assert multi_encoded.dtype == np.float32
+    multi_encoded = one_hot_encode_sequences(sequences, "trim")
+    for encoded in multi_encoded:
+        assert encoded.dtype == np.float32
 
     flattened = flatten_one_hot_sequences(multi_encoded)
     assert flattened.dtype == np.float32

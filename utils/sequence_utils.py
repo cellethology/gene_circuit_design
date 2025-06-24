@@ -12,6 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import torch
+import torch.nn.functional as F
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +24,7 @@ class SequenceModificationMethod(Enum):
     TRIM = "trim"
     PAD = "pad"
     EMBEDDING = "embedding"
+    CAR = "car"
 
 
 def one_hot_encode_sequence(sequence: str) -> np.ndarray:
@@ -58,13 +61,33 @@ def one_hot_encode_sequence(sequence: str) -> np.ndarray:
 
     return one_hot
 
-
-def one_hot_encode_sequences(sequences: List[str]) -> List[np.ndarray]:
+def one_hot_encode_motif_sequence(motif_sequence: np.ndarray, num_motifs: int = 18) -> np.ndarray:
     """
-    One-hot encode multiple DNA sequences.
+    Convert a CAR motif sequence to one-hot encoding.
 
     Args:
-        sequences: List of DNA sequence strings
+        motif_sequence: 1D numpy array of motif indices (e.g., [13, 13, 17, 0, 0])
+        num_motifs: Total number of unique motifs (default 18 for 0-17 range)
+
+    Returns:
+        One-hot encoded array of shape (sequence_length, num_motifs)
+    """
+    if motif_sequence.ndim != 1:
+        raise ValueError(f"Expected 1D motif sequence, got shape {motif_sequence.shape}")
+
+    # Convert to PyTorch tensor for one-hot encoding
+    motif_tensor = torch.tensor(motif_sequence, dtype=torch.long)
+    one_hot = F.one_hot(motif_tensor, num_classes=num_motifs)
+
+    return one_hot.numpy().astype(np.float32)
+
+def one_hot_encode_sequences(sequences, seq_mod_method: str) -> List[np.ndarray]:
+    """
+    One-hot encode multiple sequences (DNA sequences or motif sequences).
+
+    Args:
+        sequences: List of DNA sequence strings or numpy array of motif sequences
+        seq_mod_method: Sequence modification method (determines encoding type)
 
     Returns:
         List of one-hot encoded arrays
@@ -72,16 +95,33 @@ def one_hot_encode_sequences(sequences: List[str]) -> List[np.ndarray]:
     Raises:
         ValueError: If any sequence is invalid
     """
-    if not sequences:
-        raise ValueError("Sequences list cannot be empty")
+    if len(sequences) == 0:
+        raise ValueError("Sequences cannot be empty")
 
     encoded_sequences = []
-    for i, sequence in enumerate(sequences):
-        try:
-            encoded = one_hot_encode_sequence(sequence)
-            encoded_sequences.append(encoded)
-        except ValueError as err:
-            raise ValueError(f"Error encoding sequence {i}: {err}") from err
+
+    if seq_mod_method == SequenceModificationMethod.CAR.value:
+        # Handle motif sequences (numpy array)
+        if not isinstance(sequences, np.ndarray):
+            raise ValueError("CAR sequences must be a numpy array")
+
+        for i, motif_seq in enumerate(sequences):
+            try:
+                encoded = one_hot_encode_motif_sequence(motif_seq)
+                encoded_sequences.append(encoded)
+            except ValueError as err:
+                raise ValueError(f"Error encoding motif sequence {i}: {err}") from err
+    else:
+        # Handle DNA sequences (list of strings)
+        if not isinstance(sequences, list):
+            raise ValueError("DNA sequences must be a list of strings")
+
+        for i, sequence in enumerate(sequences):
+            try:
+                encoded = one_hot_encode_sequence(sequence)
+                encoded_sequences.append(encoded)
+            except ValueError as err:
+                raise ValueError(f"Error encoding DNA sequence {i}: {err}") from err
 
     return encoded_sequences
 
@@ -113,6 +153,36 @@ def flatten_one_hot_sequences(encoded_sequences: List[np.ndarray]) -> np.ndarray
     flattened = [seq.flatten() for seq in encoded_sequences]
     return np.array(flattened, dtype=np.float32)
 
+def load_multiple_car_files(file_paths: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Load and combine multiple CAR T cell data files.
+
+    Args:
+        file_paths: List of CSV file paths containing CAR T cell data
+
+    Returns:
+        Tuple of (combined_motif_sequences, combined_targets)
+
+    Raises:
+        FileNotFoundError: If any file doesn't exist
+        ValueError: If required columns are missing or data formats differ
+    """
+    all_sequences = []
+    all_targets = []
+
+    for file_path in file_paths:
+        sequences, targets = load_sequence_data(file_path, seq_mod_method=SequenceModificationMethod.CAR.value)
+        all_sequences.append(sequences)
+        all_targets.append(targets)
+
+    # Combine all data
+    combined_sequences = np.vstack(all_sequences)
+    combined_targets = np.concatenate(all_targets)
+
+    logger.info(f"Combined {len(file_paths)} CAR data files: {combined_sequences.shape[0]} total samples")
+    return combined_sequences, combined_targets
+
+
 
 def load_sequence_data(
     file_path: str,
@@ -122,9 +192,10 @@ def load_sequence_data(
     """
     Load sequence and target data from CSV file.
 
-    Supports two formats:
+    Supports three formats:
     1. Expression data: columns ['Sequence', 'Expression'] (and optional others)
     2. Log likelihood data: columns ['seqs', 'scores']
+    3. CAR motif data: columns ['motif i', 'motif j', ...] and 'Cytotoxicity (Nalm 6 Survival)'
 
     Args:
         file_path: Path to CSV file
@@ -144,30 +215,54 @@ def load_sequence_data(
 
     logger.info(f"Loading data from {file_path}")
 
+    # NOTE: rewrite this function to handle CAR-based sequence modifications with grace
     try:
-        df = pd.read_csv(file_path)
-        logger.info(f"Loaded CSV with columns: {list(df.columns)}")
+        if seq_mod_method == SequenceModificationMethod.TRIM or seq_mod_method == SequenceModificationMethod.PAD:
+            df = pd.read_csv(file_path)
+            logger.info(f"Loaded CSV with columns: {list(df.columns)}")
+            # Determine data format and extract sequences and targets
+            if "seqs" in df.columns and "scores" in df.columns:
+                # Log likelihood format
+                sequences = df["seqs"].tolist()
+                targets = df["scores"].values
+                data_type = "log likelihood"
+                logger.info("Detected log likelihood data format (seqs/scores)")
 
-        # Determine data format and extract sequences and targets
-        if "seqs" in df.columns and "scores" in df.columns:
-            # Log likelihood format
-            sequences = df["seqs"].tolist()
-            targets = df["scores"].values
-            data_type = "log likelihood"
-            logger.info("Detected log likelihood data format (seqs/scores)")
+            elif "Sequence" in df.columns and "Expression" in df.columns:
+                # Expression format
+                sequences = df["Sequence"].tolist()
+                targets = df["Expression"].values
+                data_type = "expression"
+                logger.info("Detected expression data format (Sequence/Expression)")
 
-        elif "Sequence" in df.columns and "Expression" in df.columns:
-            # Expression format
-            sequences = df["Sequence"].tolist()
-            targets = df["Expression"].values
-            data_type = "expression"
-            logger.info("Detected expression data format (Sequence/Expression)")
+            else:
+                raise ValueError(
+                    "CSV must contain either ('seqs', 'scores') or ('Sequence', 'Expression') columns. "
+                    f"Found columns: {list(df.columns)}"
+                )
+        elif seq_mod_method == SequenceModificationMethod.CAR.value:
+            # Load and preprocess CAR data
+            df = pd.read_csv(file_path, encoding='unicode_escape', sep=',')
+            logger.info(f"Loaded CAR CSV with columns: {list(df.columns)}")
 
-        else:
-            raise ValueError(
-                "CSV must contain either ('seqs', 'scores') or ('Sequence', 'Expression') columns. "
-                f"Found columns: {list(df.columns)}"
-            )
+            # Drop unnecessary columns if they exist
+            columns_to_drop = ['AA Seq', 'Parts', 'NaiveCM', 'Initial CAR T Cell Number']
+            df = df.drop([col for col in columns_to_drop if col in df.columns], axis=1)
+
+            # Validate required columns
+            motif_cols = [col for col in df.columns if col.startswith('motif')]
+            if not motif_cols:
+                raise ValueError("No motif columns found in CAR data")
+            if 'Cytotoxicity (Nalm 6 Survival)' not in df.columns:
+                raise ValueError("Missing required column: Cytotoxicity (Nalm 6 Survival)")
+
+            # Extract motif sequences and targets
+            sequences = df[motif_cols].values
+            targets = df['Cytotoxicity (Nalm 6 Survival)'].values
+
+            data_type = "cytotoxicity"
+            logger.info(f"Loaded CAR-T cell data with {len(motif_cols)} motif columns and {len(sequences)} samples")
+            logger.info(f"Motif value range: {sequences.min()} to {sequences.max()}")
 
         logger.info(f"Loaded {len(sequences)} sequences with {data_type} targets")
 
@@ -178,6 +273,9 @@ def load_sequence_data(
         elif seq_mod_method == SequenceModificationMethod.PAD:
             sequences = pad_sequences_to_length(sequences, max_length)
             logger.info(f"Padded sequences to length {len(sequences[0])}")
+        elif seq_mod_method == SequenceModificationMethod.CAR.value:
+            # No length modification needed for motif sequences
+            logger.info(f"CAR motif sequences: {sequences.shape}")
         else:
             raise ValueError(f"Invalid sequence modification method: {seq_mod_method}")
 

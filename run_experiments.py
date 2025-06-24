@@ -106,7 +106,7 @@ class ActiveLearningExperiment:
         np.random.seed(random_seed)
 
         # Data containers
-        self.all_sequences: List[str] = []
+        self.all_sequences = []  # Can be List[str] for DNA or np.ndarray for motifs
         self.all_expressions: np.ndarray = np.array([])
         self.all_log_likelihoods: np.ndarray = np.array([])  # Add log likelihood storage
         self.embeddings: np.ndarray = None  # Add embeddings storage
@@ -162,27 +162,36 @@ class ActiveLearningExperiment:
             logger.info(f"Loaded safetensors dataset with {len(self.all_sequences)} sequences")
             logger.info(f"Embeddings shape: {self.embeddings.shape}")
         else:
-            # Load from CSV file (existing logic)
-            df = pd.read_csv(self.data_path)
-
-            if 'Log_Likelihood' in df.columns:
-                # Combined dataset with log likelihood
-                sequences = df['Sequence'].tolist()
-                if seq_mod_method == "trim":
-                    sequences = trim_sequences_to_length(sequences)
-                    logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-                elif seq_mod_method == "pad":
-                    sequences = pad_sequences_to_length(sequences)
-                    logger.info(f"Padded sequences to length {len(sequences[0])}")
-                self.all_sequences = sequences
-                self.all_expressions = df['Expression'].values
-                self.all_log_likelihoods = df['Log_Likelihood'].values
-                logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
-            else:
-                # Original expression-only dataset
+            # Load from CSV file
+            logger.info(f"Using sequence modification method: {seq_mod_method}")
+            
+            if seq_mod_method == SequenceModificationMethod.CAR.value:
+                # Load CAR motif data
                 self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, seq_mod_method=seq_mod_method)
-                self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
-                logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
+                self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)
+                logger.info(f"Loaded CAR dataset with {len(self.all_sequences)} motif sequences")
+            else:
+                # Load standard CSV data
+                df = pd.read_csv(self.data_path)
+
+                if 'Log_Likelihood' in df.columns:
+                    # Combined dataset with log likelihood
+                    sequences = df['Sequence'].tolist()
+                    if seq_mod_method == "trim":
+                        sequences = trim_sequences_to_length(sequences)
+                        logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+                    elif seq_mod_method == "pad":
+                        sequences = pad_sequences_to_length(sequences)
+                        logger.info(f"Padded sequences to length {len(sequences[0])}")
+                    self.all_sequences = sequences
+                    self.all_expressions = df['Expression'].values
+                    self.all_log_likelihoods = df['Log_Likelihood'].values
+                    logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
+                else:
+                    # Original expression-only dataset
+                    self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, seq_mod_method=seq_mod_method)
+                    self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
+                    logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
 
             # For CSV files, embeddings will be None (will be computed via one-hot encoding)
             self.embeddings = None
@@ -190,8 +199,11 @@ class ActiveLearningExperiment:
         total_samples = len(self.all_sequences)
 
         # Log sequence statistics
-        stats = calculate_sequence_statistics(self.all_sequences)
-        logger.info(f"Sequence statistics: {stats}")
+        if seq_mod_method == SequenceModificationMethod.CAR.value:
+            pass
+        else:
+            stats = calculate_sequence_statistics(self.all_sequences)
+            logger.info(f"Sequence statistics: {stats}")
 
         # Log log likelihood statistics if available
         if not np.all(np.isnan(self.all_log_likelihoods)):
@@ -239,8 +251,14 @@ class ActiveLearningExperiment:
             return self.embeddings[indices]
         else:
             # Fall back to one-hot encoding for CSV files
-            sequences = [self.all_sequences[i] for i in indices]
-            encoded = one_hot_encode_sequences(sequences)
+            if self.seq_mod_method == SequenceModificationMethod.CAR.value:
+                # For CAR data, all_sequences is a numpy array
+                sequences = self.all_sequences[indices]
+            else:
+                # For DNA data, all_sequences is a list of strings
+                sequences = [self.all_sequences[i] for i in indices]
+
+            encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
             return flatten_one_hot_sequences(encoded)
             # # Flatten first, then apply PCA to reduce dimensionality, keeping 90% of variance
             # flattened = flatten_one_hot_sequences(encoded)
@@ -814,20 +832,28 @@ def main() -> None:
     #     'output_dir': 'results_all_strategies'
     # }
 
-    config = {
-        'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
-        'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
-        'seq_mod_methods': [SequenceModificationMethod.EMBEDDING],
-        'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
-        'initial_sample_size': 8,
-        'batch_size': 8,
-        'test_size': 30,
-        'max_rounds': 20,
-        'normalize_expression': True,
-        'output_dir': 'results_all_strategies_evo2_embeddings_no_test_normalization',
-        'no_test': True
-    }
+    # config = {
+    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors',
+    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
+    #     'seq_mod_methods': [SequenceModificationMethod.EMBEDDING],
+    #     'seeds': [42, 123, 456, 789, 999],  # 5 different seeds
+    #     'initial_sample_size': 8,
+    #     'batch_size': 8,
+    #     'test_size': 30,
+    #     'max_rounds': 20,
+    #     'normalize_expression': True,
+    #     'output_dir': 'results_all_strategies_evo2_embeddings_no_test_normalization',
+    #     'no_test': True
+    # }
 
+    # config for trim and pad
+    # config = {
+    #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
+    #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
+    #     'seq_mod_methods': [SequenceModificationMethod.TRIM, SequenceModificationMethod.PAD],
+    #     'seeds': [42, 123, 456, 789, 999],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+    #     'initial_sample_size': 8,
+    # }
     # config = {
     #     'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv',
     #     'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM, SelectionStrategy.LOG_LIKELIHOOD],
@@ -840,6 +866,22 @@ def main() -> None:
     #     'output_dir': 'results_all_strategies_ori_log_likelihood_pad_no_test',
     #     'no_test': True
     # }
+
+    # config for CAR-based sequence modification
+    config = {
+        'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv',
+        'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM],
+        'seq_mod_methods': [SequenceModificationMethod.CAR],
+        'seeds': [42],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+        'initial_sample_size': 8,
+        'batch_size': 8,
+        'test_size': 30,
+        'max_rounds': 20,
+        'normalize_expression': False,
+        'output_dir': 'results_all_strategies_CAR_no_test_no_normalization',
+        'no_test': True
+    }
+
 
 
 
