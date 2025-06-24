@@ -24,15 +24,21 @@ def test_dna_sequence_processing():
     # Test with the 384 data format
     try:
         sequences, targets = load_sequence_data(
-            '../data/384_Data/384_Library_CLASSIC_Data.csv',
-            seq_mod_method='trim'
+            "../data/384_Data/384_Library_CLASSIC_Data.csv",
+            seq_mod_method=SequenceModificationMethod.TRIM,
         )
         print(f"✓ Loaded {len(sequences)} DNA sequences")
-        print(f"  Sample sequence: {sequences[0][:50]}..." if len(sequences[0]) > 50 else f"  Sample sequence: {sequences[0]}")
+        print(
+            f"  Sample sequence: {sequences[0][:50]}..."
+            if len(sequences[0]) > 50
+            else f"  Sample sequence: {sequences[0]}"
+        )
         print(f"  Sample target: {targets[0]}")
 
         # Test encoding
-        encoded = one_hot_encode_sequences(sequences[:3], 'trim')
+        encoded = one_hot_encode_sequences(
+            sequences[:3], SequenceModificationMethod.TRIM
+        )
         print(f"✓ Encoded 3 sequences, shape: {[e.shape for e in encoded]}")
 
         # Test flattening
@@ -42,6 +48,7 @@ def test_dna_sequence_processing():
     except Exception as e:
         print(f"✗ Error in DNA processing: {e}")
 
+
 def test_car_motif_processing():
     """Test CAR motif sequence processing (car_data format)."""
     print("=" * 60)
@@ -50,8 +57,8 @@ def test_car_motif_processing():
 
     try:
         sequences, targets = load_sequence_data(
-            '../data/car_data/science.abq0225_data_s1.csv',
-            seq_mod_method=SequenceModificationMethod.CAR.value
+            "../data/car_data/science.abq0225_data_s1.csv",
+            seq_mod_method=SequenceModificationMethod.CAR,
         )
         print(f"✓ Loaded {len(sequences)} CAR motif sequences")
         print(f"  Sample motif sequence: {sequences[0]}")
@@ -59,7 +66,9 @@ def test_car_motif_processing():
         print(f"  Motif value range: {sequences.min()} to {sequences.max()}")
 
         # Test encoding
-        encoded = one_hot_encode_sequences(sequences[:3], SequenceModificationMethod.CAR.value)
+        encoded = one_hot_encode_sequences(
+            sequences[:3], SequenceModificationMethod.CAR
+        )
         print(f"✓ Encoded 3 motif sequences, shapes: {[e.shape for e in encoded]}")
         print(f"  Each motif position has {encoded[0].shape[1]} possible values")
 
@@ -70,6 +79,7 @@ def test_car_motif_processing():
     except Exception as e:
         print(f"✗ Error in CAR processing: {e}")
 
+
 def test_car_experiment():
     """Test complete CAR experiment pipeline."""
     print("=" * 60)
@@ -79,15 +89,15 @@ def test_car_experiment():
     try:
         # Initialize experiment with CAR data
         experiment = ActiveLearningExperiment(
-            data_path='../data/car_data/science.abq0225_data_s1.csv',
+            data_path="../data/car_data/science.abq0225_data_s1.csv",
             selection_strategy=SelectionStrategy.RANDOM,
             initial_sample_size=10,
             batch_size=5,
             test_size=20,
             random_seed=42,
-            seq_mod_method='car',
+            seq_mod_method=SequenceModificationMethod.CAR,
             no_test=False,
-            normalize_expression=False
+            normalize_expression=False,
         )
         print("✓ Initialized CAR experiment")
         print(f"  Total samples: {len(experiment.all_sequences)}")
@@ -110,7 +120,9 @@ def test_car_experiment():
     except Exception as e:
         print(f"✗ Error in CAR experiment: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 def test_comparison():
     """Compare data characteristics between DNA and CAR formats."""
@@ -121,13 +133,13 @@ def test_comparison():
     try:
         # Load both types of data
         dna_sequences, dna_targets = load_sequence_data(
-            '../data/384_Data/384_Library_CLASSIC_Data.csv',
-            seq_mod_method='trim'
+            "../data/384_Data/384_Library_CLASSIC_Data.csv",
+            seq_mod_method=SequenceModificationMethod.TRIM,
         )
 
         car_sequences, car_targets = load_sequence_data(
-            '../data/car_data/science.abq0225_data_s1.csv',
-            seq_mod_method=SequenceModificationMethod.CAR.value
+            "../data/car_data/science.abq0225_data_s1.csv",
+            seq_mod_method=SequenceModificationMethod.CAR,
         )
 
         print("DNA Data (384_data):")
@@ -146,8 +158,12 @@ def test_comparison():
         print(f"  Target mean: {car_targets.mean():.3f}")
 
         # Test encoding dimensions
-        dna_encoded = one_hot_encode_sequences(dna_sequences[:1], 'trim')
-        car_encoded = one_hot_encode_sequences(car_sequences[:1], SequenceModificationMethod.CAR.value)
+        dna_encoded = one_hot_encode_sequences(
+            dna_sequences[:1], SequenceModificationMethod.TRIM
+        )
+        car_encoded = one_hot_encode_sequences(
+            car_sequences[:1], SequenceModificationMethod.CAR
+        )
 
         dna_flattened = flatten_one_hot_sequences(dna_encoded)
         car_flattened = flatten_one_hot_sequences(car_encoded)
@@ -158,6 +174,7 @@ def test_comparison():
 
     except Exception as e:
         print(f"✗ Error in comparison: {e}")
+
 
 if __name__ == "__main__":
     print("🧬 Gene Circuit Design - CAR Data Integration Test")

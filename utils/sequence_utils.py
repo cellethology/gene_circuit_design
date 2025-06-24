@@ -61,7 +61,10 @@ def one_hot_encode_sequence(sequence: str) -> np.ndarray:
 
     return one_hot
 
-def one_hot_encode_motif_sequence(motif_sequence: np.ndarray, num_motifs: int = 18) -> np.ndarray:
+
+def one_hot_encode_motif_sequence(
+    motif_sequence: np.ndarray, num_motifs: int = 18
+) -> np.ndarray:
     """
     Convert a CAR motif sequence to one-hot encoding.
 
@@ -73,7 +76,9 @@ def one_hot_encode_motif_sequence(motif_sequence: np.ndarray, num_motifs: int = 
         One-hot encoded array of shape (sequence_length, num_motifs)
     """
     if motif_sequence.ndim != 1:
-        raise ValueError(f"Expected 1D motif sequence, got shape {motif_sequence.shape}")
+        raise ValueError(
+            f"Expected 1D motif sequence, got shape {motif_sequence.shape}"
+        )
 
     # Convert to PyTorch tensor for one-hot encoding
     motif_tensor = torch.tensor(motif_sequence, dtype=torch.long)
@@ -81,7 +86,10 @@ def one_hot_encode_motif_sequence(motif_sequence: np.ndarray, num_motifs: int = 
 
     return one_hot.numpy().astype(np.float32)
 
-def one_hot_encode_sequences(sequences, seq_mod_method: str) -> List[np.ndarray]:
+
+def one_hot_encode_sequences(
+    sequences, seq_mod_method: SequenceModificationMethod
+) -> List[np.ndarray]:
     """
     One-hot encode multiple sequences (DNA sequences or motif sequences).
 
@@ -100,7 +108,7 @@ def one_hot_encode_sequences(sequences, seq_mod_method: str) -> List[np.ndarray]
 
     encoded_sequences = []
 
-    if seq_mod_method == SequenceModificationMethod.CAR.value:
+    if seq_mod_method == SequenceModificationMethod.CAR:
         # Handle motif sequences (numpy array)
         if not isinstance(sequences, np.ndarray):
             raise ValueError("CAR sequences must be a numpy array")
@@ -153,6 +161,7 @@ def flatten_one_hot_sequences(encoded_sequences: List[np.ndarray]) -> np.ndarray
     flattened = [seq.flatten() for seq in encoded_sequences]
     return np.array(flattened, dtype=np.float32)
 
+
 def load_multiple_car_files(file_paths: List[str]) -> Tuple[np.ndarray, np.ndarray]:
     """
     Load and combine multiple CAR T cell data files.
@@ -171,7 +180,9 @@ def load_multiple_car_files(file_paths: List[str]) -> Tuple[np.ndarray, np.ndarr
     all_targets = []
 
     for file_path in file_paths:
-        sequences, targets = load_sequence_data(file_path, seq_mod_method=SequenceModificationMethod.CAR.value)
+        sequences, targets = load_sequence_data(
+            file_path, seq_mod_method=SequenceModificationMethod.CAR.value
+        )
         all_sequences.append(sequences)
         all_targets.append(targets)
 
@@ -179,14 +190,15 @@ def load_multiple_car_files(file_paths: List[str]) -> Tuple[np.ndarray, np.ndarr
     combined_sequences = np.vstack(all_sequences)
     combined_targets = np.concatenate(all_targets)
 
-    logger.info(f"Combined {len(file_paths)} CAR data files: {combined_sequences.shape[0]} total samples")
+    logger.info(
+        f"Combined {len(file_paths)} CAR data files: {combined_sequences.shape[0]} total samples"
+    )
     return combined_sequences, combined_targets
-
 
 
 def load_sequence_data(
     file_path: str,
-    seq_mod_method: str = "trim",
+    seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
     max_length: Optional[int] = None,
 ) -> Tuple[List[str], np.ndarray]:
     """
@@ -217,7 +229,10 @@ def load_sequence_data(
 
     # NOTE: rewrite this function to handle CAR-based sequence modifications with grace
     try:
-        if seq_mod_method == SequenceModificationMethod.TRIM or seq_mod_method == SequenceModificationMethod.PAD:
+        if (
+            seq_mod_method == SequenceModificationMethod.TRIM
+            or seq_mod_method == SequenceModificationMethod.PAD
+        ):
             df = pd.read_csv(file_path)
             logger.info(f"Loaded CSV with columns: {list(df.columns)}")
             # Determine data format and extract sequences and targets
@@ -240,28 +255,37 @@ def load_sequence_data(
                     "CSV must contain either ('seqs', 'scores') or ('Sequence', 'Expression') columns. "
                     f"Found columns: {list(df.columns)}"
                 )
-        elif seq_mod_method == SequenceModificationMethod.CAR.value:
+        elif seq_mod_method == SequenceModificationMethod.CAR:
             # Load and preprocess CAR data
-            df = pd.read_csv(file_path, encoding='unicode_escape', sep=',')
+            df = pd.read_csv(file_path, encoding="unicode_escape", sep=",")
             logger.info(f"Loaded CAR CSV with columns: {list(df.columns)}")
 
             # Drop unnecessary columns if they exist
-            columns_to_drop = ['AA Seq', 'Parts', 'NaiveCM', 'Initial CAR T Cell Number']
+            columns_to_drop = [
+                "AA Seq",
+                "Parts",
+                "NaiveCM",
+                "Initial CAR T Cell Number",
+            ]
             df = df.drop([col for col in columns_to_drop if col in df.columns], axis=1)
 
             # Validate required columns
-            motif_cols = [col for col in df.columns if col.startswith('motif')]
+            motif_cols = [col for col in df.columns if col.startswith("motif")]
             if not motif_cols:
                 raise ValueError("No motif columns found in CAR data")
-            if 'Cytotoxicity (Nalm 6 Survival)' not in df.columns:
-                raise ValueError("Missing required column: Cytotoxicity (Nalm 6 Survival)")
+            if "Cytotoxicity (Nalm 6 Survival)" not in df.columns:
+                raise ValueError(
+                    "Missing required column: Cytotoxicity (Nalm 6 Survival)"
+                )
 
             # Extract motif sequences and targets
             sequences = df[motif_cols].values
-            targets = df['Cytotoxicity (Nalm 6 Survival)'].values
+            targets = df["Cytotoxicity (Nalm 6 Survival)"].values
 
             data_type = "cytotoxicity"
-            logger.info(f"Loaded CAR-T cell data with {len(motif_cols)} motif columns and {len(sequences)} samples")
+            logger.info(
+                f"Loaded CAR-T cell data with {len(motif_cols)} motif columns and {len(sequences)} samples"
+            )
             logger.info(f"Motif value range: {sequences.min()} to {sequences.max()}")
 
         logger.info(f"Loaded {len(sequences)} sequences with {data_type} targets")
@@ -273,7 +297,7 @@ def load_sequence_data(
         elif seq_mod_method == SequenceModificationMethod.PAD:
             sequences = pad_sequences_to_length(sequences, max_length)
             logger.info(f"Padded sequences to length {len(sequences[0])}")
-        elif seq_mod_method == SequenceModificationMethod.CAR.value:
+        elif seq_mod_method == SequenceModificationMethod.CAR:
             # No length modification needed for motif sequences
             logger.info(f"CAR motif sequences: {sequences.shape}")
         else:
@@ -337,7 +361,9 @@ def load_log_likelihood_data(
         return sequences, log_likelihoods.astype(np.float32)
 
     except Exception as e:
-        raise ValueError(f"Error loading log likelihood data from {file_path}: {e}") from e
+        raise ValueError(
+            f"Error loading log likelihood data from {file_path}: {e}"
+        ) from e
 
 
 def pad_sequences_to_length(
@@ -364,9 +390,7 @@ def pad_sequences_to_length(
         max_length = max(len(seq) for seq in sequences)
 
     # Pad sequences with N
-    padded_sequences = [
-        seq + "N" * (max_length - len(seq)) for seq in sequences
-    ]
+    padded_sequences = [seq + "N" * (max_length - len(seq)) for seq in sequences]
 
     return padded_sequences
 
@@ -404,51 +428,75 @@ def trim_sequences_to_length(
     return trimmed_sequences
 
 
-def calculate_sequence_statistics(sequences: List[str]) -> Dict[str, Any]:
+def calculate_sequence_statistics(sequences) -> Dict[str, Any]:
     """
-    Calculate basic statistics about DNA sequences.
+    Calculate basic statistics about sequences (DNA or CAR motifs).
 
     Args:
-        sequences: List of DNA sequences
+        sequences: List of DNA sequences or numpy array of CAR motif sequences
 
     Returns:
         Dictionary with sequence statistics
 
     Raises:
-        ValueError: If sequences list is empty
+        ValueError: If sequences is empty
     """
-    if not sequences:
-        raise ValueError("Sequences list cannot be empty")
+    if isinstance(sequences, np.ndarray):
+        # Handle CAR motif sequences
+        if sequences.size == 0:
+            raise ValueError("Sequences array cannot be empty")
+        lengths = [sequences.shape[1]] * sequences.shape[
+            0
+        ]  # All motif sequences have same length
+    else:
+        # Handle DNA sequences
+        if not sequences:
+            raise ValueError("Sequences list cannot be empty")
+        lengths = [len(seq) for seq in sequences]
 
-    lengths = [len(seq) for seq in sequences]
+    if isinstance(sequences, np.ndarray):
+        count = sequences.shape[0]
+    else:
+        count = len(sequences)
 
     stats = {
-        "count": len(sequences),
+        "count": count,
         "min_length": min(lengths),
         "max_length": max(lengths),
         "mean_length": np.mean(lengths),
         "std_length": np.std(lengths),
     }
 
-    # Calculate nucleotide composition
-    all_nucleotides = "".join(sequences).upper()
-    total_nucleotides = len(all_nucleotides)
+    # Calculate sequence composition based on type
+    if isinstance(sequences, np.ndarray):
+        # For CAR motif sequences, calculate motif statistics
+        unique_motifs, counts = np.unique(sequences.flatten(), return_counts=True)
+        motif_counts = dict(zip(unique_motifs.astype(int), counts.astype(int)))
 
-    if total_nucleotides > 0:
-        nucleotide_counts = {
-            "A": all_nucleotides.count("A"),
-            "T": all_nucleotides.count("T"),
-            "G": all_nucleotides.count("G"),
-            "C": all_nucleotides.count("C"),
-        }
+        stats["total_motifs"] = sequences.size
+        stats["unique_motifs"] = len(unique_motifs)
+        stats["motif_range"] = f"{sequences.min()}-{sequences.max()}"
+        stats["motif_counts"] = motif_counts
+    else:
+        # For DNA sequences, calculate nucleotide composition
+        all_nucleotides = "".join(sequences).upper()
+        total_nucleotides = len(all_nucleotides)
 
-        nucleotide_frequencies = {
-            f"{nuc}_frequency": count / total_nucleotides
-            for nuc, count in nucleotide_counts.items()
-        }
+        if total_nucleotides > 0:
+            nucleotide_counts = {
+                "A": all_nucleotides.count("A"),
+                "T": all_nucleotides.count("T"),
+                "G": all_nucleotides.count("G"),
+                "C": all_nucleotides.count("C"),
+            }
 
-        stats.update(nucleotide_counts)
-        stats.update(nucleotide_frequencies)
+            nucleotide_frequencies = {
+                f"{nuc}_frequency": count / total_nucleotides
+                for nuc, count in nucleotide_counts.items()
+            }
+
+            stats.update(nucleotide_counts)
+            stats.update(nucleotide_frequencies)
 
     return stats
 

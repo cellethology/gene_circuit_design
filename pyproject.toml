@@ -93,6 +93,7 @@ markers = [
 dev = [
     "ipykernel>=6.29.5",
     "matplotlib>=3.7.5",
+    "pre-commit>=3.5.0",
     "ruff>=0.11.13",
     "safetensors>=0.5.3",
     "seaborn>=0.13.2",

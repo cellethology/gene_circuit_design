@@ -1,7 +1,6 @@
+import pandas as pd
 from Bio import SeqIO
 from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-import pandas as pd
 
 # Load the GenBank file
 record = SeqIO.read("384_Example_Plasmid_Map.gb", "genbank")
@@ -61,10 +60,9 @@ def substitute_features_in_region(
 
     return Seq("").join(chunks)
 
+
 if __name__ == "__main__":
-    components = pd.read_excel(
-    "384_Library_Part_Sequences.xlsx", header=1, index_col=0
-)
+    components = pd.read_excel("384_Library_Part_Sequences.xlsx", header=1, index_col=0)
     # for all Part Type that is NaN, set it equal to the Part Type of the previous row
     components["Part Type"] = components["Part Type"].ffill()
 
@@ -77,9 +75,9 @@ if __name__ == "__main__":
     # build a dictionary of lists of components using Part Code and Part Type in components
 
     part_dict = {}
-    for index, row in components.iterrows():
+    for _index, row in components.iterrows():
         part_seq = row["Sequence"]
         part_type = row["Part Type"]
         if part_type not in part_dict:
             part_dict[part_type] = []
-        part_dict[part_type].append(part_seq)   
+        part_dict[part_type].append(part_seq)

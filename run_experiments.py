@@ -38,11 +38,13 @@ from utils.sequence_utils import (
 # Create a file handler
 log_path = Path("logs") / "experiment.log"
 log_path.parent.mkdir(parents=True, exist_ok=True)  # Ensure directory exists
-file_handler = logging.FileHandler(log_path, mode='w')  # 'a' to append instead of overwrite
+file_handler = logging.FileHandler(
+    log_path, mode="w"
+)  # 'a' to append instead of overwrite
 file_handler.setLevel(logging.INFO)
 
 # Optional: set formatter for file logs
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 file_handler.setFormatter(formatter)
 
 # Add the handler to the root logger
@@ -52,7 +54,10 @@ logger = logging.getLogger(__name__)
 
 class SelectionStrategy(str, Enum):
     """Enumeration of available selection strategies."""
-    HIGH_EXPRESSION = "highExpression"  # Select sequences with highest predicted expression
+
+    HIGH_EXPRESSION = (
+        "highExpression"  # Select sequences with highest predicted expression
+    )
     RANDOM = "random"  # Select sequences randomly
     LOG_LIKELIHOOD = "log_likelihood"  # Select sequences with highest log likelihood
     UNCERTAINTY = "uncertainty"  # Select sequences with highest prediction uncertainty (future extension)
@@ -75,9 +80,9 @@ class ActiveLearningExperiment:
         batch_size: int = 8,
         test_size: int = 50,
         random_seed: int = 42,
-        seq_mod_method: str = "trim",
+        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
         no_test: bool = True,
-        normalize_expression: bool = True
+        normalize_expression: bool = True,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -108,7 +113,9 @@ class ActiveLearningExperiment:
         # Data containers
         self.all_sequences = []  # Can be List[str] for DNA or np.ndarray for motifs
         self.all_expressions: np.ndarray = np.array([])
-        self.all_log_likelihoods: np.ndarray = np.array([])  # Add log likelihood storage
+        self.all_log_likelihoods: np.ndarray = np.array(
+            []
+        )  # Add log likelihood storage
         self.embeddings: np.ndarray = None  # Add embeddings storage
         self.train_indices: List[int] = []
         self.test_indices: List[int] = []
@@ -122,32 +129,43 @@ class ActiveLearningExperiment:
         # Load and prepare data
         self._load_and_prepare_data(seq_mod_method=self.seq_mod_method)
 
-        logger.info(f"Experiment initialized with {self.selection_strategy.value} selection strategy (seed={random_seed})")
+        logger.info(
+            f"Experiment initialized with {self.selection_strategy.value} selection strategy (seed={random_seed})"
+        )
 
     def _load_and_prepare_data(self, seq_mod_method: str = "trim") -> None:
         """Load data and create train/test/unlabeled splits."""
         logger.info(f"Loading data from {self.data_path}")
 
         # Check if this is a safetensors file or CSV file
-        if self.data_path.endswith('.safetensors'):
+        if self.data_path.endswith(".safetensors"):
             logger.info("Loading from safetensors file")
             # Load from safetensors file
             tensors = load_file(self.data_path)
-            self.embeddings = tensors["embeddings"].float().numpy()  # Convert to float32 then numpy
-            self.all_expressions = tensors["expressions"].float().numpy()  # Convert to float32 then numpy
-            self.all_log_likelihoods = tensors["log_likelihoods"].float().numpy()  # Convert to float32 then numpy
+            self.embeddings = (
+                tensors["embeddings"].float().numpy()
+            )  # Convert to float32 then numpy
+            self.all_expressions = (
+                tensors["expressions"].float().numpy()
+            )  # Convert to float32 then numpy
+            self.all_log_likelihoods = (
+                tensors["log_likelihoods"].float().numpy()
+            )  # Convert to float32 then numpy
             sequences = tensors["sequences"]
 
             # Convert sequences to list of strings
-            if hasattr(sequences, 'numpy'):
+            if hasattr(sequences, "numpy"):
                 # If it's a torch tensor, convert to numpy first
                 sequences_np = sequences.numpy()
             else:
                 sequences_np = sequences
 
             # Handle different sequence formats
-            if sequences_np.dtype.kind in ['S', 'U']:  # String or Unicode
-                self.all_sequences = [seq.decode('utf-8') if isinstance(seq, bytes) else str(seq) for seq in sequences_np]
+            if sequences_np.dtype.kind in ["S", "U"]:  # String or Unicode
+                self.all_sequences = [
+                    seq.decode("utf-8") if isinstance(seq, bytes) else str(seq)
+                    for seq in sequences_np
+                ]
             elif sequences_np.dtype == object:  # Object array (might contain strings)
                 self.all_sequences = [str(seq) for seq in sequences_np]
             else:
@@ -155,43 +173,64 @@ class ActiveLearningExperiment:
                 self.all_sequences = [str(seq) for seq in sequences_np]
 
             if self.normalize_expression:
-                self.all_expressions = (self.all_expressions - self.all_expressions.mean(axis=0, keepdims=True)) / (self.all_expressions.std(axis=0, keepdims=True) + 1e-30)
-                self.embeddings = (self.embeddings - self.embeddings.mean(axis=0, keepdims=True)) / (self.embeddings.std(axis=0, keepdims=True) + 1e-30)
-                logger.info(f"Normalized expression data with mean {self.all_expressions.mean()} and std {self.all_expressions.std()}")
+                self.all_expressions = (
+                    self.all_expressions
+                    - self.all_expressions.mean(axis=0, keepdims=True)
+                ) / (self.all_expressions.std(axis=0, keepdims=True) + 1e-30)
+                self.embeddings = (
+                    self.embeddings - self.embeddings.mean(axis=0, keepdims=True)
+                ) / (self.embeddings.std(axis=0, keepdims=True) + 1e-30)
+                logger.info(
+                    f"Normalized expression data with mean {self.all_expressions.mean()} and std {self.all_expressions.std()}"
+                )
 
-            logger.info(f"Loaded safetensors dataset with {len(self.all_sequences)} sequences")
+            logger.info(
+                f"Loaded safetensors dataset with {len(self.all_sequences)} sequences"
+            )
             logger.info(f"Embeddings shape: {self.embeddings.shape}")
         else:
             # Load from CSV file
             logger.info(f"Using sequence modification method: {seq_mod_method}")
-            
-            if seq_mod_method == SequenceModificationMethod.CAR.value:
+
+            if seq_mod_method == SequenceModificationMethod.CAR:
                 # Load CAR motif data
-                self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, seq_mod_method=seq_mod_method)
+                self.all_sequences, self.all_expressions = load_sequence_data(
+                    self.data_path, seq_mod_method=seq_mod_method
+                )
                 self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)
-                logger.info(f"Loaded CAR dataset with {len(self.all_sequences)} motif sequences")
+                logger.info(
+                    f"Loaded CAR dataset with {len(self.all_sequences)} motif sequences"
+                )
             else:
                 # Load standard CSV data
                 df = pd.read_csv(self.data_path)
 
-                if 'Log_Likelihood' in df.columns:
+                if "Log_Likelihood" in df.columns:
                     # Combined dataset with log likelihood
-                    sequences = df['Sequence'].tolist()
-                    if seq_mod_method == "trim":
+                    sequences = df["Sequence"].tolist()
+                    if seq_mod_method == SequenceModificationMethod.TRIM:
                         sequences = trim_sequences_to_length(sequences)
                         logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-                    elif seq_mod_method == "pad":
+                    elif seq_mod_method == SequenceModificationMethod.PAD:
                         sequences = pad_sequences_to_length(sequences)
                         logger.info(f"Padded sequences to length {len(sequences[0])}")
                     self.all_sequences = sequences
-                    self.all_expressions = df['Expression'].values
-                    self.all_log_likelihoods = df['Log_Likelihood'].values
-                    logger.info(f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data")
+                    self.all_expressions = df["Expression"].values
+                    self.all_log_likelihoods = df["Log_Likelihood"].values
+                    logger.info(
+                        f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data"
+                    )
                 else:
                     # Original expression-only dataset
-                    self.all_sequences, self.all_expressions = load_sequence_data(self.data_path, seq_mod_method=seq_mod_method)
-                    self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)  # Fill with NaN if no log likelihood
-                    logger.info(f"Loaded expression-only dataset with {len(self.all_sequences)} sequences")
+                    self.all_sequences, self.all_expressions = load_sequence_data(
+                        self.data_path, seq_mod_method=seq_mod_method
+                    )
+                    self.all_log_likelihoods = np.full(
+                        len(self.all_sequences), np.nan
+                    )  # Fill with NaN if no log likelihood
+                    logger.info(
+                        f"Loaded expression-only dataset with {len(self.all_sequences)} sequences"
+                    )
 
             # For CSV files, embeddings will be None (will be computed via one-hot encoding)
             self.embeddings = None
@@ -199,11 +238,9 @@ class ActiveLearningExperiment:
         total_samples = len(self.all_sequences)
 
         # Log sequence statistics
-        if seq_mod_method == SequenceModificationMethod.CAR.value:
-            pass
-        else:
-            stats = calculate_sequence_statistics(self.all_sequences)
-            logger.info(f"Sequence statistics: {stats}")
+        # NOTE: base on sequence type, calculate statistics
+        stats = calculate_sequence_statistics(self.all_sequences)
+        logger.info(f"Sequence statistics: {stats}")
 
         # Log log likelihood statistics if available
         if not np.all(np.isnan(self.all_log_likelihoods)):
@@ -225,16 +262,18 @@ class ActiveLearningExperiment:
             random.shuffle(all_indices)
 
         # Reserve test set
-        self.test_indices = all_indices[:self.test_size]
-        remaining_indices = all_indices[self.test_size:]
+        self.test_indices = all_indices[: self.test_size]
+        remaining_indices = all_indices[self.test_size :]
 
         # Initial training set
-        self.train_indices = remaining_indices[:self.initial_sample_size]
-        self.unlabeled_indices = remaining_indices[self.initial_sample_size:]
+        self.train_indices = remaining_indices[: self.initial_sample_size]
+        self.unlabeled_indices = remaining_indices[self.initial_sample_size :]
 
-        logger.info(f"Data split - Train: {len(self.train_indices)}, "
-                f"Test: {len(self.test_indices)}, "
-                f"Unlabeled: {len(self.unlabeled_indices)}")
+        logger.info(
+            f"Data split - Train: {len(self.train_indices)}, "
+            f"Test: {len(self.test_indices)}, "
+            f"Unlabeled: {len(self.unlabeled_indices)}"
+        )
 
     def _encode_sequences(self, indices: List[int]) -> np.ndarray:
         """
@@ -251,7 +290,7 @@ class ActiveLearningExperiment:
             return self.embeddings[indices]
         else:
             # Fall back to one-hot encoding for CSV files
-            if self.seq_mod_method == SequenceModificationMethod.CAR.value:
+            if self.seq_mod_method == SequenceModificationMethod.CAR:
                 # For CAR data, all_sequences is a numpy array
                 sequences = self.all_sequences[indices]
             else:
@@ -307,16 +346,18 @@ class ActiveLearningExperiment:
         spearman_corr, spearman_p = spearmanr(y_test, y_pred)
 
         metrics = {
-            'rmse': rmse,
-            'r2': r2,
-            'pearson_correlation': pearson_corr,
-            'pearson_p_value': pearson_p,
-            'spearman_correlation': spearman_corr,
-            'spearman_p_value': spearman_p
+            "rmse": rmse,
+            "r2": r2,
+            "pearson_correlation": pearson_corr,
+            "pearson_p_value": pearson_p,
+            "spearman_correlation": spearman_corr,
+            "spearman_p_value": spearman_p,
         }
 
-        logger.info(f"Test metrics - RMSE: {rmse:.2f}, R²: {r2:.3f}, "
-                   f"Pearson: {pearson_corr:.3f}, Spearman: {spearman_corr:.3f}")
+        logger.info(
+            f"Test metrics - RMSE: {rmse:.2f}, R²: {r2:.3f}, "
+            f"Pearson: {pearson_corr:.3f}, Spearman: {spearman_corr:.3f}"
+        )
 
         return metrics
 
@@ -341,8 +382,10 @@ class ActiveLearningExperiment:
 
         # Log selection info
         selected_predictions = predictions[selected_local_indices]
-        logger.info(f"HIGH_EXPRESSION: Selected {len(selected_indices)} sequences with predicted expressions: "
-                   f"[{', '.join(f'{pred:.1f}' for pred in selected_predictions)}]")
+        logger.info(
+            f"HIGH_EXPRESSION: Selected {len(selected_indices)} sequences with predicted expressions: "
+            f"[{', '.join(f'{pred:.1f}' for pred in selected_predictions)}]"
+        )
 
         return selected_indices
 
@@ -358,8 +401,10 @@ class ActiveLearningExperiment:
 
         # Log selection info
         selected_expressions = self.all_expressions[selected_indices]
-        logger.info(f"RANDOM: Selected {len(selected_indices)} sequences with actual expressions: "
-                   f"[{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]")
+        logger.info(
+            f"RANDOM: Selected {len(selected_indices)} sequences with actual expressions: "
+            f"[{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
+        )
 
         return selected_indices
 
@@ -372,7 +417,9 @@ class ActiveLearningExperiment:
         """
         # Check if log likelihood data is available
         if np.all(np.isnan(self.all_log_likelihoods)):
-            logger.warning("No log likelihood data available. Falling back to random selection.")
+            logger.warning(
+                "No log likelihood data available. Falling back to random selection."
+            )
             return self._select_next_batch_random()
 
         # Get log likelihood values for unlabeled sequences
@@ -380,15 +427,23 @@ class ActiveLearningExperiment:
 
         # Filter out NaN values
         valid_mask = ~np.isnan(unlabeled_log_likelihoods)
-        valid_unlabeled_indices = [self.unlabeled_indices[i] for i in range(len(self.unlabeled_indices)) if valid_mask[i]]
+        valid_unlabeled_indices = [
+            self.unlabeled_indices[i]
+            for i in range(len(self.unlabeled_indices))
+            if valid_mask[i]
+        ]
         valid_log_likelihoods = unlabeled_log_likelihoods[valid_mask]
 
         if len(valid_unlabeled_indices) == 0:
-            logger.warning("No valid log likelihood values for unlabeled sequences. Falling back to random selection.")
+            logger.warning(
+                "No valid log likelihood values for unlabeled sequences. Falling back to random selection."
+            )
             return self._select_next_batch_random()
 
         # Select indices with highest log likelihood values (less negative = higher probability)
-        sorted_indices = np.argsort(valid_log_likelihoods)[::-1]  # Descending order (highest first)
+        sorted_indices = np.argsort(valid_log_likelihoods)[
+            ::-1
+        ]  # Descending order (highest first)
         batch_size = min(self.batch_size, len(valid_unlabeled_indices))
         selected_local_indices = sorted_indices[:batch_size]
 
@@ -398,9 +453,11 @@ class ActiveLearningExperiment:
         # Log selection info
         selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
         selected_expressions = self.all_expressions[selected_indices]
-        logger.info(f"LOG_LIKELIHOOD: Selected {len(selected_indices)} sequences with log likelihoods: "
-                   f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "
-                   f"and actual expressions: [{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]")
+        logger.info(
+            f"LOG_LIKELIHOOD: Selected {len(selected_indices)} sequences with log likelihoods: "
+            f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "
+            f"and actual expressions: [{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
+        )
 
         return selected_indices
 
@@ -432,11 +489,18 @@ class ActiveLearningExperiment:
         y_pred = self.model.predict(X_next_batch)
 
         # Custom metrics
-        top_10_ratio_intersection_pred = top_10_ratio_intersected_indices_metric(next_batch, self.all_expressions)
+        top_10_ratio_intersection_pred = top_10_ratio_intersected_indices_metric(
+            next_batch, self.all_expressions
+        )
         best_value_pred = get_best_value_metric(y_pred)
-        normalized_predictions_pred = normalized_to_best_val_metric(y_pred, self.all_expressions)
+        normalized_predictions_pred = normalized_to_best_val_metric(
+            y_pred, self.all_expressions
+        )
         if len(self.custom_metrics) > 0:
-            top_10_ratio_intersection_pred_cumulative = self.custom_metrics[-1]['top_10_ratio_intersected_indices_cumulative'] + top_10_ratio_intersection_pred
+            top_10_ratio_intersection_pred_cumulative = (
+                self.custom_metrics[-1]["top_10_ratio_intersected_indices_cumulative"]
+                + top_10_ratio_intersection_pred
+            )
         else:
             top_10_ratio_intersection_pred_cumulative = top_10_ratio_intersection_pred
 
@@ -444,17 +508,21 @@ class ActiveLearningExperiment:
         y_true = self.all_expressions[next_batch]
         # top_10_ratio_intersection_true = top_10_ratio_intersected_indices_metric(next_batch, self.all_expressions)
         best_value_true = get_best_value_metric(y_true)
-        normalized_predictions_true = normalized_to_best_val_metric(y_true, self.all_expressions)
+        normalized_predictions_true = normalized_to_best_val_metric(
+            y_true, self.all_expressions
+        )
 
         # Store custom metrics
-        self.custom_metrics.append({
-            'top_10_ratio_intersected_indices': top_10_ratio_intersection_pred,
-            'top_10_ratio_intersected_indices_cumulative': top_10_ratio_intersection_pred_cumulative,
-            'best_value_predictions_values': best_value_pred,
-            'normalized_predictions_predictions_values': normalized_predictions_pred,
-            'best_value_ground_truth_values': best_value_true,
-            'normalized_predictions_ground_truth_values': normalized_predictions_true
-        })
+        self.custom_metrics.append(
+            {
+                "top_10_ratio_intersected_indices": top_10_ratio_intersection_pred,
+                "top_10_ratio_intersected_indices_cumulative": top_10_ratio_intersection_pred_cumulative,
+                "best_value_predictions_values": best_value_pred,
+                "normalized_predictions_predictions_values": normalized_predictions_pred,
+                "best_value_ground_truth_values": best_value_true,
+                "normalized_predictions_ground_truth_values": normalized_predictions_true,
+            }
+        )
 
     def run_experiment(self, max_rounds: int = 30) -> List[Dict[str, Any]]:
         """
@@ -466,10 +534,14 @@ class ActiveLearningExperiment:
         Returns:
             List of results for each round
         """
-        logger.info(f"Starting {self.selection_strategy.value} learning experiment with {max_rounds} max rounds")
+        logger.info(
+            f"Starting {self.selection_strategy.value} learning experiment with {max_rounds} max rounds"
+        )
 
         for round_num in range(max_rounds):
-            logger.info(f"\n--- Round {round_num + 1} ({self.selection_strategy.value.upper()}) ---")
+            logger.info(
+                f"\n--- Round {round_num + 1} ({self.selection_strategy.value.upper()}) ---"
+            )
 
             # Train model
             self._train_model()
@@ -479,13 +551,13 @@ class ActiveLearningExperiment:
 
             # Store results
             round_results = {
-                'round': round_num + 1,
-                'strategy': self.selection_strategy.value,
-                'seq_mod_method': self.seq_mod_method,
-                'seed': self.random_seed,
-                'train_size': len(self.train_indices),
-                'unlabeled_size': len(self.unlabeled_indices),
-                **metrics
+                "round": round_num + 1,
+                "strategy": self.selection_strategy.value,
+                "seq_mod_method": self.seq_mod_method,
+                "seed": self.random_seed,
+                "train_size": len(self.train_indices),
+                "unlabeled_size": len(self.unlabeled_indices),
+                **metrics,
             }
             self.results.append(round_results)
 
@@ -511,12 +583,15 @@ class ActiveLearningExperiment:
 
             # Update training set
             self.train_indices.extend(next_batch)
-            self.unlabeled_indices = [idx for idx in self.unlabeled_indices
-                                    if idx not in next_batch]
+            self.unlabeled_indices = [
+                idx for idx in self.unlabeled_indices if idx not in next_batch
+            ]
 
             logger.info(f"Added {len(next_batch)} sequences to training set")
 
-        logger.info(f"{self.selection_strategy.value.capitalize()} experiment completed!")
+        logger.info(
+            f"{self.selection_strategy.value.capitalize()} experiment completed!"
+        )
         return self.results
 
     def save_results(self, output_path: str) -> None:
@@ -532,18 +607,22 @@ class ActiveLearningExperiment:
 
         # Save custom metrics if available
         if self.custom_metrics:
-            custom_metrics_path = output_path.replace('.csv', '_custom_metrics.csv')
+            custom_metrics_path = output_path.replace(".csv", "_custom_metrics.csv")
             custom_metrics_df = pd.DataFrame(self.custom_metrics)
 
             # Add metadata columns to match with main results
-            custom_metrics_df['strategy'] = self.selection_strategy.value
-            custom_metrics_df['seq_mod_method'] = self.seq_mod_method
-            custom_metrics_df['seed'] = self.random_seed
-            custom_metrics_df['round'] = range(1, len(self.custom_metrics) + 1)
-            custom_metrics_df['train_size'] = len(self.train_indices)
+            custom_metrics_df["strategy"] = self.selection_strategy.value
+            custom_metrics_df["seq_mod_method"] = self.seq_mod_method
+            custom_metrics_df["seed"] = self.random_seed
+            custom_metrics_df["round"] = range(1, len(self.custom_metrics) + 1)
+            custom_metrics_df["train_size"] = len(self.train_indices)
 
             # Reorder columns to put metadata first
-            cols = ['round', 'strategy', 'seed', 'train_size'] + [col for col in custom_metrics_df.columns if col not in ['round', 'strategy', 'seed', 'train_size']]
+            cols = ["round", "strategy", "seed", "train_size"] + [
+                col
+                for col in custom_metrics_df.columns
+                if col not in ["round", "strategy", "seed", "train_size"]
+            ]
             custom_metrics_df = custom_metrics_df[cols]
 
             custom_metrics_df.to_csv(custom_metrics_path, index=False)
@@ -559,8 +638,11 @@ class ActiveLearningExperiment:
         if not self.results:
             return {}
 
-        return {k: v for k, v in self.results[-1].items()
-                if k not in ['round', 'strategy', 'seed', 'train_size', 'unlabeled_size']}
+        return {
+            k: v
+            for k, v in self.results[-1].items()
+            if k not in ["round", "strategy", "seed", "train_size", "unlabeled_size"]
+        }
 
 
 def run_controlled_experiment(
@@ -574,7 +656,7 @@ def run_controlled_experiment(
     no_test: bool = True,
     max_rounds: int = 20,
     output_dir: str = "results",
-    normalize_expression: bool = True
+    normalize_expression: bool = True,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds.
@@ -599,7 +681,9 @@ def run_controlled_experiment(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"Running controlled experiment with strategies: {[s.value for s in strategies]}")
+    logger.info(
+        f"Running controlled experiment with strategies: {[s.value for s in strategies]}"
+    )
     logger.info(f"Using {len(seeds)} different seeds: {seeds}")
 
     # Initialize results storage
@@ -613,15 +697,18 @@ def run_controlled_experiment(
     # Create progress bar for total experiments
     total_experiments = len(strategies) * len(seq_mod_methods) * len(seeds)
     with tqdm(total=total_experiments, desc="Running experiments") as pbar:
-
         for strategy in strategies:
             for seq_mod_method in seq_mod_methods:
                 logger.info(f"\n{'='*60}")
-                logger.info(f"Running {strategy.value.upper()} strategy with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method")
+                logger.info(
+                    f"Running {strategy.value.upper()} strategy with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method"
+                )
                 logger.info(f"{'='*60}")
 
                 for seed_idx, seed in enumerate(seeds):
-                    logger.info(f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---")
+                    logger.info(
+                        f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---"
+                    )
 
                     # Create experiment with specific strategy and seed
                     experiment = ActiveLearningExperiment(
@@ -633,7 +720,7 @@ def run_controlled_experiment(
                         random_seed=seed,
                         seq_mod_method=seq_mod_method.value,
                         no_test=no_test,
-                        normalize_expression=normalize_expression
+                        normalize_expression=normalize_expression,
                     )
 
                     # Run experiment
@@ -646,26 +733,34 @@ def run_controlled_experiment(
                         for i, metrics in enumerate(experiment.custom_metrics):
                             # Calculate train_size for this round
                             # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
-                            train_size_for_round = initial_sample_size + (i * batch_size)
+                            train_size_for_round = initial_sample_size + (
+                                i * batch_size
+                            )
 
                             metrics_with_metadata = {
-                                'round': i,
-                                'strategy': strategy.value,
-                                'seed': seed,
-                                'train_size': train_size_for_round,
-                                **metrics
+                                "round": i,
+                                "strategy": strategy.value,
+                                "seed": seed,
+                                "train_size": train_size_for_round,
+                                **metrics,
                             }
-                            all_custom_metrics[strategy.value][seq_mod_method.value].append(metrics_with_metadata)
+                            all_custom_metrics[strategy.value][
+                                seq_mod_method.value
+                            ].append(metrics_with_metadata)
 
                     # Save individual seed results (this now also saves custom metrics)
-                    seed_output_path = output_path / f"{strategy.value}_seed_{seed}_results.csv"
+                    seed_output_path = (
+                        output_path / f"{strategy.value}_seed_{seed}_results.csv"
+                    )
                     experiment.save_results(str(seed_output_path))
 
                     # Log final performance for this seed
                     final_performance = experiment.get_final_performance()
-                    logger.info(f"Seed {seed} final performance - "
-                            f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-                            f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}")
+                    logger.info(
+                        f"Seed {seed} final performance - "
+                        f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
+                        f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
+                    )
 
                     pbar.update(1)
     # Save combined results for each strategy (Pearson and Spearman correlation, R2, RMSE)
@@ -673,9 +768,13 @@ def run_controlled_experiment(
         for seq_mod_method in all_results[strategy].keys():
             results = all_results[strategy][seq_mod_method]
             strategy_df = pd.DataFrame(results)
-            strategy_output_path = output_path / f"{strategy}_{seq_mod_method}_all_seeds_results.csv"
+            strategy_output_path = (
+                output_path / f"{strategy}_{seq_mod_method}_all_seeds_results.csv"
+            )
         strategy_df.to_csv(strategy_output_path, index=False)
-        logger.info(f"Combined {strategy} {seq_mod_method} results saved to {strategy_output_path}")
+        logger.info(
+            f"Combined {strategy} {seq_mod_method} results saved to {strategy_output_path}"
+        )
 
     # Save combined custom metrics for each strategy (top_10_ratio_intersected_indices, best_value_predictions_values, normalized_predictions_predictions_values, best_value_ground_truth_values, normalized_predictions_ground_truth_values)
     for strategy in all_custom_metrics.keys():
@@ -683,9 +782,14 @@ def run_controlled_experiment(
             custom_metrics = all_custom_metrics[strategy][seq_mod_method]
             if custom_metrics:  # Only save if custom metrics exist
                 custom_metrics_df = pd.DataFrame(custom_metrics)
-                custom_metrics_output_path = output_path / f"{strategy}_{seq_mod_method}_all_seeds_custom_metrics.csv"
+                custom_metrics_output_path = (
+                    output_path
+                    / f"{strategy}_{seq_mod_method}_all_seeds_custom_metrics.csv"
+                )
                 custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
-                logger.info(f"Combined {strategy} {seq_mod_method} custom metrics saved to {custom_metrics_output_path}")
+                logger.info(
+                    f"Combined {strategy} {seq_mod_method} custom metrics saved to {custom_metrics_output_path}"
+                )
 
     # Create overall combined results file
     combined_results = []
@@ -694,8 +798,10 @@ def run_controlled_experiment(
             results = all_results[strategy][seq_mod_method]
             # Add seq_mod_method to each result dictionary (in case it's missing)
             for result_dict in results:
-                result_dict_with_seq_mod = result_dict.copy()  # Create a copy to avoid modifying original
-                result_dict_with_seq_mod['seq_mod_method'] = seq_mod_method
+                result_dict_with_seq_mod = (
+                    result_dict.copy()
+                )  # Create a copy to avoid modifying original
+                result_dict_with_seq_mod["seq_mod_method"] = seq_mod_method
                 combined_results.append(result_dict_with_seq_mod)
 
     combined_df = pd.DataFrame(combined_results)
@@ -710,20 +816,30 @@ def run_controlled_experiment(
             custom_metrics = all_custom_metrics[strategy][seq_mod_method]
             # Add seq_mod_method to each custom metric dictionary
             for metric_dict in custom_metrics:
-                metric_dict_with_seq_mod = metric_dict.copy()  # Create a copy to avoid modifying original
-                metric_dict_with_seq_mod['seq_mod_method'] = seq_mod_method
+                metric_dict_with_seq_mod = (
+                    metric_dict.copy()
+                )  # Create a copy to avoid modifying original
+                metric_dict_with_seq_mod["seq_mod_method"] = seq_mod_method
                 combined_custom_metrics.append(metric_dict_with_seq_mod)
 
     if combined_custom_metrics:  # Only save if there are custom metrics
         combined_custom_metrics_df = pd.DataFrame(combined_custom_metrics)
-        combined_custom_metrics_output_path = output_path / "combined_all_custom_metrics.csv"
-        combined_custom_metrics_df.to_csv(combined_custom_metrics_output_path, index=False)
-        logger.info(f"All combined custom metrics saved to {combined_custom_metrics_output_path}")
+        combined_custom_metrics_output_path = (
+            output_path / "combined_all_custom_metrics.csv"
+        )
+        combined_custom_metrics_df.to_csv(
+            combined_custom_metrics_output_path, index=False
+        )
+        logger.info(
+            f"All combined custom metrics saved to {combined_custom_metrics_output_path}"
+        )
 
     return all_results
 
 
-def analyze_multi_seed_results(results: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Dict[str, Any]]:
+def analyze_multi_seed_results(
+    results: Dict[str, List[Dict[str, Any]]]
+) -> Dict[str, Dict[str, Any]]:
     """
     Analyze results across multiple seeds for each strategy.
 
@@ -745,35 +861,41 @@ def analyze_multi_seed_results(results: Dict[str, List[Dict[str, Any]]]) -> Dict
             df = pd.DataFrame(seq_mod_method_results)
 
             # Group by round to get statistics across seeds
-            round_stats = df.groupby('round').agg({
-                'pearson_correlation': ['mean', 'std', 'min', 'max'],
-                'spearman_correlation': ['mean', 'std', 'min', 'max'],
-                'r2': ['mean', 'std', 'min', 'max'],
-                'rmse': ['mean', 'std', 'min', 'max'],
-                'train_size': 'first'  # Should be same across seeds for same round
-            }).round(4)
+            round_stats = (
+                df.groupby("round")
+                .agg(
+                    {
+                        "pearson_correlation": ["mean", "std", "min", "max"],
+                        "spearman_correlation": ["mean", "std", "min", "max"],
+                        "r2": ["mean", "std", "min", "max"],
+                        "rmse": ["mean", "std", "min", "max"],
+                        "train_size": "first",  # Should be same across seeds for same round
+                    }
+                )
+                .round(4)
+            )
 
             # Final round statistics
-            final_round = df['round'].max()
-            final_results = df[df['round'] == final_round]
+            final_round = df["round"].max()
+            final_results = df[df["round"] == final_round]
 
             final_stats = {
-                'final_pearson_mean': final_results['pearson_correlation'].mean(),
-                'final_pearson_std': final_results['pearson_correlation'].std(),
-                'final_spearman_mean': final_results['spearman_correlation'].mean(),
-                'final_spearman_std': final_results['spearman_correlation'].std(),
-                'final_r2_mean': final_results['r2'].mean(),
-                'final_r2_std': final_results['r2'].std(),
-                'final_rmse_mean': final_results['rmse'].mean(),
-                'final_rmse_std': final_results['rmse'].std(),
-                'final_train_size': final_results['train_size'].iloc[0],
-                'n_seeds': len(final_results),
-                'n_rounds': final_round
+                "final_pearson_mean": final_results["pearson_correlation"].mean(),
+                "final_pearson_std": final_results["pearson_correlation"].std(),
+                "final_spearman_mean": final_results["spearman_correlation"].mean(),
+                "final_spearman_std": final_results["spearman_correlation"].std(),
+                "final_r2_mean": final_results["r2"].mean(),
+                "final_r2_std": final_results["r2"].std(),
+                "final_rmse_mean": final_results["rmse"].mean(),
+                "final_rmse_std": final_results["rmse"].std(),
+                "final_train_size": final_results["train_size"].iloc[0],
+                "n_seeds": len(final_results),
+                "n_rounds": final_round,
             }
 
             analysis[strategy][seq_mod_method] = {
-                'round_statistics': round_stats,
-                'final_statistics': final_stats
+                "round_statistics": round_stats,
+                "final_statistics": final_stats,
             }
 
         return analysis
@@ -786,36 +908,50 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
     Args:
         results: Dictionary mapping strategy names to their results
     """
-    logger.info("\n" + "="*80)
+    logger.info("\n" + "=" * 80)
     logger.info("MULTI-SEED STRATEGY COMPARISON")
-    logger.info("="*80)
+    logger.info("=" * 80)
 
     analysis = analyze_multi_seed_results(results)
 
     for strategy, seq_mod_methods in analysis.items():
         for seq_mod_method, seq_mod_method_analysis in seq_mod_methods.items():
-            final_stats = seq_mod_method_analysis['final_statistics']
+            final_stats = seq_mod_method_analysis["final_statistics"]
 
-            logger.info(f"\n{strategy.upper()} {seq_mod_method.upper()} Strategy (across {final_stats['n_seeds']} seeds):")
+            logger.info(
+                f"\n{strategy.upper()} {seq_mod_method.upper()} Strategy (across {final_stats['n_seeds']} seeds):"
+            )
             logger.info(f"  Final Training Size: {final_stats['final_train_size']}")
-            logger.info(f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}")
-            logger.info(f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}")
-            logger.info(f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}")
-            logger.info(f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}")
+            logger.info(
+                f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}"
+            )
+            logger.info(
+                f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}"
+            )
+            logger.info(
+                f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}"
+            )
+            logger.info(
+                f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}"
+            )
 
     # Statistical comparison between strategies
     if len(analysis) == 2:
         strategies = list(analysis.keys())
         strategy1, strategy2 = strategies[0], strategies[1]
 
-        stats1 = analysis[strategy1]['final_statistics']
-        stats2 = analysis[strategy2]['final_statistics']
+        stats1 = analysis[strategy1]["final_statistics"]
+        stats2 = analysis[strategy2]["final_statistics"]
 
         logger.info("\nSTATISTICAL COMPARISON:")
-        logger.info(f"Pearson Correlation Difference ({strategy1} - {strategy2}): "
-                   f"{stats1['final_pearson_mean'] - stats2['final_pearson_mean']:.4f}")
-        logger.info(f"Spearman Correlation Difference ({strategy1} - {strategy2}): "
-                   f"{stats1['final_spearman_mean'] - stats2['final_spearman_mean']:.4f}")
+        logger.info(
+            f"Pearson Correlation Difference ({strategy1} - {strategy2}): "
+            f"{stats1['final_pearson_mean'] - stats2['final_pearson_mean']:.4f}"
+        )
+        logger.info(
+            f"Spearman Correlation Difference ({strategy1} - {strategy2}): "
+            f"{stats1['final_spearman_mean'] - stats2['final_spearman_mean']:.4f}"
+        )
 
 
 def main() -> None:
@@ -869,28 +1005,29 @@ def main() -> None:
 
     # config for CAR-based sequence modification
     config = {
-        'data_path': '/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv',
-        'strategies': [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM],
-        'seq_mod_methods': [SequenceModificationMethod.CAR],
-        'seeds': [42],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
-        'initial_sample_size': 8,
-        'batch_size': 8,
-        'test_size': 30,
-        'max_rounds': 20,
-        'normalize_expression': False,
-        'output_dir': 'results_all_strategies_CAR_no_test_no_normalization',
-        'no_test': True
+        "data_path": "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv",
+        "strategies": [SelectionStrategy.HIGH_EXPRESSION, SelectionStrategy.RANDOM],
+        "seq_mod_methods": [SequenceModificationMethod.CAR],
+        "seeds": [
+            42
+        ],  # 2 different seeds NOTE: change to 5 different seeds for full experiment
+        "initial_sample_size": 8,
+        "batch_size": 8,
+        "test_size": 30,
+        "max_rounds": 20,
+        "normalize_expression": False,
+        "output_dir": "results_all_strategies_CAR_no_test_no_normalization",
+        "no_test": True,
     }
 
-
-
-
-    logger.info("Starting Multi-Seed Controlled Active Learning Experiments with Log Likelihood Strategy")
+    logger.info(
+        "Starting Multi-Seed Controlled Active Learning Experiments with Log Likelihood Strategy"
+    )
     logger.info(f"Configuration: {config}")
 
     # Run controlled experiments
     all_results = run_controlled_experiment(**config)
-    if not config['no_test']:
+    if not config["no_test"]:
         # Analyze and compare performance across strategies
         # NOTE: only compare performance if test set is used
         compare_strategies_performance(all_results)
@@ -902,24 +1039,26 @@ def main() -> None:
         summary_data = []
         for strategy, strategy_analysis in analysis.items():
             for seq_mod_method, seq_mod_method_analysis in strategy_analysis.items():
-                final_stats = seq_mod_method_analysis['final_statistics']
-                summary_data.append({
-                    'strategy': strategy,
-                    'seq_mod_method': seq_mod_method,
-                    'n_seeds': final_stats['n_seeds'],
-                    'final_pearson_mean': final_stats['final_pearson_mean'],
-                    'final_pearson_std': final_stats['final_pearson_std'],
-                    'final_spearman_mean': final_stats['final_spearman_mean'],
-                    'final_spearman_std': final_stats['final_spearman_std'],
-                    'final_r2_mean': final_stats['final_r2_mean'],
-                    'final_r2_std': final_stats['final_r2_std'],
-                    'final_rmse_mean': final_stats['final_rmse_mean'],
-                    'final_rmse_std': final_stats['final_rmse_std'],
-                    'final_train_size': final_stats['final_train_size']
-                })
+                final_stats = seq_mod_method_analysis["final_statistics"]
+                summary_data.append(
+                    {
+                        "strategy": strategy,
+                        "seq_mod_method": seq_mod_method,
+                        "n_seeds": final_stats["n_seeds"],
+                        "final_pearson_mean": final_stats["final_pearson_mean"],
+                        "final_pearson_std": final_stats["final_pearson_std"],
+                        "final_spearman_mean": final_stats["final_spearman_mean"],
+                        "final_spearman_std": final_stats["final_spearman_std"],
+                        "final_r2_mean": final_stats["final_r2_mean"],
+                        "final_r2_std": final_stats["final_r2_std"],
+                        "final_rmse_mean": final_stats["final_rmse_mean"],
+                        "final_rmse_std": final_stats["final_rmse_std"],
+                        "final_train_size": final_stats["final_train_size"],
+                    }
+                )
 
         summary_df = pd.DataFrame(summary_data)
-        summary_path = Path(config['output_dir']) / "summary_statistics.csv"
+        summary_path = Path(config["output_dir"]) / "summary_statistics.csv"
         summary_df.to_csv(summary_path, index=False)
         logger.info(f"Summary statistics saved to {summary_path}")
 

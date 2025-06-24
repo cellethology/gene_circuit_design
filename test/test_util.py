@@ -13,6 +13,7 @@ import pytest
 
 # Import the functions to test - using proper package imports
 from utils.sequence_utils import (
+    SequenceModificationMethod,
     calculate_sequence_statistics,
     flatten_one_hot_sequences,
     load_sequence_data,
@@ -29,12 +30,14 @@ class TestOneHotEncodeSequence:
         sequence = "ATGC"
         result = one_hot_encode_sequence(sequence)
 
-        expected = np.array([
-            [1, 0, 0, 0],  # A
-            [0, 1, 0, 0],  # T
-            [0, 0, 1, 0],  # G
-            [0, 0, 0, 1]   # C
-        ])
+        expected = np.array(
+            [
+                [1, 0, 0, 0],  # A
+                [0, 1, 0, 0],  # T
+                [0, 0, 1, 0],  # G
+                [0, 0, 0, 1],  # C
+            ]
+        )
 
         assert result.shape == (4, 4)
         np.testing.assert_array_equal(result, expected)
@@ -42,9 +45,8 @@ class TestOneHotEncodeSequence:
     def test_empty_sequence(self):
         """Test encoding of empty sequence."""
         sequence = ""
-        result = one_hot_encode_sequence(sequence)
-
-        assert result.shape == (0, 4)
+        with pytest.raises(ValueError, match="Sequence cannot be empty"):
+            one_hot_encode_sequence(sequence)
 
     def test_single_nucleotide(self):
         """Test encoding of single nucleotide."""
@@ -76,12 +78,14 @@ class TestOneHotEncodeSequence:
         sequence = "atgc"
         result = one_hot_encode_sequence(sequence)
 
-        expected = np.array([
-            [1, 0, 0, 0],  # a -> A
-            [0, 1, 0, 0],  # t -> T
-            [0, 0, 1, 0],  # g -> G
-            [0, 0, 0, 1]   # c -> C
-        ])
+        expected = np.array(
+            [
+                [1, 0, 0, 0],  # a -> A
+                [0, 1, 0, 0],  # t -> T
+                [0, 0, 1, 0],  # g -> G
+                [0, 0, 0, 1],  # c -> C
+            ]
+        )
 
         assert result.shape == (4, 4)
         np.testing.assert_array_equal(result, expected)
@@ -93,7 +97,7 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_same_length(self):
         """Test encoding multiple sequences of same length."""
         sequences = ["ATGC", "GCTA", "TTAA"]
-        result = one_hot_encode_sequences(sequences, "trim")
+        result = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
 
         assert len(result) == 3
         for encoded_seq in result:
@@ -103,7 +107,7 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_different_lengths(self):
         """Test encoding multiple sequences of different lengths."""
         sequences = ["AT", "GCTA", "TTAAGG"]
-        result = one_hot_encode_sequences(sequences, "trim")
+        result = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
 
         assert len(result) == 3
         assert result[0].shape == (2, 4)
@@ -113,16 +117,15 @@ class TestOneHotEncodeSequences:
     def test_empty_sequence_list(self):
         """Test encoding empty sequence list."""
         sequences = []
-        result = one_hot_encode_sequences(sequences, "trim")
-
-        assert len(result) == 0
+        with pytest.raises(ValueError, match="Sequences cannot be empty"):
+            one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
 
     def test_sequence_with_invalid_nucleotide(self):
         """Test handling sequences with invalid nucleotides."""
         sequences = ["ATGC", "GCTX", "TTAA"]  # Second sequence has invalid X
 
         with pytest.raises(ValueError):
-            one_hot_encode_sequences(sequences)
+            one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
 
 
 class TestFlattenOneHotSequences:
@@ -142,7 +145,7 @@ class TestFlattenOneHotSequences:
         """Test flattening multiple sequences of same length."""
         encoded_sequences = [
             np.array([[1, 0, 0, 0], [0, 1, 0, 0]]),  # AT
-            np.array([[0, 0, 1, 0], [0, 0, 0, 1]])   # GC
+            np.array([[0, 0, 1, 0], [0, 0, 0, 1]]),  # GC
         ]
         result = flatten_one_hot_sequences(encoded_sequences)
 
@@ -155,8 +158,8 @@ class TestFlattenOneHotSequences:
     def test_flatten_different_length_sequences_raises_error(self):
         """Test that flattening sequences of different lengths raises error."""
         encoded_sequences = [
-            np.array([[1, 0, 0, 0], [0, 1, 0, 0]]),        # Length 2
-            np.array([[0, 0, 1, 0], [0, 0, 0, 1], [1, 0, 0, 0]])  # Length 3
+            np.array([[1, 0, 0, 0], [0, 1, 0, 0]]),  # Length 2
+            np.array([[0, 0, 1, 0], [0, 0, 0, 1], [1, 0, 0, 0]]),  # Length 3
         ]
 
         with pytest.raises(ValueError, match="All sequences must have the same length"):
@@ -165,9 +168,8 @@ class TestFlattenOneHotSequences:
     def test_flatten_empty_list(self):
         """Test flattening empty sequence list."""
         encoded_sequences = []
-        result = flatten_one_hot_sequences(encoded_sequences)
-
-        assert result.shape == (0, 0)
+        with pytest.raises(ValueError, match="Encoded sequences list cannot be empty"):
+            flatten_one_hot_sequences(encoded_sequences)
 
 
 class TestLoadSequenceData:
@@ -181,12 +183,14 @@ class TestLoadSequenceData:
 2,GCATGCTA,2000.0,P2,K2,T2
 3,TTAACCGG,800.25,P3,K3,T3"""
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(csv_data)
             temp_path = f.name
 
         try:
-            sequences, expressions = load_sequence_data(temp_path, "trim")
+            sequences, expressions = load_sequence_data(
+                temp_path, SequenceModificationMethod.TRIM
+            )
 
             assert len(sequences) == 3
             assert len(expressions) == 3
@@ -205,20 +209,20 @@ class TestLoadSequenceData:
 1,ATGC,P1
 2,GCTA,P2"""
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(csv_data)
             temp_path = f.name
 
         try:
             with pytest.raises(ValueError):
-                load_sequence_data(temp_path, "trim")
+                load_sequence_data(temp_path, SequenceModificationMethod.TRIM)
         finally:
             os.unlink(temp_path)
 
     def test_load_nonexistent_file(self):
         """Test loading non-existent file."""
         with pytest.raises(FileNotFoundError):
-            load_sequence_data("nonexistent_file.csv", "trim")
+            load_sequence_data("nonexistent_file.csv", SequenceModificationMethod.TRIM)
 
     def test_load_with_trimming(self):
         """Test loading with sequence trimming."""
@@ -227,12 +231,14 @@ class TestLoadSequenceData:
 2,GCATGCTATTTT,2000.0
 3,TTAACCGGCCCC,800.25"""
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(csv_data)
             temp_path = f.name
 
         try:
-            sequences, expressions = load_sequence_data(temp_path, "trim")
+            sequences, expressions = load_sequence_data(
+                temp_path, SequenceModificationMethod.TRIM
+            )
 
             # All sequences should be trimmed to the length of the shortest (12)
             assert all(len(seq) == 12 for seq in sequences)
@@ -251,44 +257,36 @@ class TestCalculateSequenceStatistics:
         sequences = ["ATGC", "GCTA", "TTAACCGG"]
         stats = calculate_sequence_statistics(sequences)
 
-        assert stats['count'] == 3
-        assert stats['min_length'] == 4
-        assert stats['max_length'] == 8
-        assert stats['mean_length'] == pytest.approx(5.33, rel=1e-2)
-        assert stats['total_nucleotides'] == 16
+        assert stats["count"] == 3
+        assert stats["min_length"] == 4
+        assert stats["max_length"] == 8
+        assert stats["mean_length"] == pytest.approx(5.33, rel=1e-2)
 
     def test_single_sequence_statistics(self):
         """Test statistics for single sequence."""
         sequences = ["ATGCGTAC"]
         stats = calculate_sequence_statistics(sequences)
 
-        assert stats['count'] == 1
-        assert stats['min_length'] == 8
-        assert stats['max_length'] == 8
-        assert stats['mean_length'] == 8.0
-        assert stats['total_nucleotides'] == 8
+        assert stats["count"] == 1
+        assert stats["min_length"] == 8
+        assert stats["max_length"] == 8
+        assert stats["mean_length"] == 8.0
 
     def test_empty_sequence_list_statistics(self):
         """Test statistics for empty sequence list."""
         sequences = []
-        stats = calculate_sequence_statistics(sequences)
-
-        assert stats['count'] == 0
-        assert stats['min_length'] == 0
-        assert stats['max_length'] == 0
-        assert stats['mean_length'] == 0.0
-        assert stats['total_nucleotides'] == 0
+        with pytest.raises(ValueError, match="Sequences list cannot be empty"):
+            calculate_sequence_statistics(sequences)
 
     def test_sequences_with_varying_lengths(self):
         """Test statistics for sequences with varying lengths."""
         sequences = ["A", "AT", "ATG", "ATGC", "ATGCG"]
         stats = calculate_sequence_statistics(sequences)
 
-        assert stats['count'] == 5
-        assert stats['min_length'] == 1
-        assert stats['max_length'] == 5
-        assert stats['mean_length'] == 3.0
-        assert stats['total_nucleotides'] == 15
+        assert stats["count"] == 5
+        assert stats["min_length"] == 1
+        assert stats["max_length"] == 5
+        assert stats["mean_length"] == 3.0
 
 
 # Integration tests
@@ -302,25 +300,32 @@ class TestSequenceProcessingIntegration:
 2,GCTA,2000.0
 3,TTAA,800.25"""
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
             f.write(csv_data)
             temp_path = f.name
 
         try:
             # Load data
-            sequences, expressions = load_sequence_data(temp_path, "trim")
+            sequences, expressions = load_sequence_data(
+                temp_path, SequenceModificationMethod.TRIM
+            )
 
             # Calculate statistics
             stats = calculate_sequence_statistics(sequences)
-            assert stats['count'] == 3
+            assert stats["count"] == 3
 
             # Encode sequences
-            encoded = one_hot_encode_sequences(sequences, "trim")
+            encoded = one_hot_encode_sequences(
+                sequences, SequenceModificationMethod.TRIM
+            )
             assert len(encoded) == 3
 
             # Flatten encoded sequences
             flattened = flatten_one_hot_sequences(encoded)
-            assert flattened.shape == (3, 16)  # 3 sequences × 4 nucleotides × 4 positions
+            assert flattened.shape == (
+                3,
+                16,
+            )  # 3 sequences × 4 nucleotides × 4 positions
 
         finally:
             os.unlink(temp_path)
@@ -346,7 +351,7 @@ def sample_csv_content():
 @pytest.fixture
 def temp_csv_file(sample_csv_content):
     """Fixture providing temporary CSV file."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
         f.write(sample_csv_content)
         temp_path = f.name
 
@@ -361,14 +366,18 @@ class TestWithFixtures:
 
     def test_encode_sample_sequences(self, sample_sequences):
         """Test encoding sample sequences using fixture."""
-        encoded = one_hot_encode_sequences(sample_sequences, "trim")
+        encoded = one_hot_encode_sequences(
+            sample_sequences, SequenceModificationMethod.TRIM
+        )
         assert len(encoded) == 4
         for seq_encoded in encoded:
             assert seq_encoded.shape == (4, 4)
 
     def test_load_temp_csv(self, temp_csv_file):
         """Test loading temporary CSV file using fixture."""
-        sequences, expressions = load_sequence_data(temp_csv_file, "trim")
+        sequences, expressions = load_sequence_data(
+            temp_csv_file, SequenceModificationMethod.TRIM
+        )
         assert len(sequences) == 4
         assert len(expressions) == 4
         assert expressions[0] == 1500.5
@@ -385,7 +394,7 @@ def test_numpy_float32_dtype():
     assert encoded.dtype == np.float32
 
     sequences = ["ATGC", "GGCC"]
-    multi_encoded = one_hot_encode_sequences(sequences, "trim")
+    multi_encoded = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
     for encoded in multi_encoded:
         assert encoded.dtype == np.float32
 
