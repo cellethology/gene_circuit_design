@@ -85,3 +85,6 @@ site/
 .env.production.local
 run_experiments.py
 setting.json
+
+# dir
+.claude/

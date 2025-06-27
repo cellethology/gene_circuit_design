@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from run_experiments import SelectionStrategy, SequenceModificationMethod
+from utils.model_loader import RegressionModel
 
 
 def load_experiment_config(
@@ -86,6 +87,24 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
         }
         config["seq_mod_methods"] = [
             seq_mod_map[method] for method in config["seq_mod_methods"]
+        ]
+
+    # Convert regression models from strings to enums (with default if missing)
+    if "regression_models" in config:
+        regression_model_map = {
+            "LINEAR": RegressionModel.LINEAR,
+            "KNN": RegressionModel.KNN,
+            "RANDOM_FOREST": RegressionModel.RANDOM_FOREST,
+        }
+        config["regression_models"] = [
+            regression_model_map[model] for model in config["regression_models"]
+        ]
+    else:
+        # Default to all three models if not specified
+        config["regression_models"] = [
+            RegressionModel.LINEAR,
+            RegressionModel.KNN,
+            RegressionModel.RANDOM_FOREST,
         ]
 
     return config

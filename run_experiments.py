@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 from scipy.stats import pearsonr, spearmanr
-from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
@@ -26,6 +25,7 @@ from utils.metrics import (
     normalized_to_best_val_metric,
     top_10_ratio_intersected_indices_metric,
 )
+from utils.model_loader import RegressionModel, return_model
 from utils.sequence_utils import (
     SequenceModificationMethod,
     calculate_sequence_statistics,
@@ -78,6 +78,7 @@ class ActiveLearningExperiment:
         self,
         data_path: str,
         selection_strategy: SelectionStrategy = SelectionStrategy.HIGH_EXPRESSION,
+        regression_model: RegressionModel = RegressionModel.LINEAR,
         initial_sample_size: int = 8,
         batch_size: int = 8,
         test_size: int = 50,
@@ -125,7 +126,7 @@ class ActiveLearningExperiment:
         self.unlabeled_indices: List[int] = []
 
         # Model and results
-        self.model = LinearRegression()
+        self.model = return_model(regression_model, random_state=random_seed)
         self.results: List[Dict[str, Any]] = []
         self.custom_metrics: List[Dict[str, Any]] = []
 
@@ -477,6 +478,7 @@ class ActiveLearningExperiment:
         if len(self.unlabeled_indices) == 0:
             return []
 
+        # TODO: make this into a function
         if self.selection_strategy == SelectionStrategy.HIGH_EXPRESSION:
             return self._select_next_batch_active()
         elif self.selection_strategy == SelectionStrategy.RANDOM:
@@ -650,15 +652,37 @@ class ActiveLearningExperiment:
             # Add metadata columns to match with main results
             custom_metrics_df["strategy"] = self.selection_strategy.value
             custom_metrics_df["seq_mod_method"] = self.seq_mod_method
+            custom_metrics_df["regression_model"] = self.model.__class__.__name__
             custom_metrics_df["seed"] = self.random_seed
             custom_metrics_df["round"] = range(1, len(self.custom_metrics) + 1)
-            custom_metrics_df["train_size"] = len(self.train_indices)
+
+            # Calculate correct train_size for each round
+            # Round 0: initial_sample_size (8)
+            # Round 1: initial_sample_size + batch_size (16)
+            # Round 2: initial_sample_size + 2*batch_size (24)
+            # etc.
+            train_sizes = []
+            for i in range(len(self.custom_metrics)):
+                if i == 0:
+                    # First custom metric is for initial training set
+                    train_size = self.initial_sample_size
+                else:
+                    # Subsequent metrics are after adding each batch
+                    train_size = self.initial_sample_size + (i * self.batch_size)
+                train_sizes.append(train_size)
+            custom_metrics_df["train_size"] = train_sizes
 
             # Reorder columns to put metadata first
-            cols = ["round", "strategy", "seed", "train_size"] + [
-                col
-                for col in custom_metrics_df.columns
-                if col not in ["round", "strategy", "seed", "train_size"]
+            metadata_cols = [
+                "round",
+                "strategy",
+                "seed",
+                "train_size",
+                "regression_model",
+                "seq_mod_method",
+            ]
+            cols = metadata_cols + [
+                col for col in custom_metrics_df.columns if col not in metadata_cols
             ]
             custom_metrics_df = custom_metrics_df[cols]
 
@@ -685,6 +709,7 @@ class ActiveLearningExperiment:
 def run_controlled_experiment(
     data_path: str,
     strategies: List[SelectionStrategy],
+    regression_models: List[RegressionModel],
     seq_mod_methods: List[SequenceModificationMethod],
     seeds: List[int],
     initial_sample_size: int = 8,
@@ -728,118 +753,142 @@ def run_controlled_experiment(
         all_results[strategy.value] = {}
         all_custom_metrics[strategy.value] = {}
         for seq_mod_method in seq_mod_methods:
-            all_results[strategy.value][seq_mod_method.value] = []
-            all_custom_metrics[strategy.value][seq_mod_method.value] = []
+            all_results[strategy.value][seq_mod_method.value] = {}
+            all_custom_metrics[strategy.value][seq_mod_method.value] = {}
+            for regression_model in regression_models:
+                all_results[strategy.value][seq_mod_method.value][
+                    regression_model.value
+                ] = []
+                all_custom_metrics[strategy.value][seq_mod_method.value][
+                    regression_model.value
+                ] = []
 
     # Create progress bar for total experiments
-    total_experiments = len(strategies) * len(seq_mod_methods) * len(seeds)
+    total_experiments = (
+        len(strategies) * len(seq_mod_methods) * len(seeds) * len(regression_models)
+    )
     with tqdm(total=total_experiments, desc="Running experiments") as pbar:
         for strategy in strategies:
             for seq_mod_method in seq_mod_methods:
-                logger.info(f"\n{'='*60}")
-                logger.info(
-                    f"Running {strategy.value.upper()} strategy with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method"
-                )
-                logger.info(f"{'='*60}")
-
-                for seed_idx, seed in enumerate(seeds):
+                for regression_model in regression_models:
+                    logger.info(f"\n{'='*60}")
                     logger.info(
-                        f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---"
+                        f"Running {strategy.value.upper()} strategy with regressor {regression_model} with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method"
                     )
+                    logger.info(f"{'='*60}")
 
-                    # Create experiment with specific strategy and seed
-                    experiment = ActiveLearningExperiment(
-                        data_path=data_path,
-                        selection_strategy=strategy,
-                        initial_sample_size=initial_sample_size,
-                        batch_size=batch_size,
-                        test_size=test_size,
-                        random_seed=seed,
-                        seq_mod_method=seq_mod_method.value,
-                        no_test=no_test,
-                        normalize_expression=normalize_expression,
-                    )
+                    for seed_idx, seed in enumerate(seeds):
+                        logger.info(
+                            f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---"
+                        )
 
-                    # Run experiment
-                    results = experiment.run_experiment(max_rounds=max_rounds)
-                    all_results[strategy.value][seq_mod_method.value].extend(results)
+                        # Create experiment with specific strategy and seed
+                        experiment = ActiveLearningExperiment(
+                            data_path=data_path,
+                            selection_strategy=strategy,
+                            regression_model=regression_model,
+                            initial_sample_size=initial_sample_size,
+                            batch_size=batch_size,
+                            test_size=test_size,
+                            random_seed=seed,
+                            seq_mod_method=seq_mod_method.value,
+                            no_test=no_test,
+                            normalize_expression=normalize_expression,
+                        )
 
-                    # Collect custom metrics
-                    if experiment.custom_metrics:
-                        # Add metadata to custom metrics
-                        for i, metrics in enumerate(experiment.custom_metrics):
-                            # Calculate train_size for this round
-                            # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
-                            train_size_for_round = initial_sample_size + (
-                                i * batch_size
-                            )
+                        # Run experiment
+                        results = experiment.run_experiment(max_rounds=max_rounds)
+                        all_results[strategy.value][seq_mod_method.value][
+                            regression_model.value
+                        ].extend(results)
 
-                            metrics_with_metadata = {
-                                "round": i,
-                                "strategy": strategy.value,
-                                "seed": seed,
-                                "train_size": train_size_for_round,
-                                **metrics,
-                            }
-                            all_custom_metrics[strategy.value][
-                                seq_mod_method.value
-                            ].append(metrics_with_metadata)
+                        # Collect custom metrics
+                        if experiment.custom_metrics:
+                            # Add metadata to custom metrics
+                            for i, metrics in enumerate(experiment.custom_metrics):
+                                # Calculate train_size for this round
+                                # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
+                                train_size_for_round = initial_sample_size + (
+                                    i * batch_size
+                                )
 
-                    # Save individual seed results (this now also saves custom metrics)
-                    seed_output_path = (
-                        output_path / f"{strategy.value}_seed_{seed}_results.csv"
-                    )
-                    experiment.save_results(str(seed_output_path))
+                                metrics_with_metadata = {
+                                    "round": i,
+                                    "strategy": strategy.value,
+                                    "seq_mod_method": seq_mod_method.value,
+                                    "regression_model": regression_model.value,
+                                    "seed": seed,
+                                    "train_size": train_size_for_round,
+                                    **metrics,
+                                }
+                                all_custom_metrics[strategy.value][
+                                    seq_mod_method.value
+                                ][regression_model.value].append(metrics_with_metadata)
 
-                    # Log final performance for this seed
-                    final_performance = experiment.get_final_performance()
-                    logger.info(
-                        f"Seed {seed} final performance - "
-                        f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-                        f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
-                    )
+                        # Save individual seed results (this now also saves custom metrics)
+                        seed_output_path = (
+                            output_path
+                            / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
+                        )
+                        experiment.save_results(str(seed_output_path))
 
-                    pbar.update(1)
+                        # Log final performance for this seed
+                        final_performance = experiment.get_final_performance()
+                        logger.info(
+                            f"Seed {seed} final performance - "
+                            f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
+                            f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
+                        )
+
+                        pbar.update(1)
+
     # Save combined results for each strategy (Pearson and Spearman correlation, R2, RMSE)
     for strategy in all_results.keys():
         for seq_mod_method in all_results[strategy].keys():
-            results = all_results[strategy][seq_mod_method]
-            strategy_df = pd.DataFrame(results)
-            strategy_output_path = (
-                output_path / f"{strategy}_{seq_mod_method}_all_seeds_results.csv"
-            )
-        strategy_df.to_csv(strategy_output_path, index=False)
-        logger.info(
-            f"Combined {strategy} {seq_mod_method} results saved to {strategy_output_path}"
-        )
-
+            for regression_model in all_results[strategy][seq_mod_method].keys():
+                results = all_results[strategy][seq_mod_method][regression_model]
+                if results:  # Only save if there are results
+                    strategy_df = pd.DataFrame(results)
+                    strategy_output_path = (
+                        output_path
+                        / f"{strategy}_{seq_mod_method}_{regression_model}_all_seeds_results.csv"
+                    )
+                    strategy_df.to_csv(strategy_output_path, index=False)
+                    logger.info(
+                        f"Combined {strategy} {seq_mod_method} {regression_model} results saved to {strategy_output_path}"
+                    )
     # Save combined custom metrics for each strategy (top_10_ratio_intersected_indices, best_value_predictions_values, normalized_predictions_predictions_values, best_value_ground_truth_values, normalized_predictions_ground_truth_values)
     for strategy in all_custom_metrics.keys():
         for seq_mod_method in all_custom_metrics[strategy].keys():
-            custom_metrics = all_custom_metrics[strategy][seq_mod_method]
-            if custom_metrics:  # Only save if custom metrics exist
-                custom_metrics_df = pd.DataFrame(custom_metrics)
-                custom_metrics_output_path = (
-                    output_path
-                    / f"{strategy}_{seq_mod_method}_all_seeds_custom_metrics.csv"
-                )
-                custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
-                logger.info(
-                    f"Combined {strategy} {seq_mod_method} custom metrics saved to {custom_metrics_output_path}"
-                )
+            for regression_model in all_custom_metrics[strategy][seq_mod_method].keys():
+                custom_metrics = all_custom_metrics[strategy][seq_mod_method][
+                    regression_model
+                ]
+                if custom_metrics:  # Only save if custom metrics exist
+                    custom_metrics_df = pd.DataFrame(custom_metrics)
+                    custom_metrics_output_path = (
+                        output_path
+                        / f"{strategy}_{seq_mod_method}_{regression_model}_all_seeds_custom_metrics.csv"
+                    )
+                    custom_metrics_df.to_csv(custom_metrics_output_path, index=False)
+                    logger.info(
+                        f"Combined {strategy} {seq_mod_method} {regression_model} custom metrics saved to {custom_metrics_output_path}"
+                    )
 
     # Create overall combined results file
     combined_results = []
     for strategy in all_results.keys():
         for seq_mod_method in all_results[strategy].keys():
-            results = all_results[strategy][seq_mod_method]
-            # Add seq_mod_method to each result dictionary (in case it's missing)
-            for result_dict in results:
-                result_dict_with_seq_mod = (
-                    result_dict.copy()
-                )  # Create a copy to avoid modifying original
-                result_dict_with_seq_mod["seq_mod_method"] = seq_mod_method
-                combined_results.append(result_dict_with_seq_mod)
+            for regression_model in all_results[strategy][seq_mod_method].keys():
+                results = all_results[strategy][seq_mod_method][regression_model]
+                # Add seq_mod_method and regression_model to each result dictionary (in case they're missing)
+                for result_dict in results:
+                    result_dict_with_metadata = (
+                        result_dict.copy()
+                    )  # Create a copy to avoid modifying original
+                    result_dict_with_metadata["seq_mod_method"] = seq_mod_method
+                    result_dict_with_metadata["regression_model"] = regression_model
+                    combined_results.append(result_dict_with_metadata)
 
     combined_df = pd.DataFrame(combined_results)
     combined_output_path = output_path / "combined_all_results.csv"
@@ -850,14 +899,18 @@ def run_controlled_experiment(
     combined_custom_metrics = []
     for strategy in all_custom_metrics.keys():
         for seq_mod_method in all_custom_metrics[strategy].keys():
-            custom_metrics = all_custom_metrics[strategy][seq_mod_method]
-            # Add seq_mod_method to each custom metric dictionary
-            for metric_dict in custom_metrics:
-                metric_dict_with_seq_mod = (
-                    metric_dict.copy()
-                )  # Create a copy to avoid modifying original
-                metric_dict_with_seq_mod["seq_mod_method"] = seq_mod_method
-                combined_custom_metrics.append(metric_dict_with_seq_mod)
+            for regression_model in all_custom_metrics[strategy][seq_mod_method].keys():
+                custom_metrics = all_custom_metrics[strategy][seq_mod_method][
+                    regression_model
+                ]
+                # Add seq_mod_method and regression_model to each custom metric dictionary
+                for metric_dict in custom_metrics:
+                    metric_dict_with_metadata = (
+                        metric_dict.copy()
+                    )  # Create a copy to avoid modifying original
+                    metric_dict_with_metadata["seq_mod_method"] = seq_mod_method
+                    metric_dict_with_metadata["regression_model"] = regression_model
+                    combined_custom_metrics.append(metric_dict_with_metadata)
 
     if combined_custom_metrics:  # Only save if there are custom metrics
         combined_custom_metrics_df = pd.DataFrame(combined_custom_metrics)
@@ -871,7 +924,102 @@ def run_controlled_experiment(
             f"All combined custom metrics saved to {combined_custom_metrics_output_path}"
         )
 
+    # Ensure combined results are created even if experiments were interrupted
+    create_combined_results_from_files(output_path)
+
     return all_results
+
+
+def create_combined_results_from_files(output_path: Path) -> None:
+    """
+    Create combined results files from individual experiment files.
+    This is useful when experiments are interrupted but individual files exist.
+    """
+    import re
+
+    # Find all individual results files
+    results_files = list(output_path.glob("*_results.csv"))
+    custom_metrics_files = list(output_path.glob("*_custom_metrics.csv"))
+
+    if not results_files:
+        logger.warning("No individual results files found to combine")
+        return
+
+    # Combine results files
+    all_results = []
+    for file_path in results_files:
+        filename = file_path.stem
+        # Parse filename: strategy_seqmod_regressor_seed_X_results
+        # Handle complex regressor names like "KNN_regression" or "linear_regresion"
+        pattern = r"([^_]+)_([^_]+)_(.+)_seed_(\d+)_results"
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.warning(f"Could not parse filename {filename}")
+            continue
+
+        strategy, seq_mod_method, regression_model, seed = match.groups()
+        seed = int(seed)
+
+        try:
+            df = pd.read_csv(file_path)
+            # Add metadata columns if missing
+            df["strategy"] = strategy
+            df["seq_mod_method"] = seq_mod_method
+            df["regression_model"] = regression_model
+            df["seed"] = seed
+            all_results.append(df)
+        except Exception as e:
+            logger.warning(f"Could not read {file_path}: {e}")
+            continue
+
+    if all_results:
+        combined_df = pd.DataFrame(pd.concat(all_results, ignore_index=True))
+        combined_output_path = output_path / "combined_all_results.csv"
+        combined_df.to_csv(combined_output_path, index=False)
+        logger.info(
+            f"Combined results from {len(results_files)} files saved to {combined_output_path}"
+        )
+
+    # Combine custom metrics files
+    all_custom_metrics = []
+    for file_path in custom_metrics_files:
+        filename = file_path.stem.replace("_custom_metrics", "")
+        pattern = r"([^_]+)_([^_]+)_(.+)_seed_(\d+)"
+        match = re.match(pattern, filename)
+
+        if not match:
+            logger.warning(f"Could not parse custom metrics filename {filename}")
+            continue
+
+        strategy, seq_mod_method, regression_model, seed = match.groups()
+        seed = int(seed)
+
+        try:
+            df = pd.read_csv(file_path)
+            # Add metadata columns if missing
+            if "strategy" not in df.columns:
+                df["strategy"] = strategy
+            if "seq_mod_method" not in df.columns:
+                df["seq_mod_method"] = seq_mod_method
+            if "regression_model" not in df.columns:
+                df["regression_model"] = regression_model
+            if "seed" not in df.columns:
+                df["seed"] = seed
+            all_custom_metrics.append(df)
+        except Exception as e:
+            logger.warning(f"Could not read {file_path}: {e}")
+            continue
+
+    if all_custom_metrics:
+        combined_custom_df = pd.DataFrame(
+            pd.concat(all_custom_metrics, ignore_index=True)
+        )
+        combined_custom_output_path = output_path / "combined_all_custom_metrics.csv"
+        combined_custom_df.to_csv(combined_custom_output_path, index=False)
+        logger.info(
+            f"Combined custom metrics from {len(custom_metrics_files)} files saved to {combined_custom_output_path}"
+        )
 
 
 def analyze_multi_seed_results(
@@ -891,51 +1039,55 @@ def analyze_multi_seed_results(
 
     for strategy, strategy_results in results.items():
         for seq_mod_method, seq_mod_method_results in strategy_results.items():
-            if not seq_mod_method_results:
-                continue
+            for (
+                regression_model,
+                regression_model_results,
+            ) in seq_mod_method_results.items():
+                if not regression_model_results:
+                    continue
 
-            # Convert to DataFrame for easier analysis
-            df = pd.DataFrame(seq_mod_method_results)
+                # Convert to DataFrame for easier analysis
+                df = pd.DataFrame(regression_model_results)
 
-            # Group by round to get statistics across seeds
-            round_stats = (
-                df.groupby("round")
-                .agg(
-                    {
-                        "pearson_correlation": ["mean", "std", "min", "max"],
-                        "spearman_correlation": ["mean", "std", "min", "max"],
-                        "r2": ["mean", "std", "min", "max"],
-                        "rmse": ["mean", "std", "min", "max"],
-                        "train_size": "first",  # Should be same across seeds for same round
-                    }
+                # Group by round to get statistics across seeds
+                round_stats = (
+                    df.groupby("round")
+                    .agg(
+                        {
+                            "pearson_correlation": ["mean", "std", "min", "max"],
+                            "spearman_correlation": ["mean", "std", "min", "max"],
+                            "r2": ["mean", "std", "min", "max"],
+                            "rmse": ["mean", "std", "min", "max"],
+                            "train_size": "first",  # Should be same across seeds for same round
+                        }
+                    )
+                    .round(4)
                 )
-                .round(4)
-            )
 
-            # Final round statistics
-            final_round = df["round"].max()
-            final_results = df[df["round"] == final_round]
+                # Final round statistics
+                final_round = df["round"].max()
+                final_results = df[df["round"] == final_round]
 
-            final_stats = {
-                "final_pearson_mean": final_results["pearson_correlation"].mean(),
-                "final_pearson_std": final_results["pearson_correlation"].std(),
-                "final_spearman_mean": final_results["spearman_correlation"].mean(),
-                "final_spearman_std": final_results["spearman_correlation"].std(),
-                "final_r2_mean": final_results["r2"].mean(),
-                "final_r2_std": final_results["r2"].std(),
-                "final_rmse_mean": final_results["rmse"].mean(),
-                "final_rmse_std": final_results["rmse"].std(),
-                "final_train_size": final_results["train_size"].iloc[0],
-                "n_seeds": len(final_results),
-                "n_rounds": final_round,
-            }
+                final_stats = {
+                    "final_pearson_mean": final_results["pearson_correlation"].mean(),
+                    "final_pearson_std": final_results["pearson_correlation"].std(),
+                    "final_spearman_mean": final_results["spearman_correlation"].mean(),
+                    "final_spearman_std": final_results["spearman_correlation"].std(),
+                    "final_r2_mean": final_results["r2"].mean(),
+                    "final_r2_std": final_results["r2"].std(),
+                    "final_rmse_mean": final_results["rmse"].mean(),
+                    "final_rmse_std": final_results["rmse"].std(),
+                    "final_train_size": final_results["train_size"].iloc[0],
+                    "n_seeds": len(final_results),
+                    "n_rounds": final_round,
+                }
 
-            analysis[strategy][seq_mod_method] = {
-                "round_statistics": round_stats,
-                "final_statistics": final_stats,
-            }
+                analysis[strategy][seq_mod_method][regression_model] = {
+                    "round_statistics": round_stats,
+                    "final_statistics": final_stats,
+                }
 
-        return analysis
+    return analysis
 
 
 def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> None:
@@ -952,43 +1104,44 @@ def compare_strategies_performance(results: Dict[str, List[Dict[str, Any]]]) -> 
     analysis = analyze_multi_seed_results(results)
 
     for strategy, seq_mod_methods in analysis.items():
-        for seq_mod_method, seq_mod_method_analysis in seq_mod_methods.items():
-            final_stats = seq_mod_method_analysis["final_statistics"]
+        for seq_mod_method, regression_models in seq_mod_methods.items():
+            for (
+                regression_model,
+                regression_model_analysis,
+            ) in regression_models.items():
+                final_stats = regression_model_analysis["final_statistics"]
 
-            logger.info(
-                f"\n{strategy.upper()} {seq_mod_method.upper()} Strategy (across {final_stats['n_seeds']} seeds):"
-            )
-            logger.info(f"  Final Training Size: {final_stats['final_train_size']}")
-            logger.info(
-                f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}"
-            )
-            logger.info(
-                f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}"
-            )
-            logger.info(
-                f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}"
-            )
-            logger.info(
-                f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}"
-            )
+                logger.info(
+                    f"\n{strategy.upper()} {seq_mod_method.upper()} {regression_model.upper()} Strategy (across {final_stats['n_seeds']} seeds):"
+                )
+                logger.info(f"  Final Training Size: {final_stats['final_train_size']}")
+                logger.info(
+                    f"  Final Pearson Correlation: {final_stats['final_pearson_mean']:.4f} ± {final_stats['final_pearson_std']:.4f}"
+                )
+                logger.info(
+                    f"  Final Spearman Correlation: {final_stats['final_spearman_mean']:.4f} ± {final_stats['final_spearman_std']:.4f}"
+                )
+                logger.info(
+                    f"  Final R²: {final_stats['final_r2_mean']:.4f} ± {final_stats['final_r2_std']:.4f}"
+                )
+                logger.info(
+                    f"  Final RMSE: {final_stats['final_rmse_mean']:.2f} ± {final_stats['final_rmse_std']:.2f}"
+                )
 
-    # Statistical comparison between strategies
-    if len(analysis) == 2:
-        strategies = list(analysis.keys())
-        strategy1, strategy2 = strategies[0], strategies[1]
-
-        stats1 = analysis[strategy1]["final_statistics"]
-        stats2 = analysis[strategy2]["final_statistics"]
-
-        logger.info("\nSTATISTICAL COMPARISON:")
-        logger.info(
-            f"Pearson Correlation Difference ({strategy1} - {strategy2}): "
-            f"{stats1['final_pearson_mean'] - stats2['final_pearson_mean']:.4f}"
-        )
-        logger.info(
-            f"Spearman Correlation Difference ({strategy1} - {strategy2}): "
-            f"{stats1['final_spearman_mean'] - stats2['final_spearman_mean']:.4f}"
-        )
+    # Statistical comparison between strategies - now simplified to just log a summary
+    logger.info("\nSTATISTICAL COMPARISON SUMMARY:")
+    # TODO: Come back and double check this calculation - the len() logic doesn't make sense
+    # depends on whether seq_mod_method.values() is returning a list of lists or just a list\
+    # that would make the difference
+    total_configs = sum(
+        len(regression_models)
+        for seq_mod_methods in analysis.values()
+        for regression_models in seq_mod_methods.values()
+    )
+    logger.info(f"Total configurations analyzed: {total_configs}")
+    logger.info(
+        "Detailed comparisons available in the saved CSV files for further analysis."
+    )
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
@@ -1106,12 +1259,17 @@ def main() -> None:
             SelectionStrategy.RANDOM,
             SelectionStrategy.LOG_LIKELIHOOD,
         ],
+        "regression_models": [
+            RegressionModel.KNN,
+            RegressionModel.LINEAR,
+            RegressionModel.RANDOM_FOREST,
+        ],
         "seq_mod_methods": [SequenceModificationMethod.EMBEDDING],
         "seeds": [42, 123, 456, 789, 999],
         "initial_sample_size": 8,
         "batch_size": 8,
         "test_size": 30,
-        "max_rounds": 20,
+        "max_rounds": 2,
         "normalize_expression": False,
         "output_dir": "results_all_strategies_ori_log_likelihood_embeddings_no_test_normalization",
         "no_test": True,
@@ -1134,23 +1292,28 @@ def main() -> None:
         summary_data = []
         for strategy, strategy_analysis in analysis.items():
             for seq_mod_method, seq_mod_method_analysis in strategy_analysis.items():
-                final_stats = seq_mod_method_analysis["final_statistics"]
-                summary_data.append(
-                    {
-                        "strategy": strategy,
-                        "seq_mod_method": seq_mod_method,
-                        "n_seeds": final_stats["n_seeds"],
-                        "final_pearson_mean": final_stats["final_pearson_mean"],
-                        "final_pearson_std": final_stats["final_pearson_std"],
-                        "final_spearman_mean": final_stats["final_spearman_mean"],
-                        "final_spearman_std": final_stats["final_spearman_std"],
-                        "final_r2_mean": final_stats["final_r2_mean"],
-                        "final_r2_std": final_stats["final_r2_std"],
-                        "final_rmse_mean": final_stats["final_rmse_mean"],
-                        "final_rmse_std": final_stats["final_rmse_std"],
-                        "final_train_size": final_stats["final_train_size"],
-                    }
-                )
+                for (
+                    regression_model,
+                    regression_model_analysis,
+                ) in seq_mod_method_analysis.items():
+                    final_stats = regression_model_analysis["final_statistics"]
+                    summary_data.append(
+                        {
+                            "strategy": strategy,
+                            "seq_mod_method": seq_mod_method,
+                            "regression_model": regression_model,
+                            "n_seeds": final_stats["n_seeds"],
+                            "final_pearson_mean": final_stats["final_pearson_mean"],
+                            "final_pearson_std": final_stats["final_pearson_std"],
+                            "final_spearman_mean": final_stats["final_spearman_mean"],
+                            "final_spearman_std": final_stats["final_spearman_std"],
+                            "final_r2_mean": final_stats["final_r2_mean"],
+                            "final_r2_std": final_stats["final_r2_std"],
+                            "final_rmse_mean": final_stats["final_rmse_mean"],
+                            "final_rmse_std": final_stats["final_rmse_std"],
+                            "final_train_size": final_stats["final_train_size"],
+                        }
+                    )
 
         summary_df = pd.DataFrame(summary_data)
         summary_path = Path(config["output_dir"]) / "summary_statistics.csv"
