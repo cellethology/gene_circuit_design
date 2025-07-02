@@ -519,25 +519,25 @@ class ActiveLearningExperiment:
                 self.custom_metrics[-1]["top_10_ratio_intersected_indices_cumulative"]
                 + top_10_ratio_intersection_pred
             )
-            best_value_pred_cumulative = (
-                self.custom_metrics[-1]["best_value_predictions_values_cumulative"]
-                + best_value_pred
+            best_value_pred_cumulative = max(
+                self.custom_metrics[-1]["best_value_predictions_values_cumulative"],
+                best_value_pred,
             )
-            normalized_predictions_pred_cumulative = (
+            normalized_predictions_pred_cumulative = max(
                 self.custom_metrics[-1][
                     "normalized_predictions_predictions_values_cumulative"
-                ]
-                + normalized_predictions_pred
+                ],
+                normalized_predictions_pred,
             )
-            best_value_true_cumulative = (
-                self.custom_metrics[-1]["best_value_ground_truth_values_cumulative"]
-                + best_value_true
+            best_value_true_cumulative = max(
+                self.custom_metrics[-1]["best_value_ground_truth_values_cumulative"],
+                best_value_true,
             )
-            normalized_predictions_true_cumulative = (
+            normalized_predictions_true_cumulative = max(
                 self.custom_metrics[-1][
                     "normalized_predictions_ground_truth_values_cumulative"
-                ]
-                + normalized_predictions_true
+                ],
+                normalized_predictions_true,
             )
         else:
             # For first round, cumulative equals current value
