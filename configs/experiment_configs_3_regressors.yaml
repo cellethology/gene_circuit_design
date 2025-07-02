@@ -4,31 +4,31 @@
 experiments:
 
   # Basic embedding experiments with 3 regressors
-  embeddings_3_regressors:
-    data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors"
-    strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
-    seq_mod_methods: ["EMBEDDING"]
-    regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
-    seeds: [42, 123, 456, 789, 999]
-    initial_sample_size: 8
-    batch_size: 8
-    test_size: 30
-    max_rounds: 20
-    normalize_expression: false
-    no_test: true
-    output_dir: "results/results_3_regressors/embeddings_all_strategies"
+  # embeddings_3_regressors:
+  #   data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors"
+  #   strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
+  #   seq_mod_methods: ["EMBEDDING"]
+  #   regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
+  #   seeds: [42, 123, 456, 789, 999]
+  #   initial_sample_size: 8
+  #   batch_size: 8
+  #   test_size: 30
+  #   max_rounds: 20
+  #   normalize_expression: false
+  #   no_test: true
+  #   output_dir: "results/results_3_regressors/embeddings_all_strategies"
 
   # Normalized embeddings with 3 regressors
   embeddings_normalized_3_regressors:
-    data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0.safetensors"
+    data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/embeddings/384_rice/post_embedding/combined_sequence_data_rank_0_ori_log_likelihood.safetensors"
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
     seq_mod_methods: ["EMBEDDING"]
     regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
-    seeds: [42, 123, 456, 789, 999]
+    seeds: [42, 123, 456]
     initial_sample_size: 8
     batch_size: 8
     test_size: 30
-    max_rounds: 20
+    max_rounds: 10
     normalize_expression: true
     no_test: true
     output_dir: "results/results_3_regressors/embeddings_normalized"
@@ -39,20 +39,20 @@ experiments:
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
     seq_mod_methods: ["EMBEDDING"]
     regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
-    seeds: [42, 123, 456, 789, 999]
+    seeds: [42, 123, 456]
     initial_sample_size: 8
     batch_size: 8
     test_size: 30
-    max_rounds: 20
+    max_rounds: 10
     normalize_expression: false
     no_test: true
     output_dir: "results/results_3_regressors/ori_log_likelihood"
 
   # Trim and Pad sequences with 3 regressors
-  trim_pad_3_regressors:
+  pad_3_regressors:
     data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/384_Data/combined_sequence_data.csv"
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
-    seq_mod_methods: ["TRIM", "PAD"]
+    seq_mod_methods: ["PAD"]
     regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
     seeds: [42, 123, 456, 789, 999]
     initial_sample_size: 8
@@ -61,22 +61,22 @@ experiments:
     max_rounds: 20
     normalize_expression: false
     no_test: true
-    output_dir: "results/results_3_regressors/trim_pad"
+    output_dir: "results/results_3_regressors/pad"
 
-  # CAR experiments with 3 regressors
-  car_3_regressors:
-    data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv"
-    strategies: ["HIGH_EXPRESSION", "RANDOM"]
-    seq_mod_methods: ["CAR"]
-    regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
-    seeds: [42, 123, 456, 789, 999]
-    initial_sample_size: 8
-    batch_size: 8
-    test_size: 30
-    max_rounds: 20
-    normalize_expression: false
-    no_test: true
-    output_dir: "results/results_3_regressors/car_experiments"
+  # # CAR experiments with 3 regressors
+  # car_3_regressors:
+  #   data_path: "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/car_data/science.abq0225_data_s1.csv"
+  #   strategies: ["HIGH_EXPRESSION", "RANDOM"]
+  #   seq_mod_methods: ["CAR"]
+  #   regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
+  #   seeds: [42, 123, 456, 789, 999]
+  #   initial_sample_size: 8
+  #   batch_size: 8
+  #   test_size: 30
+  #   max_rounds: 20
+  #   normalize_expression: false
+  #   no_test: true
+  #   output_dir: "results/results_3_regressors/car_experiments"
 
 # Default experiment settings (can be overridden)
 defaults:

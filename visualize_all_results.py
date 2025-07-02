@@ -21,6 +21,13 @@ from utils.plotting import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Define consistent color scheme for strategies
+STRATEGY_COLORS = {
+    "highExpression": "#1f77b4",  # Blue
+    "log_likelihood": "#ff7f0e",  # Orange
+    "random": "#2ca02c",  # Green
+}
+
 
 def discover_results_folders(base_path: str = ".") -> List[Path]:
     """
@@ -50,7 +57,7 @@ def discover_results_folders(base_path: str = ".") -> List[Path]:
     return sorted(results_folders)
 
 
-def check_folder_contents(folder_path: Path) -> Tuple[bool, bool]:
+def check_folder_contents(folder_path: Path) -> Tuple[bool, bool, bool]:
     """
     Check what type of results files are available in a folder.
 
@@ -58,7 +65,7 @@ def check_folder_contents(folder_path: Path) -> Tuple[bool, bool]:
         folder_path: Path to the results folder
 
     Returns:
-        Tuple of (has_standard_metrics, has_custom_metrics)
+        Tuple of (has_standard_metrics, has_custom_metrics, has_regressor_data)
     """
     standard_file = folder_path / "combined_all_results.csv"
     custom_file = folder_path / "combined_all_custom_metrics.csv"
@@ -66,7 +73,18 @@ def check_folder_contents(folder_path: Path) -> Tuple[bool, bool]:
     has_standard = standard_file.exists()
     has_custom = custom_file.exists()
 
-    return has_standard, has_custom
+    # Check if the combined results file contains regression_model column
+    has_regressor_data = False
+    if has_standard:
+        try:
+            import pandas as pd
+
+            df = pd.read_csv(standard_file, nrows=1)  # Read just the header
+            has_regressor_data = "regression_model" in df.columns
+        except Exception:
+            has_regressor_data = False
+
+    return has_standard, has_custom, has_regressor_data
 
 
 def visualize_folder(
@@ -86,11 +104,12 @@ def visualize_folder(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    has_standard, has_custom = check_folder_contents(folder_path)
+    has_standard, has_custom, has_regressor_data = check_folder_contents(folder_path)
 
     logger.info(f"Processing folder: {folder_path}")
     logger.info(f"  Standard metrics: {'✓' if has_standard else '✗'}")
     logger.info(f"  Custom metrics: {'✓' if has_custom else '✗'}")
+    logger.info(f"  Regressor comparison data: {'✓' if has_regressor_data else '✗'}")
 
     # Plot standard metrics if available
     if has_standard:
@@ -131,6 +150,146 @@ def visualize_folder(
         except Exception as e:
             logger.error(f"  ✗ Error creating value metrics plot: {e}")
 
+    # Plot individual regressor value metrics if available
+    if has_regressor_data and has_custom:
+        try:
+            import matplotlib.pyplot as plt
+            import pandas as pd
+
+            custom_file = folder_path / "combined_all_custom_metrics.csv"
+            df = pd.read_csv(custom_file)
+
+            # Get unique regressors
+            if "regression_model" in df.columns:
+                regressors = df["regression_model"].unique()
+
+                # Define the value metrics to plot
+                value_metrics = [
+                    "best_value_predictions_values",
+                    "best_value_predictions_values_cumulative",
+                    "normalized_predictions_predictions_values",
+                    "normalized_predictions_predictions_values_cumulative",
+                    "best_value_ground_truth_values",
+                    "best_value_ground_truth_values_cumulative",
+                    "normalized_predictions_ground_truth_values",
+                    "normalized_predictions_ground_truth_values_cumulative",
+                ]
+
+                # Filter to only available metrics
+                available_value_metrics = [m for m in value_metrics if m in df.columns]
+
+                for regressor in regressors:
+                    logger.info(f"  Generating value metrics plot for {regressor}...")
+
+                    # Filter data for this specific regressor
+                    regressor_data = df[df["regression_model"] == regressor]
+
+                    if len(regressor_data) == 0:
+                        logger.warning(f"  No data found for {regressor}")
+                        continue
+
+                    try:
+                        # Create custom plot for this regressor
+                        n_metrics = len(available_value_metrics)
+                        n_cols = min(4, n_metrics)
+                        n_rows = (n_metrics + n_cols - 1) // n_cols
+
+                        fig, axes = plt.subplots(n_rows, n_cols, figsize=(24, 12))
+
+                        # Handle different subplot configurations
+                        if n_metrics == 1:
+                            axes = [axes]
+                        elif n_rows == 1:
+                            axes = axes if isinstance(axes, list) else [axes]
+                        else:
+                            axes = axes.flatten()
+
+                        for i, metric in enumerate(available_value_metrics):
+                            if i >= len(axes):
+                                break
+                            ax = axes[i]
+
+                            # Plot each strategy for this regressor
+                            for strategy in regressor_data["strategy"].unique():
+                                strategy_data = regressor_data[
+                                    regressor_data["strategy"] == strategy
+                                ]
+
+                                if len(strategy_data) == 0:
+                                    continue
+
+                                # Get consistent color for this strategy
+                                color = STRATEGY_COLORS.get(
+                                    strategy, "#1f77b4"
+                                )  # Default to blue if not found
+
+                                # Calculate mean and std for each train_size
+                                stats = (
+                                    strategy_data.groupby("train_size")[metric]
+                                    .agg(["mean", "std"])
+                                    .reset_index()
+                                )
+
+                                # Plot mean line
+                                ax.plot(
+                                    stats["train_size"],
+                                    stats["mean"],
+                                    marker="o",
+                                    label=strategy,
+                                    color=color,
+                                )
+
+                                # Add fill between mean ± std
+                                ax.fill_between(
+                                    stats["train_size"],
+                                    stats["mean"] - stats["std"],
+                                    stats["mean"] + stats["std"],
+                                    alpha=0.2,
+                                    color=color,
+                                )
+
+                            # Format the plot
+                            ax.set_title(
+                                f'{metric.replace("_", " ").title()}', fontsize=12
+                            )
+                            ax.set_xlabel("Train Size", fontsize=10)
+                            ax.set_ylabel(metric.replace("_", " ").title(), fontsize=10)
+                            ax.legend()
+                            ax.grid(True, alpha=0.3)
+
+                        # Hide unused subplots
+                        for i in range(len(available_value_metrics), len(axes)):
+                            axes[i].set_visible(False)
+
+                        # Set overall title
+                        fig.suptitle(
+                            f"{regressor} - Value Metrics vs Train Size", fontsize=16
+                        )
+                        plt.tight_layout()
+
+                        # Save plot
+                        save_path = (
+                            output_dir
+                            / f"{folder_path.name}_{regressor}_value_metrics.png"
+                        )
+                        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+                        print(f"Plot saved to: {save_path}")
+
+                        if not show_plots:
+                            plt.close()
+                        else:
+                            plt.show()
+
+                        logger.info(f"  ✓ {regressor} value metrics plot created")
+
+                    except Exception as e:
+                        logger.error(
+                            f"  ✗ Error creating {regressor} value metrics plot: {e}"
+                        )
+
+        except Exception as e:
+            logger.error(f"  ✗ Error processing regressor data: {e}")
+
     if not has_standard and not has_custom:
         logger.warning(f"  No suitable data files found in {folder_path}")
 
@@ -150,7 +309,7 @@ def create_summary_report(
         f.write(f"Found {len(results_folders)} results folders:\n\n")
 
         for folder in results_folders:
-            has_standard, has_custom = check_folder_contents(folder)
+            has_standard, has_custom, has_regressor_data = check_folder_contents(folder)
 
             f.write(f"## {folder.name}\n\n")
             f.write(f"- **Path**: `{folder}`\n")
@@ -160,13 +319,27 @@ def create_summary_report(
             f.write(
                 f"- **Custom metrics**: {'✅ Available' if has_custom else '❌ Not found'}\n"
             )
+            f.write(
+                f"- **Regressor comparison**: {'✅ Available' if has_regressor_data else '❌ Not found'}\n"
+            )
 
             # List generated plots
             plots = []
             if has_standard:
                 plots.append(f"![Standard Metrics]({folder.name}_standard_metrics.png)")
             if has_custom:
-                plots.append(f"![Custom Metrics]({folder.name}_custom_metrics.png)")
+                plots.append(
+                    f"![Top 10 Ratio Metrics]({folder.name}_top10_ratio_metrics.png)"
+                )
+                plots.append(f"![Value Metrics]({folder.name}_value_metrics.png)")
+            if has_regressor_data:
+                plots.append(
+                    f"![Regressor Comparison]({folder.name}_regressor_comparison.png)"
+                )
+                if has_custom:
+                    plots.append(
+                        f"![Regressor Summary]({folder.name}_regressor_summary.png)"
+                    )
 
             if plots:
                 f.write("- **Generated plots**:\n")
