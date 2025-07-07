@@ -10,6 +10,75 @@ import pandas as pd
 
 FONT_SIZE = 14
 
+STATEGY_LABELS = {
+    "highExpression": "Top-K Selection",
+    "random": "Random",
+    "log_likelihood": "Zero Shot",
+}
+
+def q1(x):
+    return x.quantile(0.25)
+
+def q3(x):
+    return x.quantile(0.75)
+
+def sem(x):
+    return x.sem()
+
+def regressor_line_plot(ax, stats, regressor, plot_type, regressor_colors):
+    if plot_type == "mean":
+        ax.plot(
+            stats["train_size"],
+            stats["mean"],
+            marker="o",
+            label=regressor,
+            color=regressor_colors[regressor],
+            linewidth=2,
+        )
+
+        # Add fill between mean ± std
+        ax.fill_between(
+            stats["train_size"],
+            stats["mean"] - stats["std"],
+            stats["mean"] + stats["std"],
+            alpha=0.2,
+            color=regressor_colors[regressor],
+        )
+    elif plot_type == "median":
+        ax.plot(
+            stats["train_size"],
+            stats["median"],
+            marker="o",
+            label=regressor,
+            color=regressor_colors[regressor],
+            linewidth=2,
+        )
+
+        # Add fill between median ± std
+        ax.fill_between(
+            stats["train_size"],
+            stats["q1"],
+            stats["q3"],
+            alpha=0.2,
+            color=regressor_colors[regressor],
+        )
+    elif plot_type == "sem":
+        ax.plot(
+            stats["train_size"],
+            stats["mean"],
+            marker="o",
+            label=regressor,
+            color=regressor_colors[regressor],
+            linewidth=2,
+        )
+        # Add fill between mean ± sem
+        ax.fill_between(
+            stats["train_size"],
+            stats["mean"] - stats["sem"],
+            stats["mean"] + stats["sem"],
+            alpha=0.2,
+            color=regressor_colors[regressor],
+        )
 
 def plot_active_learning_metrics(
     results_folder_path: str,
@@ -181,7 +250,7 @@ def plot_top10_ratio_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=strategy)
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -289,7 +358,7 @@ def plot_value_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=strategy)
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -413,7 +482,7 @@ def plot_custom_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=strategy)
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -454,9 +523,11 @@ def plot_custom_metrics(
 def plot_regressor_comparison(
     results_folder_path: str,
     metrics: Optional[List[str]] = None,
-    figsize: Tuple[int, int] = (18, 12),
+    figsize: Tuple[int, int] = (35, 6),
     save_path: Optional[str] = None,
     show_plot: bool = True,
+    strategy: Optional[str] = None,
+    plot_type: str = "mean",
 ) -> plt.Figure:
     """
     Plot comparison between different regression models for each strategy.
@@ -467,17 +538,24 @@ def plot_regressor_comparison(
         figsize: Figure size as (width, height)
         save_path: Path to save the plot. If None, plot is not saved.
         show_plot: Whether to display the plot
-
+        strategy: Strategy to plot. If None, plots all strategies.
+        plot_type: Type of plot to use. If "mean", plots the mean of the metric. If "median", plots the median of the metric.
     Raises:
         FileNotFoundError: If the combined results file is not found
         ValueError: If required columns are missing from the data
     """
     # Default metrics if none provided
     if metrics is None:
-        metrics = ["pearson_correlation", "spearman_correlation", "r2", "rmse"]
+        metrics = [
+            "best_value_predictions_values_cumulative",
+            "normalized_predictions_predictions_values_cumulative",
+            "best_value_ground_truth_values_cumulative",
+            "normalized_predictions_ground_truth_values_cumulative",
+        ]
+
 
     # Construct path to combined results file
-    results_path = Path(results_folder_path) / "combined_all_results.csv"
+    results_path = Path(results_folder_path) / "combined_all_custom_metrics.csv"
 
     # Check if file exists
     if not results_path.exists():
@@ -503,6 +581,9 @@ def plot_regressor_comparison(
 
     # Get unique strategies and regression models
     strategies = df["strategy"].unique()
+    # If strategy is provided, only plot that strategy
+    if strategy:
+        strategies = [strategy]
     regressors = df["regression_model"].unique()
 
     # Set up the plot - strategies as rows, metrics as columns
@@ -540,41 +621,26 @@ def plot_regressor_comparison(
                 # Calculate mean and std for each train_size
                 stats = (
                     data.groupby("train_size")[metric]
-                    .agg(["mean", "std"])
+                    .agg(["mean", "std", "median", q1, q3, sem])
                     .reset_index()
                 )
 
-                # Plot mean line
-                ax.plot(
-                    stats["train_size"],
-                    stats["mean"],
-                    marker="o",
-                    label=regressor,
-                    color=regressor_colors[regressor],
-                    linewidth=2,
-                )
-
-                # Add fill between mean ± std
-                ax.fill_between(
-                    stats["train_size"],
-                    stats["mean"] - stats["std"],
-                    stats["mean"] + stats["std"],
-                    alpha=0.2,
-                    color=regressor_colors[regressor],
-                )
+                # Plot the regressor line
+                regressor_line_plot(ax, stats, regressor, plot_type, regressor_colors)
 
             # Format the plot
             ax.set_title(
-                f'{strategy} - {metric.replace("_", " ").title()}', fontsize=FONT_SIZE
+                f'{strategy} - {metric.replace("_", " ").title()} {(plot_type)}', fontsize=FONT_SIZE - 4
             )
             ax.set_xlabel("Train Size", fontsize=FONT_SIZE - 2)
             ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE - 2)
 
+            # NOTE: add this back if needed
             # Only show legend on the first subplot to avoid clutter
-            if i == 0 and j == 0:
-                ax.legend(title="Regressor", fontsize=FONT_SIZE - 2)
+            # if i == 0 and j == 0:
+            ax.legend(title="Regressor", fontsize=FONT_SIZE - 2, loc='upper left')
 
-            ax.grid(True, alpha=0.3)
+            # ax.grid(True, alpha=0.3)
 
             # Improve tick label formatting
             ax.tick_params(labelsize=FONT_SIZE - 4)
@@ -741,14 +807,14 @@ def plot_example():
 
         # Plot standard metrics
         plot_active_learning_metrics(
-            folder_path, save_path=f"{folder_path}/metrics_plot.png"
+            folder_path, save_path=f"{folder_path}/metrics_plot.pdf"
         )
 
         # Plot custom metrics if available
         custom_metrics_file = Path(folder_path) / "combined_all_custom_metrics.csv"
         if custom_metrics_file.exists():
             plot_custom_metrics(
-                folder_path, save_path=f"{folder_path}/custom_metrics_plot.png"
+                folder_path, save_path=f"{folder_path}/custom_metrics_plot.pdf"
             )
 
 

@@ -23,7 +23,7 @@ def return_model(model: str, random_state: int = 42):
     if model == RegressionModel.LINEAR:
         return LinearRegression()
     elif model == RegressionModel.RANDOM_FOREST:
-        return RandomForestRegressor(random_state=random_state)
+        return RandomForestRegressor(random_state=random_state, n_jobs=-1)
     elif model == RegressionModel.KNN:
         # KNN doesn't have random_state, but we can set n_neighbors for consistency
-        return KNeighborsRegressor(n_neighbors=5)
+        return KNeighborsRegressor(n_neighbors=5, n_jobs=-1)

@@ -11,10 +11,16 @@ import logging
 from pathlib import Path
 from typing import List, Tuple
 
+
 from utils.plotting import (
     plot_active_learning_metrics,
     plot_top10_ratio_metrics,
     plot_value_metrics,
+    plot_regressor_comparison,
+    q1,
+    q3,
+    sem,
+    STATEGY_LABELS,
 )
 
 # Configure logging
@@ -88,7 +94,7 @@ def check_folder_contents(folder_path: Path) -> Tuple[bool, bool, bool]:
 
 
 def visualize_folder(
-    folder_path: Path, output_dir: Path = None, show_plots: bool = False
+    folder_path: Path, output_dir: Path = None, show_plots: bool = False, plot_type: str = "mean"
 ) -> None:
     """
     Create visualizations for a single results folder.
@@ -105,7 +111,6 @@ def visualize_folder(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     has_standard, has_custom, has_regressor_data = check_folder_contents(folder_path)
-
     logger.info(f"Processing folder: {folder_path}")
     logger.info(f"  Standard metrics: {'✓' if has_standard else '✗'}")
     logger.info(f"  Custom metrics: {'✓' if has_custom else '✗'}")
@@ -117,7 +122,7 @@ def visualize_folder(
             logger.info("  Generating standard metrics plot...")
             plot_active_learning_metrics(
                 results_folder_path=str(folder_path),
-                save_path=str(output_dir / f"{folder_path.name}_standard_metrics.png"),
+                save_path=str(output_dir / f"{folder_path.name}_standard_metrics.pdf"),
                 show_plot=show_plots,
             )
             logger.info("  ✓ Standard metrics plot created")
@@ -131,7 +136,7 @@ def visualize_folder(
             plot_top10_ratio_metrics(
                 results_folder_path=str(folder_path),
                 save_path=str(
-                    output_dir / f"{folder_path.name}_top10_ratio_metrics.png"
+                    output_dir / f"{folder_path.name}_top10_ratio_metrics.pdf"
                 ),
                 show_plot=show_plots,
             )
@@ -143,7 +148,7 @@ def visualize_folder(
             logger.info("  Generating value metrics plot...")
             plot_value_metrics(
                 results_folder_path=str(folder_path),
-                save_path=str(output_dir / f"{folder_path.name}_value_metrics.png"),
+                save_path=str(output_dir / f"{folder_path.name}_value_metrics.pdf"),
                 show_plot=show_plots,
             )
             logger.info("  ✓ Value metrics plot created")
@@ -152,6 +157,18 @@ def visualize_folder(
 
     # Plot individual regressor value metrics if available
     if has_regressor_data and has_custom:
+        try:
+            plot_regressor_comparison(
+                results_folder_path=str(folder_path),
+                save_path=str(output_dir / f"{folder_path.name}_regressor_comparison.pdf"),
+                show_plot=show_plots,
+                plot_type=plot_type,
+                strategy="highExpression",
+            )
+            logger.info("  ✓ Regressor comparison plot created")
+        except Exception as e:
+            logger.error(f"  ✗ Error creating regressor comparison plot: {e}")
+
         try:
             import matplotlib.pyplot as plt
             import pandas as pd
@@ -194,7 +211,7 @@ def visualize_folder(
                         n_cols = min(4, n_metrics)
                         n_rows = (n_metrics + n_cols - 1) // n_cols
 
-                        fig, axes = plt.subplots(n_rows, n_cols, figsize=(24, 12))
+                        fig, axes = plt.subplots(n_rows, n_cols, figsize=(35, 12))
 
                         # Handle different subplot configurations
                         if n_metrics == 1:
@@ -226,36 +243,68 @@ def visualize_folder(
                                 # Calculate mean and std for each train_size
                                 stats = (
                                     strategy_data.groupby("train_size")[metric]
-                                    .agg(["mean", "std"])
+                                    .agg(["mean", "std", "median", q1, q3, sem])
                                     .reset_index()
                                 )
-
-                                # Plot mean line
-                                ax.plot(
-                                    stats["train_size"],
-                                    stats["mean"],
-                                    marker="o",
-                                    label=strategy,
-                                    color=color,
-                                )
-
-                                # Add fill between mean ± std
-                                ax.fill_between(
-                                    stats["train_size"],
-                                    stats["mean"] - stats["std"],
-                                    stats["mean"] + stats["std"],
-                                    alpha=0.2,
-                                    color=color,
-                                )
+                                if plot_type == "median": # Plot median line
+                                    # Plot median line
+                                    ax.plot(
+                                        stats["train_size"],
+                                        stats["median"],
+                                        marker="o",
+                                        label=STATEGY_LABELS[strategy],
+                                        color=color,
+                                    )
+                                    ax.fill_between(
+                                        stats["train_size"],
+                                        stats["q1"],
+                                        stats["q3"],
+                                        alpha=0.2,
+                                        color=color,
+                                    )
+                                elif plot_type == "sem":
+                                    # Plot mean line
+                                    ax.plot(
+                                        stats["train_size"],
+                                        stats["mean"],
+                                        marker="o",
+                                        label=STATEGY_LABELS[strategy],
+                                        color=color,
+                                    )
+                                    # Add fill between mean ± sem
+                                    ax.fill_between(
+                                        stats["train_size"],
+                                        stats["mean"] - stats["sem"],
+                                        stats["mean"] + stats["sem"],
+                                        alpha=0.2,
+                                        color=color,
+                                    )
+                                else:
+                                    # Plot mean line
+                                    ax.plot(
+                                        stats["train_size"],
+                                        stats["mean"],
+                                        marker="o",
+                                        label=STATEGY_LABELS[strategy],
+                                        color=color,
+                                    )
+                                    # Add fill between mean ± std
+                                    ax.fill_between(
+                                        stats["train_size"],
+                                        stats["mean"] - stats["std"],
+                                        stats["mean"] + stats["std"],
+                                        alpha=0.2,
+                                        color=color,
+                                    )
 
                             # Format the plot
                             ax.set_title(
-                                f'{metric.replace("_", " ").title()}', fontsize=12
+                                f'{metric.replace("_", " ").title()} ({plot_type.title()})', fontsize=12
                             )
                             ax.set_xlabel("Train Size", fontsize=10)
                             ax.set_ylabel(metric.replace("_", " ").title(), fontsize=10)
-                            ax.legend()
-                            ax.grid(True, alpha=0.3)
+                            ax.legend(loc='upper left', fontsize=10)
+                            # ax.grid(True, alpha=0.3)
 
                         # Hide unused subplots
                         for i in range(len(available_value_metrics), len(axes)):
@@ -270,7 +319,7 @@ def visualize_folder(
                         # Save plot
                         save_path = (
                             output_dir
-                            / f"{folder_path.name}_{regressor}_value_metrics.png"
+                            / f"{folder_path.name}_{regressor}_value_metrics.pdf"
                         )
                         plt.savefig(save_path, dpi=300, bbox_inches="tight")
                         print(f"Plot saved to: {save_path}")
@@ -326,19 +375,19 @@ def create_summary_report(
             # List generated plots
             plots = []
             if has_standard:
-                plots.append(f"![Standard Metrics]({folder.name}_standard_metrics.png)")
+                plots.append(f"![Standard Metrics]({folder.name}_standard_metrics.pdf)")
             if has_custom:
                 plots.append(
-                    f"![Top 10 Ratio Metrics]({folder.name}_top10_ratio_metrics.png)"
+                    f"![Top 10 Ratio Metrics]({folder.name}_top10_ratio_metrics.pdf)"
                 )
-                plots.append(f"![Value Metrics]({folder.name}_value_metrics.png)")
+                plots.append(f"![Value Metrics]({folder.name}_value_metrics.pdf)")
             if has_regressor_data:
                 plots.append(
-                    f"![Regressor Comparison]({folder.name}_regressor_comparison.png)"
+                    f"![Regressor Comparison]({folder.name}_regressor_comparison.pdf)"
                 )
                 if has_custom:
                     plots.append(
-                        f"![Regressor Summary]({folder.name}_regressor_summary.png)"
+                        f"![Regressor Summary]({folder.name}_regressor_summary.pdf)"
                     )
 
             if plots:
@@ -356,7 +405,14 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate visualizations for all active learning experiment results"
     )
-
+    # Plot median line instead of mean line
+    parser.add_argument(
+        "--plot-type",
+        "-t",
+        type=str,
+        default="mean",
+        help="Plot type: mean, median, sem",
+    )
     parser.add_argument(
         "--base-path",
         "-b",
@@ -426,6 +482,7 @@ def main():
                 folder_path=folder,
                 output_dir=output_dir / folder.name,
                 show_plots=args.show_plots,
+                plot_type=args.plot_type,
             )
         except Exception as e:
             logger.error(f"Error processing folder {folder}: {e}")

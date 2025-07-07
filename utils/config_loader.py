@@ -181,12 +181,45 @@ def run_experiment_from_config(
 
     print(f"Running experiment: {experiment_name}")
     print(f"Configuration: {config}")
-
     # Run the experiment
     results = run_controlled_experiment(**config)
 
     return results
 
+def run_experiment_from_config_parallel(
+    experiment_name: str,
+    config_file: str = "configs/experiment_configs.yaml",
+    dry_run: bool = False,
+    n_jobs: int = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Run an experiment from configuration.
+
+    Args:
+        experiment_name: Name of the experiment to run
+        config_file: Path to the YAML configuration file
+        dry_run: If True, only print what would be run without executing
+
+    Returns:
+        Experiment results if executed, None if dry_run
+    """
+    from run_experiments_parallelization import run_controlled_experiment_parallel
+
+    # Get the configuration
+    config = get_experiment_config(experiment_name, config_file)
+
+    if dry_run:
+        print(f"Would run experiment '{experiment_name}' with config:")
+        for key, value in config.items():
+            print(f"  {key}: {value}")
+        return None
+
+    print(f"Running experiment: {experiment_name}")
+    print(f"Configuration: {config}")
+    # Run the experiment
+    results = run_controlled_experiment_parallel(**config, n_jobs=n_jobs)
+
+    return results
 
 def create_custom_config(
     name: str,
