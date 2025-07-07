@@ -9,9 +9,10 @@ import argparse
 import logging
 import random
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -706,6 +707,93 @@ class ActiveLearningExperiment:
         }
 
 
+def run_single_experiment(
+    experiment_config: Dict[str, Any]
+) -> Tuple[str, str, str, int, List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Run a single experiment with given configuration.
+
+    Args:
+        experiment_config: Dictionary containing all experiment parameters
+
+    Returns:
+        Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
+    """
+    # Extract parameters from config
+    data_path = experiment_config["data_path"]
+    strategy = experiment_config["strategy"]
+    regression_model = experiment_config["regression_model"]
+    seq_mod_method = experiment_config["seq_mod_method"]
+    seed = experiment_config["seed"]
+    initial_sample_size = experiment_config["initial_sample_size"]
+    batch_size = experiment_config["batch_size"]
+    test_size = experiment_config["test_size"]
+    no_test = experiment_config["no_test"]
+    max_rounds = experiment_config["max_rounds"]
+    normalize_expression = experiment_config["normalize_expression"]
+    output_dir = experiment_config["output_dir"]
+
+    # Create experiment
+    experiment = ActiveLearningExperiment(
+        data_path=data_path,
+        selection_strategy=strategy,
+        regression_model=regression_model,
+        initial_sample_size=initial_sample_size,
+        batch_size=batch_size,
+        test_size=test_size,
+        random_seed=seed,
+        seq_mod_method=seq_mod_method.value,
+        no_test=no_test,
+        normalize_expression=normalize_expression,
+    )
+
+    # Run experiment
+    results = experiment.run_experiment(max_rounds=max_rounds)
+
+    # Process custom metrics
+    custom_metrics = []
+    if experiment.custom_metrics:
+        for i, metrics in enumerate(experiment.custom_metrics):
+            train_size_for_round = initial_sample_size + (i * batch_size)
+            metrics_with_metadata = {
+                "round": i,
+                "strategy": strategy.value,
+                "seq_mod_method": seq_mod_method.value,
+                "regression_model": regression_model.value,
+                "seed": seed,
+                "train_size": train_size_for_round,
+                **metrics,
+            }
+            custom_metrics.append(metrics_with_metadata)
+
+    # Save individual results
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    seed_output_path = (
+        output_path
+        / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
+    )
+    experiment.save_results(str(seed_output_path))
+
+    # Log final performance
+    final_performance = experiment.get_final_performance()
+    logger.info(
+        f"Seed {seed} final performance - "
+        f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
+        f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
+    )
+
+    return (
+        strategy.value,
+        seq_mod_method.value,
+        regression_model.value,
+        seed,
+        results,
+        custom_metrics,
+    )
+
+
 def run_controlled_experiment(
     data_path: str,
     strategies: List[SelectionStrategy],
@@ -719,9 +807,10 @@ def run_controlled_experiment(
     max_rounds: int = 20,
     output_dir: str = "results",
     normalize_expression: bool = True,
+    max_workers: int = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Run controlled experiments comparing different selection strategies with multiple seeds.
+    Run controlled experiments comparing different selection strategies with multiple seeds using parallel processing.
 
     Args:
         data_path: Path to CSV file with sequence and expression data
@@ -734,6 +823,7 @@ def run_controlled_experiment(
         no_test: Whether to use the test set
         max_rounds: Maximum number of rounds per experiment
         output_dir: Directory to save results
+        max_workers: Maximum number of parallel workers (None for auto-detection)
 
     Returns:
         Dictionary mapping strategy names to their results across all seeds
@@ -747,6 +837,7 @@ def run_controlled_experiment(
         f"Running controlled experiment with strategies: {[s.value for s in strategies]}"
     )
     logger.info(f"Using {len(seeds)} different seeds: {seeds}")
+    logger.info(f"Using parallel processing with max_workers: {max_workers}")
 
     # Initialize results storage
     for strategy in strategies:
@@ -763,84 +854,74 @@ def run_controlled_experiment(
                     regression_model.value
                 ] = []
 
-    # Create progress bar for total experiments
-    total_experiments = (
-        len(strategies) * len(seq_mod_methods) * len(seeds) * len(regression_models)
-    )
-    with tqdm(total=total_experiments, desc="Running experiments") as pbar:
-        for strategy in strategies:
-            for seq_mod_method in seq_mod_methods:
-                for regression_model in regression_models:
-                    logger.info(f"\n{'=' * 60}")
+    # Create experiment configurations for parallel processing
+    experiment_configs = []
+    for strategy in strategies:
+        for seq_mod_method in seq_mod_methods:
+            for regression_model in regression_models:
+                for seed in seeds:
+                    config = {
+                        "data_path": data_path,
+                        "strategy": strategy,
+                        "seq_mod_method": seq_mod_method,
+                        "regression_model": regression_model,
+                        "seed": seed,
+                        "initial_sample_size": initial_sample_size,
+                        "batch_size": batch_size,
+                        "test_size": test_size,
+                        "no_test": no_test,
+                        "max_rounds": max_rounds,
+                        "normalize_expression": normalize_expression,
+                        "output_dir": output_dir,
+                    }
+                    experiment_configs.append(config)
+
+    # Run experiments in parallel
+    total_experiments = len(experiment_configs)
+    logger.info(f"Running {total_experiments} experiments in parallel...")
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all experiments
+        future_to_config = {
+            executor.submit(run_single_experiment, config): config
+            for config in experiment_configs
+        }
+
+        # Process completed experiments with progress bar
+        with tqdm(total=total_experiments, desc="Running experiments") as pbar:
+            for future in as_completed(future_to_config):
+                try:
+                    (
+                        strategy_name,
+                        seq_mod_method_name,
+                        regression_model_name,
+                        seed,
+                        results,
+                        custom_metrics,
+                    ) = future.result()
+
+                    # Store results
+                    all_results[strategy_name][seq_mod_method_name][
+                        regression_model_name
+                    ].extend(results)
+
+                    # Store custom metrics
+                    if custom_metrics:
+                        all_custom_metrics[strategy_name][seq_mod_method_name][
+                            regression_model_name
+                        ].extend(custom_metrics)
+
                     logger.info(
-                        f"Running {strategy.value.upper()} strategy with regressor {regression_model} with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method"
+                        f"Completed experiment: {strategy_name}_{seq_mod_method_name}_{regression_model_name}_seed_{seed}"
                     )
-                    logger.info(f"{'=' * 60}")
 
-                    for seed_idx, seed in enumerate(seeds):
-                        logger.info(
-                            f"\n--- {strategy.value.upper()} Strategy - Seed {seed} ({seed_idx + 1}/{len(seeds)}) ---"
-                        )
+                except Exception as e:
+                    config = future_to_config[future]
+                    logger.error(
+                        f"Experiment failed: {config['strategy'].value}_{config['seq_mod_method'].value}_{config['regression_model'].value}_seed_{config['seed']} - {e}"
+                    )
 
-                        # Create experiment with specific strategy and seed
-                        experiment = ActiveLearningExperiment(
-                            data_path=data_path,
-                            selection_strategy=strategy,
-                            regression_model=regression_model,
-                            initial_sample_size=initial_sample_size,
-                            batch_size=batch_size,
-                            test_size=test_size,
-                            random_seed=seed,
-                            seq_mod_method=seq_mod_method.value,
-                            no_test=no_test,
-                            normalize_expression=normalize_expression,
-                        )
-
-                        # Run experiment
-                        results = experiment.run_experiment(max_rounds=max_rounds)
-                        all_results[strategy.value][seq_mod_method.value][
-                            regression_model.value
-                        ].extend(results)
-
-                        # Collect custom metrics
-                        if experiment.custom_metrics:
-                            # Add metadata to custom metrics
-                            for i, metrics in enumerate(experiment.custom_metrics):
-                                # Calculate train_size for this round
-                                # Custom metrics are collected after selecting next batch, so train_size = initial + (round * batch_size)
-                                train_size_for_round = initial_sample_size + (
-                                    i * batch_size
-                                )
-
-                                metrics_with_metadata = {
-                                    "round": i,
-                                    "strategy": strategy.value,
-                                    "seq_mod_method": seq_mod_method.value,
-                                    "regression_model": regression_model.value,
-                                    "seed": seed,
-                                    "train_size": train_size_for_round,
-                                    **metrics,
-                                }
-                                all_custom_metrics[strategy.value][
-                                    seq_mod_method.value
-                                ][regression_model.value].append(metrics_with_metadata)
-
-                        # Save individual seed results (this now also saves custom metrics)
-                        seed_output_path = (
-                            output_path
-                            / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
-                        )
-                        experiment.save_results(str(seed_output_path))
-
-                        # Log final performance for this seed
-                        final_performance = experiment.get_final_performance()
-                        logger.info(
-                            f"Seed {seed} final performance - "
-                            f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-                            f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
-                        )
-
-                        pbar.update(1)
+                pbar.update(1)
 
     # Save combined results for each strategy (Pearson and Spearman correlation, R2, RMSE)
     for strategy in all_results.keys():
@@ -1182,6 +1263,13 @@ def create_argument_parser() -> argparse.ArgumentParser:
         help="Show what would be run without executing",
     )
 
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=None,
+        help="Maximum number of parallel workers (default: auto-detect)",
+    )
+
     return parser
 
 
@@ -1189,9 +1277,6 @@ def main() -> None:
     """Main function to run controlled active learning experiments with multiple seeds."""
     parser = create_argument_parser()
     args = parser.parse_args()
-
-    with ProcessPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(train_and_save_model, config) for config in configs]
 
     # Import config loader (avoid circular import)
     try:
@@ -1281,7 +1366,8 @@ def main() -> None:
     logger.info("Starting Multi-Seed Controlled Active Learning Experiments")
     logger.info(f"Configuration: {config}")
 
-    # Run controlled experiments
+    # Run controlled experiments with max_workers parameter
+    config["max_workers"] = getattr(args, "max_workers", None)
     all_results = run_controlled_experiment(**config)
     if not config["no_test"]:
         # Analyze and compare performance across strategies
@@ -1327,12 +1413,9 @@ def main() -> None:
 
 
 def parallelization():
-    with ProcessPoolExecutor(max_workers=3) as executor:
-        futures = [executor.submit(train_and_save_model, config) for config in configs]
-
-    for future in futures:
-        model_name, score = future.result()
-        print(f"{model_name}: {score:.4f}")
+    """Example parallelization function - kept for reference but not used in main flow."""
+    # This function is kept for reference but not used in the main flow
+    pass
 
 
 if __name__ == "__main__":

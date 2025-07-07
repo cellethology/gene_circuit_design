@@ -11,16 +11,15 @@ import logging
 from pathlib import Path
 from typing import List, Tuple
 
-
 from utils.plotting import (
+    STATEGY_LABELS,
     plot_active_learning_metrics,
+    plot_regressor_comparison,
     plot_top10_ratio_metrics,
     plot_value_metrics,
-    plot_regressor_comparison,
     q1,
     q3,
     sem,
-    STATEGY_LABELS,
 )
 
 # Configure logging
@@ -94,7 +93,10 @@ def check_folder_contents(folder_path: Path) -> Tuple[bool, bool, bool]:
 
 
 def visualize_folder(
-    folder_path: Path, output_dir: Path = None, show_plots: bool = False, plot_type: str = "mean"
+    folder_path: Path,
+    output_dir: Path = None,
+    show_plots: bool = False,
+    plot_type: str = "mean",
 ) -> None:
     """
     Create visualizations for a single results folder.
@@ -160,7 +162,9 @@ def visualize_folder(
         try:
             plot_regressor_comparison(
                 results_folder_path=str(folder_path),
-                save_path=str(output_dir / f"{folder_path.name}_regressor_comparison.pdf"),
+                save_path=str(
+                    output_dir / f"{folder_path.name}_regressor_comparison.pdf"
+                ),
                 show_plot=show_plots,
                 plot_type=plot_type,
                 strategy="highExpression",
@@ -246,7 +250,7 @@ def visualize_folder(
                                     .agg(["mean", "std", "median", q1, q3, sem])
                                     .reset_index()
                                 )
-                                if plot_type == "median": # Plot median line
+                                if plot_type == "median":  # Plot median line
                                     # Plot median line
                                     ax.plot(
                                         stats["train_size"],
@@ -299,11 +303,12 @@ def visualize_folder(
 
                             # Format the plot
                             ax.set_title(
-                                f'{metric.replace("_", " ").title()} ({plot_type.title()})', fontsize=12
+                                f'{metric.replace("_", " ").title()} ({plot_type.title()})',
+                                fontsize=12,
                             )
                             ax.set_xlabel("Train Size", fontsize=10)
                             ax.set_ylabel(metric.replace("_", " ").title(), fontsize=10)
-                            ax.legend(loc='upper left', fontsize=10)
+                            ax.legend(loc="upper left", fontsize=10)
                             # ax.grid(True, alpha=0.3)
 
                         # Hide unused subplots
