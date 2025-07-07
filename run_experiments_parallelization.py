@@ -1282,7 +1282,7 @@ def main() -> None:
     try:
         from utils.config_loader import (
             list_available_experiments,
-            run_experiment_from_config,
+            run_experiment_from_config_parallel,
         )
     except ImportError:
         logger.error(
@@ -1310,9 +1310,15 @@ def main() -> None:
 
             try:
                 if args.dry_run:
-                    run_experiment_from_config(exp_name, args.config, dry_run=True)
+                    run_experiment_from_config_parallel(
+                        exp_name, args.config, dry_run=True
+                    )
                 else:
-                    results = run_experiment_from_config(exp_name, args.config)
+                    results = run_experiment_from_config_parallel(
+                        exp_name,
+                        args.config,
+                        max_workers=getattr(args, "max_workers", None),
+                    )
                     logger.info(f"Completed experiment: {exp_name}")
             except Exception as e:
                 logger.error(f"Error running experiment {exp_name}: {e}")
@@ -1325,9 +1331,15 @@ def main() -> None:
     if args.experiment:
         try:
             if args.dry_run:
-                run_experiment_from_config(args.experiment, args.config, dry_run=True)
+                run_experiment_from_config_parallel(
+                    args.experiment, args.config, dry_run=True
+                )
             else:
-                results = run_experiment_from_config(args.experiment, args.config)
+                results = run_experiment_from_config_parallel(
+                    args.experiment,
+                    args.config,
+                    max_workers=getattr(args, "max_workers", None),
+                )
                 logger.info(f"Experiment {args.experiment} completed successfully!")
                 logger.info(f"Results: {results}")
         except Exception as e:

@@ -7,7 +7,10 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from run_experiments import SelectionStrategy, SequenceModificationMethod
+from run_experiments_parallelization import (
+    SelectionStrategy,
+    SequenceModificationMethod,
+)
 from utils.model_loader import RegressionModel
 
 
@@ -186,24 +189,26 @@ def run_experiment_from_config(
 
     return results
 
+
 def run_experiment_from_config_parallel(
     experiment_name: str,
     config_file: str = "configs/experiment_configs.yaml",
     dry_run: bool = False,
-    n_jobs: int = None,
+    max_workers: int = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Run an experiment from configuration.
+    Run an experiment from configuration using parallelization.
 
     Args:
         experiment_name: Name of the experiment to run
         config_file: Path to the YAML configuration file
         dry_run: If True, only print what would be run without executing
+        max_workers: Maximum number of parallel workers (None for auto-detect)
 
     Returns:
         Experiment results if executed, None if dry_run
     """
-    from run_experiments_parallelization import run_controlled_experiment_parallel
+    from run_experiments_parallelization import run_controlled_experiment
 
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)
@@ -216,10 +221,15 @@ def run_experiment_from_config_parallel(
 
     print(f"Running experiment: {experiment_name}")
     print(f"Configuration: {config}")
-    # Run the experiment
-    results = run_controlled_experiment_parallel(**config, n_jobs=n_jobs)
+
+    # Add max_workers to config
+    config["max_workers"] = max_workers
+
+    # Run the experiment with parallelization
+    results = run_controlled_experiment(**config)
 
     return results
+
 
 def create_custom_config(
     name: str,
