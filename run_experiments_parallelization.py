@@ -32,6 +32,7 @@ from utils.sequence_utils import (
     calculate_sequence_statistics,
     ensure_sequence_modification_method,
     flatten_one_hot_sequences,
+    flatten_one_hot_sequences_with_pca,
     load_sequence_data,
     one_hot_encode_sequences,
     pad_sequences_to_length,
@@ -87,6 +88,8 @@ class ActiveLearningExperiment:
         seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
         no_test: bool = True,
         normalize_expression: bool = True,
+        use_pca: bool = False,
+        pca_components: int = 4096,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -111,6 +114,8 @@ class ActiveLearningExperiment:
         self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
         self.no_test = no_test
         self.normalize_expression = normalize_expression
+        self.use_pca = use_pca
+        self.pca_components = pca_components
         # Set random seeds for reproducibility
         random.seed(random_seed)
         np.random.seed(random_seed)
@@ -306,13 +311,15 @@ class ActiveLearningExperiment:
                 sequences = [self.all_sequences[i] for i in indices]
 
             encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
-            return flatten_one_hot_sequences(encoded)
-            # # Flatten first, then apply PCA to reduce dimensionality, keeping 90% of variance
-            # flattened = flatten_one_hot_sequences(encoded)
-            # pca = PCA(n_components=0.9)  # 0.9 = 90% variance explained
-            # reduced = pca.fit_transform(flattened)
-            # logger.info(f"PCA reduced dimensions from {flattened.shape[1]} to {reduced.shape[1]} (90% variance explained)")
-            # return reduced
+
+            # Apply PCA if specified
+            if self.use_pca:
+                logger.info(f"PCA enabled with {self.pca_components} components")
+                return flatten_one_hot_sequences_with_pca(
+                    encoded, n_components=self.pca_components
+                )
+            else:
+                return flatten_one_hot_sequences(encoded)
 
     def _train_model(self) -> None:
         """Train the linear regression model on current training data."""
@@ -732,6 +739,8 @@ def run_single_experiment(
     max_rounds = experiment_config["max_rounds"]
     normalize_expression = experiment_config["normalize_expression"]
     output_dir = experiment_config["output_dir"]
+    use_pca = experiment_config.get("use_pca", False)
+    pca_components = experiment_config.get("pca_components", 4096)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
@@ -745,6 +754,8 @@ def run_single_experiment(
         seq_mod_method=seq_mod_method.value,
         no_test=no_test,
         normalize_expression=normalize_expression,
+        use_pca=use_pca,
+        pca_components=pca_components,
     )
 
     # Run experiment
@@ -808,6 +819,8 @@ def run_controlled_experiment(
     output_dir: str = "results",
     normalize_expression: bool = True,
     max_workers: int = None,
+    use_pca: bool = False,
+    pca_components: int = 4096,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds using parallel processing.
@@ -873,6 +886,8 @@ def run_controlled_experiment(
                         "max_rounds": max_rounds,
                         "normalize_expression": normalize_expression,
                         "output_dir": output_dir,
+                        "use_pca": use_pca,
+                        "pca_components": pca_components,
                     }
                     experiment_configs.append(config)
 

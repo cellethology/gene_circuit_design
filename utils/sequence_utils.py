@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from sklearn.decomposition import PCA
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -183,6 +184,62 @@ def flatten_one_hot_sequences(encoded_sequences: List[np.ndarray]) -> np.ndarray
     # Flatten each sequence and stack
     flattened = [seq.flatten() for seq in encoded_sequences]
     return np.array(flattened, dtype=np.float32)
+
+
+def flatten_one_hot_sequences_with_pca(
+    encoded_sequences: List[np.ndarray], n_components: int = 4096
+) -> np.ndarray:
+    """
+    Flatten one-hot encoded sequences and apply PCA for dimensionality reduction.
+
+    Args:
+        encoded_sequences: List of one-hot encoded sequence arrays
+        n_components: Number of PCA components to keep (default: 4096)
+
+    Returns:
+        2D array where each row is a PCA-reduced flattened sequence
+
+    Raises:
+        ValueError: If sequences have different lengths or n_components is invalid
+    """
+    if not encoded_sequences:
+        raise ValueError("Encoded sequences list cannot be empty")
+
+    # Check that all sequences have the same length
+    lengths = [seq.shape[0] for seq in encoded_sequences]
+    if len(set(lengths)) > 1:
+        raise ValueError(
+            f"All sequences must have the same length. Found lengths: {set(lengths)}"
+        )
+
+    # Flatten each sequence and stack
+    flattened = [seq.flatten() for seq in encoded_sequences]
+    flattened_array = np.array(flattened, dtype=np.float32)
+
+    # Check if PCA is needed
+    original_dim = flattened_array.shape[1]
+    if original_dim <= n_components:
+        logger.info(
+            f"Original dimension ({original_dim}) is <= n_components ({n_components}). "
+            f"Skipping PCA and returning original data."
+        )
+        return flattened_array
+
+    # Apply PCA
+    logger.info(
+        f"Applying PCA: reducing from {original_dim} to {n_components} dimensions"
+    )
+    pca = PCA(n_components=n_components, random_state=42)
+    reduced_sequences = pca.fit_transform(flattened_array)
+
+    # Log variance explained
+    variance_explained = pca.explained_variance_ratio_.sum()
+    logger.info(
+        f"PCA completed. Variance explained: {variance_explained:.4f} "
+        f"({variance_explained*100:.2f}%)"
+    )
+
+    return reduced_sequences.astype(np.float32)
 
 
 def load_multiple_car_files(file_paths: List[str]) -> Tuple[np.ndarray, np.ndarray]:
