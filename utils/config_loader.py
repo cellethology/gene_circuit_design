@@ -2,6 +2,7 @@
 Configuration loading utilities for active learning experiments.
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -213,6 +214,31 @@ def run_experiment_from_config_parallel(
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)
 
+    # Handle cores_per_process configuration
+    if "cores_per_process" in config:
+        cores_per_process = config["cores_per_process"]
+        total_cores = os.cpu_count()
+        calculated_max_workers = total_cores // cores_per_process
+
+        if total_cores % cores_per_process != 0:
+            print(
+                f"Warning: Total cores ({total_cores}) is not divisible by cores_per_process ({cores_per_process})"
+            )
+            print(
+                f"Using {calculated_max_workers} workers, leaving {total_cores % cores_per_process} cores unused"
+            )
+
+        config["max_workers"] = calculated_max_workers
+        print(
+            f"Auto-calculated max_workers: {calculated_max_workers} (total cores: {total_cores}, cores per process: {cores_per_process})"
+        )
+
+        # Remove cores_per_process from config as it's not needed by run_controlled_experiment
+        del config["cores_per_process"]
+    else:
+        # Use provided max_workers or None for auto-detect
+        config["max_workers"] = max_workers
+
     if dry_run:
         print(f"Would run experiment '{experiment_name}' with config:")
         for key, value in config.items():
@@ -221,9 +247,6 @@ def run_experiment_from_config_parallel(
 
     print(f"Running experiment: {experiment_name}")
     print(f"Configuration: {config}")
-
-    # Add max_workers to config
-    config["max_workers"] = max_workers
 
     # Run the experiment with parallelization
     results = run_controlled_experiment(**config)
