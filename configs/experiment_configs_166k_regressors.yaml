@@ -1,0 +1,15 @@
+
+experiments:
+  embeddings_normalized_3_regressors_166k_one_hot_part_data:
+    data_path: "data/166k_data/166k_rice/post_embeddings/part_data_with_sequence.csv"
+    strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
+    seq_mod_methods: ["PAD"]
+    regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
+    seeds: [42, 123]
+    initial_sample_size: 8
+    batch_size: 8
+    test_size: 30
+    max_rounds: 2
+    normalize_expression: true
+    no_test: true
+    output_dir: "results/results_3_regressors/embeddings_normalized_166k_one_hot_part_data_test"

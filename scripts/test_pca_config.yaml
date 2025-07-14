@@ -1,0 +1,17 @@
+experiments:
+  test_pca_experiment:
+    data_path: "data/166k_data/166k_rice/post_embeddings/part_data_with_sequence.csv"
+    strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
+    seq_mod_methods: ["PAD"]
+    regression_models: ["LINEAR"]
+    seeds: [42]
+    initial_sample_size: 5000
+    batch_size: 8
+    test_size: 30
+    max_rounds: 1
+    normalize_expression: true
+    no_test: true
+    use_pca: true
+    pca_components: 4096
+    output_dir: "results/test_pca"
+    cores_per_process: 4

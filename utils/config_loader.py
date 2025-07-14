@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from run_experiments_parallelization import (
+from experiments.run_experiments_parallelization import (
     SelectionStrategy,
     SequenceModificationMethod,
 )
@@ -172,7 +172,9 @@ def run_experiment_from_config(
     Returns:
         Experiment results if executed, None if dry_run
     """
-    from run_experiments import run_controlled_experiment
+    from experiments.run_experiments_parallelization import (
+        run_controlled_experiment,
+    )
 
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)
@@ -209,7 +211,9 @@ def run_experiment_from_config_parallel(
     Returns:
         Experiment results if executed, None if dry_run
     """
-    from run_experiments_parallelization import run_controlled_experiment
+    from experiments.run_experiments_parallelization import (
+        run_controlled_experiment,
+    )
 
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)

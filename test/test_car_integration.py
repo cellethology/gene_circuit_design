@@ -6,7 +6,10 @@ This script demonstrates the updated codebase functionality for handling
 both DNA sequences (384_data) and CAR motif sequences (car_data).
 """
 
-from run_experiments import ActiveLearningExperiment, SelectionStrategy
+from experiments.run_experiments_parallelization import (
+    ActiveLearningExperiment,
+    SelectionStrategy,
+)
 from utils.sequence_utils import (
     SequenceModificationMethod,
     flatten_one_hot_sequences,

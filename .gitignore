@@ -55,6 +55,8 @@ htmlcov/
 *.sqlite
 *.db
 *.csv
+*.pdf
+*.png
 
 # Model files and data
 *.h5

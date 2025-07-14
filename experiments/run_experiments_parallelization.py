@@ -155,16 +155,27 @@ class ActiveLearningExperiment:
             logger.info("Loading from safetensors file")
             # Load from safetensors file
             tensors = load_file(self.data_path)
-            self.embeddings = (
-                tensors["embeddings"].float().numpy()
-            )  # Convert to float32 then numpy
-            self.all_expressions = (
-                tensors["expressions"].float().numpy()
-            )  # Convert to float32 then numpy
-            self.all_log_likelihoods = (
-                tensors["log_likelihoods"].float().numpy()
-            )  # Convert to float32 then numpy
-            sequences = tensors["sequences"]
+
+            # Handle different safetensors formats
+            if "embeddings" in tensors:
+                # Standard embeddings format
+                self.embeddings = tensors["embeddings"].float().numpy()
+                self.all_expressions = tensors["expressions"].float().numpy()
+                self.all_log_likelihoods = tensors["log_likelihoods"].float().numpy()
+                sequences = tensors["sequences"]
+            elif "pca_components" in tensors:
+                # PCA results format
+                self.embeddings = tensors["pca_components"].float().numpy()
+                self.all_expressions = tensors["expression"].float().numpy()
+                self.all_log_likelihoods = tensors["log_likelihood"].float().numpy()
+                # For PCA files, we need to generate dummy sequences since we don't have actual sequences
+                # We'll use variant IDs as sequences for now
+                variant_ids = tensors["variant_ids"].numpy()
+                sequences = np.array([f"variant_{int(vid)}" for vid in variant_ids])
+            else:
+                raise ValueError(
+                    f"Unknown safetensors format. Available keys: {list(tensors.keys())}"
+                )
 
             # Convert sequences to list of strings
             if hasattr(sequences, "numpy"):
