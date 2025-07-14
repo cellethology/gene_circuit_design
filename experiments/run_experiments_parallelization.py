@@ -162,7 +162,9 @@ class ActiveLearningExperiment:
                 self.embeddings = tensors["embeddings"].float().numpy()
                 self.all_expressions = tensors["expressions"].float().numpy()
                 self.all_log_likelihoods = tensors["log_likelihoods"].float().numpy()
-                sequences = tensors["sequences"]
+                # For embeddings, we don't need actual sequences, just generate dummy ones
+                num_sequences = len(self.all_expressions)
+                sequences = np.array([f"embedding_{i}" for i in range(num_sequences)])
             elif "pca_components" in tensors:
                 # PCA results format
                 self.embeddings = tensors["pca_components"].float().numpy()

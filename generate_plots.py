@@ -15,7 +15,7 @@ def main():
     try:
         print("Running visualization script...")
         result = subprocess.run(
-            ["uv", "run", "python", "plotting/visualize_all_results.py"], check=True
+            ["python", "plotting/visualize_all_results.py"], check=True
         )
         print("✓ Visualization plots generated successfully")
     except subprocess.CalledProcessError as e:
@@ -26,7 +26,7 @@ def main():
     try:
         print("Running regressor comparison script...")
         result = subprocess.run(
-            ["uv", "run", "python", "plotting/plot_regressor_comparison.py"], check=True
+            ["python", "plotting/plot_regressor_comparison.py"], check=True
         )
         print("✓ Regressor comparison plots generated successfully")
     except subprocess.CalledProcessError as e:

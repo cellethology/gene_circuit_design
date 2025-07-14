@@ -32,7 +32,7 @@ def run_experiment(
     """Run a single experiment or all experiments in a config."""
     logger.info(f"Running experiments from config: {config_path}")
 
-    cmd = ["uv", "run", "python", "run_all_experiments.py", "--config", config_path]
+    cmd = ["python", "run_all_experiments.py", "--config", config_path]
 
     if experiment_name:
         cmd.extend(["--experiment", experiment_name])
@@ -72,15 +72,11 @@ def generate_plots_for_results(results_dir: str) -> bool:
 
     # Run visualization script
     try:
-        subprocess.run(
-            ["uv", "run", "python", "plotting/visualize_all_results.py"], check=True
-        )
+        subprocess.run(["python", "plotting/visualize_all_results.py"], check=True)
         logger.info("Visualization plots generated successfully")
 
         # Also run regressor comparison
-        subprocess.run(
-            ["uv", "run", "python", "plotting/plot_regressor_comparison.py"], check=True
-        )
+        subprocess.run(["python", "plotting/plot_regressor_comparison.py"], check=True)
         logger.info("Regressor comparison plots generated successfully")
 
         return True

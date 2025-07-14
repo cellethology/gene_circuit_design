@@ -36,8 +36,6 @@ def list_experiments_in_config(config_path: Path) -> List[str]:
     try:
         result = subprocess.run(
             [
-                "uv",
-                "run",
                 "python",
                 "experiments/run_experiments_parallelization.py",
                 "--config",
@@ -69,8 +67,6 @@ def run_single_experiment(
     logger.info(f"Running experiment: {experiment_name} from {config_path}")
 
     cmd = [
-        "uv",
-        "run",
         "python",
         "experiments/run_experiments_parallelization.py",
         "--config",
@@ -98,8 +94,6 @@ def run_all_experiments_in_config(
     logger.info(f"Running all experiments in {config_path}")
 
     cmd = [
-        "uv",
-        "run",
         "python",
         "experiments/run_experiments_parallelization.py",
         "--config",
@@ -124,8 +118,6 @@ def run_pca_experiments(max_workers: Optional[int] = None) -> bool:
     logger.info("Running PCA experiments")
 
     cmd = [
-        "uv",
-        "run",
         "python",
         "experiments/run_experiments_parallelization.py",
         "--config",
@@ -158,7 +150,7 @@ def generate_plots():
     for script in plot_scripts:
         if Path(script).exists():
             try:
-                subprocess.run(["uv", "run", "python", script], check=True)
+                subprocess.run(["python", script], check=True)
                 logger.info(f"Successfully generated plots from {script}")
             except subprocess.CalledProcessError as e:
                 logger.error(f"Failed to generate plots from {script}: {e}")
