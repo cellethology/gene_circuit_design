@@ -72,11 +72,24 @@ def generate_plots_for_results(results_dir: str) -> bool:
 
     # Run visualization script
     try:
-        subprocess.run(["python", "plotting/visualize_all_results.py"], check=True)
+        # Change to project root and run plotting scripts
+        import os
+
+        original_cwd = os.getcwd()
+
+        subprocess.run(
+            ["python", "plotting/visualize_all_results.py"],
+            check=True,
+            cwd=original_cwd,
+        )
         logger.info("Visualization plots generated successfully")
 
         # Also run regressor comparison
-        subprocess.run(["python", "plotting/plot_regressor_comparison.py"], check=True)
+        subprocess.run(
+            ["python", "plotting/plot_regressor_comparison.py"],
+            check=True,
+            cwd=original_cwd,
+        )
         logger.info("Regressor comparison plots generated successfully")
 
         return True
