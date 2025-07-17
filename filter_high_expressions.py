@@ -5,7 +5,166 @@ Filter out data points with expression values higher than 500 from safetensors f
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 from safetensors.torch import load_file, save_file
+
+
+def plot_filtering_analysis(
+    expressions, log_likelihoods, keep_indices, max_expression, output_dir
+):
+    """
+    Create plots showing the distribution of filtered data and correlation with log likelihood.
+
+    Args:
+        expressions: Array of expression values
+        log_likelihoods: Array of log likelihood values
+        keep_indices: Boolean array indicating which points to keep
+        max_expression: Maximum expression threshold
+        output_dir: Directory to save plots
+    """
+    # Create output directory
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Split data into kept and removed
+    kept_expressions = expressions[keep_indices]
+    removed_expressions = expressions[~keep_indices]
+    kept_log_likelihoods = log_likelihoods[keep_indices]
+    removed_log_likelihoods = log_likelihoods[~keep_indices]
+
+    # Figure 1: Expression distribution comparison
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.hist(
+        kept_expressions,
+        bins=50,
+        alpha=0.7,
+        label=f"Kept (n={len(kept_expressions)})",
+        color="green",
+    )
+    plt.hist(
+        removed_expressions,
+        bins=50,
+        alpha=0.7,
+        label=f"Removed (n={len(removed_expressions)})",
+        color="red",
+    )
+    plt.axvline(
+        x=max_expression,
+        color="black",
+        linestyle="--",
+        label=f"Threshold={max_expression}",
+    )
+    plt.xlabel("Expression Value")
+    plt.ylabel("Frequency")
+    plt.title("Expression Distribution: Kept vs Removed")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    plt.subplot(1, 2, 2)
+    plt.hist(
+        kept_log_likelihoods,
+        bins=50,
+        alpha=0.7,
+        label=f"Kept (n={len(kept_log_likelihoods)})",
+        color="green",
+    )
+    plt.hist(
+        removed_log_likelihoods,
+        bins=50,
+        alpha=0.7,
+        label=f"Removed (n={len(removed_log_likelihoods)})",
+        color="red",
+    )
+    plt.xlabel("Log Likelihood")
+    plt.ylabel("Frequency")
+    plt.title("Log Likelihood Distribution: Kept vs Removed")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        output_dir / "filtering_distributions.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # Figure 2: Scatter plot of expression vs log likelihood
+    plt.figure(figsize=(12, 5))
+
+    plt.subplot(1, 2, 1)
+    plt.scatter(
+        kept_expressions,
+        kept_log_likelihoods,
+        alpha=0.5,
+        s=1,
+        c="green",
+        label=f"Kept (n={len(kept_expressions)})",
+    )
+    plt.scatter(
+        removed_expressions,
+        removed_log_likelihoods,
+        alpha=0.5,
+        s=1,
+        c="red",
+        label=f"Removed (n={len(removed_expressions)})",
+    )
+    plt.axvline(
+        x=max_expression,
+        color="black",
+        linestyle="--",
+        alpha=0.8,
+        label=f"Threshold={max_expression}",
+    )
+    plt.xlabel("Expression Value")
+    plt.ylabel("Log Likelihood")
+    plt.title("Expression vs Log Likelihood (All Data)")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+
+    plt.subplot(1, 2, 2)
+    # Focus on kept data only
+    plt.scatter(kept_expressions, kept_log_likelihoods, alpha=0.6, s=1, c="green")
+    plt.xlabel("Expression Value")
+    plt.ylabel("Log Likelihood")
+    plt.title(
+        f"Expression vs Log Likelihood (Kept Data Only, n={len(kept_expressions)})"
+    )
+    plt.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        output_dir / "expression_vs_log_likelihood.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # Calculate and print correlation statistics
+    all_corr = np.corrcoef(expressions, log_likelihoods)[0, 1]
+    kept_corr = np.corrcoef(kept_expressions, kept_log_likelihoods)[0, 1]
+    removed_corr = np.corrcoef(removed_expressions, removed_log_likelihoods)[0, 1]
+
+    print("\nCorrelation Analysis:")
+    print(f"All data correlation (expression vs log_likelihood): {all_corr:.4f}")
+    print(f"Kept data correlation: {kept_corr:.4f}")
+    print(f"Removed data correlation: {removed_corr:.4f}")
+
+    # Summary statistics
+    print("\nSummary Statistics:")
+    print(
+        f"Kept data - Expression: mean={kept_expressions.mean():.3f}, std={kept_expressions.std():.3f}"
+    )
+    print(
+        f"Kept data - Log likelihood: mean={kept_log_likelihoods.mean():.3f}, std={kept_log_likelihoods.std():.3f}"
+    )
+    print(
+        f"Removed data - Expression: mean={removed_expressions.mean():.3f}, std={removed_expressions.std():.3f}"
+    )
+    print(
+        f"Removed data - Log likelihood: mean={removed_log_likelihoods.mean():.3f}, std={removed_log_likelihoods.std():.3f}"
+    )
+
+    print(f"\nPlots saved to: {output_dir}")
 
 
 def filter_high_expressions(
@@ -39,6 +198,15 @@ def filter_high_expressions(
             f"No expression data found. Available keys: {list(tensors.keys())}"
         )
 
+    # Load log likelihoods for correlation analysis
+    if "log_likelihood" in tensors:
+        log_likelihoods = tensors["log_likelihood"].float().numpy()
+    elif "log_likelihoods" in tensors:
+        log_likelihoods = tensors["log_likelihoods"].float().numpy()
+    else:
+        print("Warning: No log likelihood data found for correlation analysis")
+        log_likelihoods = None
+
     print(f"Original data shape: {expressions.shape}")
     print(f"Expression range: {expressions.min():.3f} to {expressions.max():.3f}")
 
@@ -49,6 +217,13 @@ def filter_high_expressions(
 
     print(f"Removing {num_removed} data points with expression > {max_expression}")
     print(f"Keeping {num_kept} data points")
+
+    # Create plots if log likelihood data is available
+    if log_likelihoods is not None:
+        output_dir = Path(output_path).parent / "filtering_analysis"
+        plot_filtering_analysis(
+            expressions, log_likelihoods, keep_indices, max_expression, output_dir
+        )
 
     # Filter all tensors
     filtered_tensors = {}

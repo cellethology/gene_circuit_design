@@ -281,11 +281,8 @@ class ActiveLearningExperiment:
 
         # Create indices for all samples
         all_indices = list(range(total_samples))
-        # NOTE: DEBUG CODE: FIX SEED FOR SHUFFLING
-        if self.selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
-            random.Random(0).shuffle(all_indices)
-        else:
-            random.shuffle(all_indices)
+        # Shuffle using experiment seed for all strategies
+        random.shuffle(all_indices)
 
         # Reserve test set
         self.test_indices = all_indices[: self.test_size]
@@ -513,18 +510,26 @@ class ActiveLearningExperiment:
         """
         Evaluate the model on the test set and store the results.
         """
-        # Get predictions for the next batch
-        X_next_batch = self._encode_sequences(next_batch)
-        y_pred = self.model.predict(X_next_batch)
-
-        # Custom metrics
+        # Custom metrics based on selection strategy
         top_10_ratio_intersection_pred = top_10_ratio_intersected_indices_metric(
             next_batch, self.all_expressions
         )
-        best_value_pred = get_best_value_metric(y_pred)
-        normalized_predictions_pred = normalized_to_best_val_metric(
-            y_pred, self.all_expressions
-        )
+
+        if self.selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
+            # For LOG_LIKELIHOOD, use true values to maintain model independence
+            y_selected = self.all_expressions[next_batch]
+            best_value_pred = get_best_value_metric(y_selected)
+            normalized_predictions_pred = normalized_to_best_val_metric(
+                y_selected, self.all_expressions
+            )
+        else:
+            # For other strategies, use model predictions
+            X_next_batch = self._encode_sequences(next_batch)
+            y_pred = self.model.predict(X_next_batch)
+            best_value_pred = get_best_value_metric(y_pred)
+            normalized_predictions_pred = normalized_to_best_val_metric(
+                y_pred, self.all_expressions
+            )
 
         # Get true values for the next batch
         y_true = self.all_expressions[next_batch]
