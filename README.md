@@ -123,7 +123,6 @@ python plotting/visualize_all_results.py
 ├── utils/                     # Utility functions
 ├── run_and_plot.py           # Main pipeline script
 ├── run_all_experiments.py    # Experiment runner
-└── filter_high_expressions.py # Data filtering utility
 ```
 
 ## Output

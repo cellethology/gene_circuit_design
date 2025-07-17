@@ -135,6 +135,9 @@ class ActiveLearningExperiment:
         self.model = return_model(regression_model, random_state=random_seed)
         self.results: List[Dict[str, Any]] = []
         self.custom_metrics: List[Dict[str, Any]] = []
+        self.selected_variants: List[
+            Dict[str, Any]
+        ] = []  # Track selected variants per round
 
         # Load and prepare data
         self._load_and_prepare_data(seq_mod_method=self.seq_mod_method)
@@ -160,8 +163,37 @@ class ActiveLearningExperiment:
             if "embeddings" in tensors:
                 # Standard embeddings format
                 self.embeddings = tensors["embeddings"].float().numpy()
-                self.all_expressions = tensors["expressions"].float().numpy()
-                self.all_log_likelihoods = tensors["log_likelihoods"].float().numpy()
+                # Handle both "expressions" and "expression" keys
+                if "expressions" in tensors:
+                    self.all_expressions = tensors["expressions"].float().numpy()
+                elif "expression" in tensors:
+                    self.all_expressions = tensors["expression"].float().numpy()
+                else:
+                    raise ValueError(
+                        f"No expression data found. Available keys: {list(tensors.keys())}"
+                    )
+
+                # Handle log likelihood (may not exist for enformer)
+                if "log_likelihoods" in tensors:
+                    self.all_log_likelihoods = (
+                        tensors["log_likelihoods"].float().numpy()
+                    )
+                elif "log_likelihood" in tensors:
+                    self.all_log_likelihoods = tensors["log_likelihood"].float().numpy()
+                else:
+                    # No log likelihood data - fill with NaN
+                    self.all_log_likelihoods = np.full(
+                        len(self.all_expressions), np.nan
+                    )
+                    logger.warning(
+                        "No log likelihood data found. LOG_LIKELIHOOD strategy will be skipped."
+                    )
+
+                # Load variant IDs if available
+                if "variant_ids" in tensors:
+                    self.variant_ids = tensors["variant_ids"].numpy()
+                else:
+                    self.variant_ids = None
                 # For embeddings, we don't need actual sequences, just generate dummy ones
                 num_sequences = len(self.all_expressions)
                 sequences = np.array([f"embedding_{i}" for i in range(num_sequences)])
@@ -170,10 +202,17 @@ class ActiveLearningExperiment:
                 self.embeddings = tensors["pca_components"].float().numpy()
                 self.all_expressions = tensors["expression"].float().numpy()
                 self.all_log_likelihoods = tensors["log_likelihood"].float().numpy()
-                # For PCA files, we need to generate dummy sequences since we don't have actual sequences
-                # We'll use variant IDs as sequences for now
-                variant_ids = tensors["variant_ids"].numpy()
-                sequences = np.array([f"variant_{int(vid)}" for vid in variant_ids])
+                # Load variant IDs
+                if "variant_ids" in tensors:
+                    self.variant_ids = tensors["variant_ids"].numpy()
+                    sequences = np.array(
+                        [f"variant_{int(vid)}" for vid in self.variant_ids]
+                    )
+                else:
+                    self.variant_ids = None
+                    sequences = np.array(
+                        [f"pca_seq_{i}" for i in range(len(self.all_expressions))]
+                    )
             else:
                 raise ValueError(
                     f"Unknown safetensors format. Available keys: {list(tensors.keys())}"
@@ -589,6 +628,51 @@ class ActiveLearningExperiment:
             }
         )
 
+    def _track_selected_variants(
+        self, round_num: int, selected_indices: List[int]
+    ) -> None:
+        """
+        Track which variants were selected in this round.
+
+        Args:
+            round_num: Current round number
+            selected_indices: List of indices that were selected
+        """
+        for idx in selected_indices:
+            # Get variant information
+            variant_info = {
+                "round": round_num,
+                "strategy": self.selection_strategy.value,
+                "seed": self.random_seed,
+                "variant_index": idx,  # Position in file (0-based)
+                "expression": float(self.all_expressions[idx]),
+                "log_likelihood": float(self.all_log_likelihoods[idx])
+                if not np.isnan(self.all_log_likelihoods[idx])
+                else None,
+            }
+
+            # Add variant ID if available (from variant_ids column)
+            if hasattr(self, "variant_ids") and self.variant_ids is not None:
+                variant_info["variant_id"] = (
+                    int(self.variant_ids[idx])
+                    if not np.isnan(self.variant_ids[idx])
+                    else None
+                )
+            else:
+                variant_info["variant_id"] = f"variant_{idx}"
+
+            # Add sequence if available (truncated for readability)
+            if hasattr(self, "all_sequences") and idx < len(self.all_sequences):
+                sequence = str(self.all_sequences[idx])
+                # Truncate very long sequences for readability
+                variant_info["sequence"] = (
+                    sequence[:50] + "..." if len(sequence) > 50 else sequence
+                )
+            else:
+                variant_info["sequence"] = f"seq_{idx}"
+
+            self.selected_variants.append(variant_info)
+
     def run_experiment(self, max_rounds: int = 30) -> List[Dict[str, Any]]:
         """
         Run the active learning experiment.
@@ -626,10 +710,12 @@ class ActiveLearningExperiment:
             }
             self.results.append(round_results)
 
-            # first round custom_evaluation
+            # first round custom_evaluation and track initial training set
             # NOTE: double check
             if round_num == 0:
                 self._intermediate_evaluation_custom_metrics(self.train_indices)
+                # Track initial training set as "round 0"
+                self._track_selected_variants(0, self.train_indices)
 
             # Check stopping criteria
             if len(self.unlabeled_indices) == 0:
@@ -641,6 +727,9 @@ class ActiveLearningExperiment:
             if not next_batch:
                 logger.info("No more sequences to select. Stopping.")
                 break
+
+            # Track selected variants for this round
+            self._track_selected_variants(round_num + 1, next_batch)
 
             # Evaluate custom metrics
             self._intermediate_evaluation_custom_metrics(next_batch)
@@ -714,6 +803,38 @@ class ActiveLearningExperiment:
 
             custom_metrics_df.to_csv(custom_metrics_path, index=False)
             logger.info(f"Custom metrics saved to {custom_metrics_path}")
+
+        # Save selected variants if available
+        if self.selected_variants:
+            selected_variants_path = output_path.replace(
+                ".csv", "_selected_variants.csv"
+            )
+            selected_variants_df = pd.DataFrame(self.selected_variants)
+
+            # Add regression model metadata for consistency
+            selected_variants_df["regression_model"] = self.model.__class__.__name__
+            selected_variants_df["seq_mod_method"] = self.seq_mod_method
+
+            # Reorder columns to put metadata first
+            metadata_cols = [
+                "round",
+                "strategy",
+                "seed",
+                "regression_model",
+                "seq_mod_method",
+                "variant_index",
+                "variant_id",
+                "expression",
+                "log_likelihood",
+                "sequence",
+            ]
+            cols = metadata_cols + [
+                col for col in selected_variants_df.columns if col not in metadata_cols
+            ]
+            selected_variants_df = selected_variants_df[cols]
+
+            selected_variants_df.to_csv(selected_variants_path, index=False)
+            logger.info(f"Selected variants saved to {selected_variants_path}")
 
     def get_final_performance(self) -> Dict[str, float]:
         """
@@ -863,6 +984,56 @@ def run_controlled_experiment(
     all_custom_metrics = {}  # Add storage for custom metrics
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    # Check if LOG_LIKELIHOOD strategy is viable by checking data availability
+    if SelectionStrategy.LOG_LIKELIHOOD in strategies:
+        logger.info("Checking log likelihood data availability...")
+        try:
+            # Create temporary experiment to check log likelihood data
+            temp_exp = ActiveLearningExperiment(
+                data_path=data_path,
+                selection_strategy=SelectionStrategy.RANDOM,  # Use random for temp check
+                initial_sample_size=initial_sample_size,
+                batch_size=batch_size,
+                test_size=test_size,
+                random_seed=42,
+                no_test=no_test,
+                normalize_expression=normalize_expression,
+                use_pca=use_pca,
+                pca_components=pca_components,
+            )
+
+            # Check if log likelihood data is available and not all NaN
+            if (
+                hasattr(temp_exp, "all_log_likelihoods")
+                and len(temp_exp.all_log_likelihoods) > 0
+            ):
+                if np.all(np.isnan(temp_exp.all_log_likelihoods)):
+                    logger.warning(
+                        "LOG_LIKELIHOOD strategy requested but all log likelihood values are NaN. Skipping LOG_LIKELIHOOD strategy."
+                    )
+                    strategies = [
+                        s for s in strategies if s != SelectionStrategy.LOG_LIKELIHOOD
+                    ]
+                else:
+                    logger.info(
+                        "Log likelihood data is available. LOG_LIKELIHOOD strategy will be used."
+                    )
+            else:
+                logger.warning(
+                    "LOG_LIKELIHOOD strategy requested but no log likelihood data found. Skipping LOG_LIKELIHOOD strategy."
+                )
+                strategies = [
+                    s for s in strategies if s != SelectionStrategy.LOG_LIKELIHOOD
+                ]
+
+        except Exception as e:
+            logger.error(
+                f"Error checking log likelihood data: {e}. Skipping LOG_LIKELIHOOD strategy."
+            )
+            strategies = [
+                s for s in strategies if s != SelectionStrategy.LOG_LIKELIHOOD
+            ]
 
     logger.info(
         f"Running controlled experiment with strategies: {[s.value for s in strategies]}"

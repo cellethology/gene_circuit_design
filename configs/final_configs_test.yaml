@@ -34,18 +34,18 @@ experiments:
     cores_per_process: 4
 
   # 3. Enformer template (to be filled in later)
-  # enformer_template:
-  #   data_path: "data/enformer_data/enformer_embeddings.csv"  # Update with actual path
-  #   strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
-  #   seq_mod_methods: ["ENFORMER"]  # You'll need to implement this in sequence_utils.py
-  #   regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
-  #   seeds: [42, 123, 456, 789, 999, 101, 202, 303, 404, 505]
-  #   initial_sample_size: 8
-  #   batch_size: 8
-  #   test_size: 30
-  #   max_rounds: 3
-  #   normalize_expression: true
-  #   no_test: true
-  #   # enformer_model_path: "path/to/enformer/model"  # Add if needed
-  #   # enformer_embedding_dim: 3072  # Add if needed
-  #   output_dir: "results/final_test/enformer"
+  enformer_template:
+    data_path: "data/166k_data/166k_rice/post_embeddings/all_embeddings_parallel_enformer_with_expressions.safetensors"  # Update with actual path
+    strategies: ["HIGH_EXPRESSION", "RANDOM"]
+    seq_mod_methods: ["EMBEDDING"]  # You'll need to implement this in sequence_utils.py
+    regression_models: ["LINEAR", "KNN", "RANDOM_FOREST"]
+    seeds: [42]
+    initial_sample_size: 8
+    batch_size: 8
+    test_size: 30
+    max_rounds: 3
+    normalize_expression: true
+    no_test: true
+    # enformer_model_path: "path/to/enformer/model"  # Add if needed
+    # enformer_embedding_dim: 3072  # Add if needed
+    output_dir: "results/final_test/enformer"
