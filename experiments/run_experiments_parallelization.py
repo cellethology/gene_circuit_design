@@ -26,7 +26,7 @@ from utils.metrics import (
     normalized_to_best_val_metric,
     top_10_ratio_intersected_indices_metric,
 )
-from utils.model_loader import RegressionModel, return_model
+from utils.model_loader import RegressionModelType, return_model
 from utils.sequence_utils import (
     SequenceModificationMethod,
     calculate_sequence_statistics,
@@ -80,7 +80,7 @@ class ActiveLearningExperiment:
         self,
         data_path: str,
         selection_strategy: SelectionStrategy = SelectionStrategy.HIGH_EXPRESSION,
-        regression_model: RegressionModel = RegressionModel.LINEAR,
+        regression_model: RegressionModelType = RegressionModelType.LINEAR,
         initial_sample_size: int = 8,
         batch_size: int = 8,
         test_size: int = 50,
@@ -947,7 +947,7 @@ def run_single_experiment(
 def run_controlled_experiment(
     data_path: str,
     strategies: List[SelectionStrategy],
-    regression_models: List[RegressionModel],
+    regression_models: List[RegressionModelType],
     seq_mod_methods: List[SequenceModificationMethod],
     seeds: List[int],
     initial_sample_size: int = 8,
@@ -1564,9 +1564,9 @@ def main() -> None:
             SelectionStrategy.LOG_LIKELIHOOD,
         ],
         "regression_models": [
-            RegressionModel.KNN,
-            RegressionModel.LINEAR,
-            RegressionModel.RANDOM_FOREST,
+            RegressionModelType.KNN,
+            RegressionModelType.LINEAR,
+            RegressionModelType.RANDOM_FOREST,
         ],
         "seq_mod_methods": [SequenceModificationMethod.EMBEDDING],
         "seeds": [42, 123, 456, 789, 999],

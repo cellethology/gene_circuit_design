@@ -17,8 +17,8 @@ from utils.sequence_utils import (
     calculate_sequence_statistics,
     flatten_one_hot_sequences,
     load_sequence_data,
-    one_hot_encode_sequence,
     one_hot_encode_sequences,
+    one_hot_encode_single_sequence,
 )
 
 
@@ -28,7 +28,7 @@ class TestOneHotEncodeSequence:
     def test_basic_sequence_encoding(self):
         """Test encoding of basic DNA sequence."""
         sequence = "ATGC"
-        result = one_hot_encode_sequence(sequence)
+        result = one_hot_encode_single_sequence(sequence)
 
         expected = np.array(
             [
@@ -46,12 +46,12 @@ class TestOneHotEncodeSequence:
         """Test encoding of empty sequence."""
         sequence = ""
         with pytest.raises(ValueError, match="Sequence cannot be empty"):
-            one_hot_encode_sequence(sequence)
+            one_hot_encode_single_sequence(sequence)
 
     def test_single_nucleotide(self):
         """Test encoding of single nucleotide."""
         sequence = "A"
-        result = one_hot_encode_sequence(sequence)
+        result = one_hot_encode_single_sequence(sequence)
 
         expected = np.array([[1, 0, 0, 0]])
         assert result.shape == (1, 4)
@@ -60,7 +60,7 @@ class TestOneHotEncodeSequence:
     def test_long_sequence(self):
         """Test encoding of longer sequence."""
         sequence = "ATGCATGCATGC"
-        result = one_hot_encode_sequence(sequence)
+        result = one_hot_encode_single_sequence(sequence)
 
         assert result.shape == (12, 4)
         # Check that each row sums to 1 (one-hot property)
@@ -71,12 +71,12 @@ class TestOneHotEncodeSequence:
         sequence = "ATGCX"  # X is not a valid nucleotide
 
         with pytest.raises(ValueError, match="Invalid nucleotide"):
-            one_hot_encode_sequence(sequence)
+            one_hot_encode_single_sequence(sequence)
 
     def test_lowercase_sequence(self):
         """Test encoding of lowercase sequence."""
         sequence = "atgc"
-        result = one_hot_encode_sequence(sequence)
+        result = one_hot_encode_single_sequence(sequence)
 
         expected = np.array(
             [
@@ -390,7 +390,7 @@ pytestmark = pytest.mark.unit
 def test_numpy_float32_dtype():
     """Test that all functions return np.float32 dtype for consistency."""
     sequence = "ATGC"
-    encoded = one_hot_encode_sequence(sequence)
+    encoded = one_hot_encode_single_sequence(sequence)
     assert encoded.dtype == np.float32
 
     sequences = ["ATGC", "GGCC"]

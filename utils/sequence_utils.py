@@ -48,7 +48,7 @@ def ensure_sequence_modification_method(
     return seq_mod_method
 
 
-def one_hot_encode_sequence(sequence: str) -> np.ndarray:
+def one_hot_encode_single_sequence(sequence: str) -> np.ndarray:
     """
     Convert a DNA sequence to one-hot encoding.
 
@@ -150,7 +150,7 @@ def one_hot_encode_sequences(
 
         for i, sequence in enumerate(sequences):
             try:
-                encoded = one_hot_encode_sequence(sequence)
+                encoded = one_hot_encode_single_sequence(sequence)
                 encoded_sequences.append(encoded)
             except ValueError as err:
                 raise ValueError(f"Error encoding DNA sequence {i}: {err}") from err
@@ -202,7 +202,7 @@ def flatten_one_hot_sequences_with_pca(
     Raises:
         ValueError: If sequences have different lengths or n_components is invalid
     """
-    if not encoded_sequences:
+    if encoded_sequences is None or len(encoded_sequences) == 0:
         raise ValueError("Encoded sequences list cannot be empty")
 
     # Check that all sequences have the same length
