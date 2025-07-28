@@ -3,16 +3,25 @@ Configuration loading utilities for active learning experiments.
 """
 
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
 
-from experiments.run_experiments_parallelization import (
-    SelectionStrategy,
-    SequenceModificationMethod,
-)
-from utils.model_loader import RegressionModel
+from utils.model_loader import RegressionModelType
+from utils.sequence_utils import SequenceModificationMethod
+
+
+class SelectionStrategy(str, Enum):
+    """Enumeration of available selection strategies."""
+
+    HIGH_EXPRESSION = (
+        "highExpression"  # Select sequences with highest predicted expression
+    )
+    RANDOM = "random"  # Select sequences randomly
+    LOG_LIKELIHOOD = "log_likelihood"  # Select sequences with highest log likelihood
+    UNCERTAINTY = "uncertainty"  # Select sequences with highest prediction uncertainty (future extension)
 
 
 def load_experiment_config(
@@ -96,9 +105,9 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
     # Convert regression models from strings to enums (with default if missing)
     if "regression_models" in config:
         regression_model_map = {
-            "LINEAR": RegressionModel.LINEAR,
-            "KNN": RegressionModel.KNN,
-            "RANDOM_FOREST": RegressionModel.RANDOM_FOREST,
+            "LINEAR": RegressionModelType.LINEAR,
+            "KNN": RegressionModelType.KNN,
+            "RANDOM_FOREST": RegressionModelType.RANDOM_FOREST,
         }
         config["regression_models"] = [
             regression_model_map[model] for model in config["regression_models"]
@@ -106,9 +115,9 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
     else:
         # Default to all three models if not specified
         config["regression_models"] = [
-            RegressionModel.LINEAR,
-            RegressionModel.KNN,
-            RegressionModel.RANDOM_FOREST,
+            RegressionModelType.LINEAR,
+            RegressionModelType.KNN,
+            RegressionModelType.RANDOM_FOREST,
         ]
 
     return config

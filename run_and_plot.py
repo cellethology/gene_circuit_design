@@ -24,12 +24,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def extract_output_dir_from_config(
+    config_path: str, experiment_name: Optional[str] = None
+) -> Optional[str]:
+    """Extract output directory from config file or experiment configuration."""
+    try:
+        import yaml
+
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        # If specific experiment is requested, look for it in experiments section
+        if experiment_name and "experiments" in config:
+            experiments = config["experiments"]
+            if experiment_name in experiments:
+                return experiments[experiment_name].get("output_dir")
+
+        # If no specific experiment, try to find a default output_dir
+        # or use the first experiment's output_dir as fallback
+        if "output_dir" in config:
+            return config["output_dir"]
+        elif "experiments" in config and config["experiments"]:
+            # Return the first experiment's output_dir as fallback
+            first_exp = next(iter(config["experiments"].values()))
+            return first_exp.get("output_dir", "results")
+
+        return "results"  # Final fallback
+
+    except Exception as e:
+        logger.warning(f"Could not extract output_dir from config: {e}")
+        return None
+
+
 def run_experiment(
     config_path: str,
     experiment_name: Optional[str] = None,
     max_workers: Optional[int] = None,
-) -> bool:
-    """Run a single experiment or all experiments in a config."""
+) -> tuple[bool, Optional[str]]:
+    """Run a single experiment or all experiments in a config.
+
+    Returns:
+        Tuple of (success, output_dir) where output_dir is the directory where results were saved
+    """
     logger.info(f"Running experiments from config: {config_path}")
 
     cmd = ["python", "run_all_experiments.py", "--config", config_path]
@@ -44,12 +80,16 @@ def run_experiment(
         cmd.extend(["--max-workers", str(max_workers)])
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=False)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
         logger.info("Experiments completed successfully")
-        return True
+
+        # Extract output directory from the experiment output
+        output_dir = extract_output_dir_from_config(config_path, experiment_name)
+
+        return True, output_dir
     except subprocess.CalledProcessError as e:
         logger.error(f"Experiments failed: {e}")
-        return False
+        return False, None
 
 
 def generate_plots_for_results(results_dir: str) -> bool:
@@ -167,6 +207,7 @@ def find_all_result_dirs() -> List[str]:
 
 def main():
     """Main function."""
+    # python3 run_and_plot.py --config configs/config.yaml --experiment "experiment_name"
     parser = argparse.ArgumentParser(description="Run experiments and generate plots")
     parser.add_argument("--config", type=str, required=True, help="Path to config file")
     parser.add_argument("--experiment", type=str, help="Specific experiment to run")
@@ -181,9 +222,6 @@ def main():
     parser.add_argument(
         "--skip-plots", action="store_true", help="Skip plots, only run experiments"
     )
-    parser.add_argument(
-        "--results-dir", type=str, help="Specific results directory to plot"
-    )
 
     args = parser.parse_args()
 
@@ -193,21 +231,27 @@ def main():
     logger.info("Starting combined experiment and plotting pipeline")
 
     success = True
+    experiment_output_dir = None
 
     # Run experiments unless skipped
     if not args.skip_experiments:
-        success = run_experiment(args.config, args.experiment, args.max_workers)
+        success, experiment_output_dir = run_experiment(
+            args.config, args.experiment, args.max_workers
+        )
         if not success:
             logger.error("Experiments failed, stopping")
             sys.exit(1)
 
     # Generate plots unless skipped
     if not args.skip_plots:
-        if args.results_dir:
-            # Plot specific results directory
-            plot_success = generate_plots_for_results(args.results_dir)
+        if experiment_output_dir:
+            # Plot only the directory from the experiment that was just run
+            logger.info(
+                f"Plotting results from recent experiment: {experiment_output_dir}"
+            )
+            plot_success = generate_plots_for_results(experiment_output_dir)
         else:
-            # Find and plot all result directories
+            # Fallback: Find and plot all result directories
             result_dirs = find_all_result_dirs()
             logger.info(f"Found {len(result_dirs)} result directories")
 
@@ -221,10 +265,16 @@ def main():
         else:
             logger.warning("Some plots failed to generate")
 
-    # Create summary report
-    result_dirs = find_all_result_dirs()
-    if result_dirs:
-        create_summary_report(result_dirs)
+    # Create summary report - only for recent experiment or all if no recent experiment
+    if experiment_output_dir:
+        # Only create summary for the recent experiment
+        if Path(experiment_output_dir).exists():
+            create_summary_report([experiment_output_dir])
+    else:
+        # Fallback: create summary for all result directories
+        result_dirs = find_all_result_dirs()
+        if result_dirs:
+            create_summary_report(result_dirs)
 
     logger.info("Pipeline completed successfully")
 

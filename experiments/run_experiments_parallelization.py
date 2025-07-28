@@ -10,7 +10,6 @@ import logging
 import random
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -21,6 +20,7 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
+from utils.config_loader import SelectionStrategy
 from utils.metrics import (
     get_best_value_metric,
     normalized_to_best_val_metric,
@@ -54,17 +54,6 @@ file_handler.setFormatter(formatter)
 # Add the handler to the root logger
 logging.getLogger().addHandler(file_handler)
 logger = logging.getLogger(__name__)
-
-
-class SelectionStrategy(str, Enum):
-    """Enumeration of available selection strategies."""
-
-    HIGH_EXPRESSION = (
-        "highExpression"  # Select sequences with highest predicted expression
-    )
-    RANDOM = "random"  # Select sequences randomly
-    LOG_LIKELIHOOD = "log_likelihood"  # Select sequences with highest log likelihood
-    UNCERTAINTY = "uncertainty"  # Select sequences with highest prediction uncertainty (future extension)
 
 
 class ActiveLearningExperiment:
@@ -1222,9 +1211,17 @@ def create_combined_results_from_files(output_path: Path) -> None:
     """
     import re
 
-    # Find all individual results files
-    results_files = list(output_path.glob("*_results.csv"))
-    custom_metrics_files = list(output_path.glob("*_custom_metrics.csv"))
+    # Find all individual results files (exclude combined files)
+    results_files = [
+        f
+        for f in output_path.glob("*_results.csv")
+        if "_all_seeds_" not in f.name and "combined_all_" not in f.name
+    ]
+    custom_metrics_files = [
+        f
+        for f in output_path.glob("*_custom_metrics.csv")
+        if "_all_seeds_" not in f.name and "combined_all_" not in f.name
+    ]
 
     if not results_files:
         logger.warning("No individual results files found to combine")
@@ -1236,7 +1233,7 @@ def create_combined_results_from_files(output_path: Path) -> None:
         filename = file_path.stem
         # Parse filename: strategy_seqmod_regressor_seed_X_results
         # Handle complex regressor names like "KNN_regression" or "linear_regresion"
-        pattern = r"([^_]+)_([^_]+)_(.+)_seed_(\d+)_results"
+        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)_results"
         match = re.match(pattern, filename)
 
         if not match:
@@ -1270,7 +1267,7 @@ def create_combined_results_from_files(output_path: Path) -> None:
     all_custom_metrics = []
     for file_path in custom_metrics_files:
         filename = file_path.stem.replace("_custom_metrics", "")
-        pattern = r"([^_]+)_([^_]+)_(.+)_seed_(\d+)"
+        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)"
         match = re.match(pattern, filename)
 
         if not match:
