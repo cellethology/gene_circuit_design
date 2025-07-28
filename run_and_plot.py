@@ -68,7 +68,12 @@ def run_experiment(
     """
     logger.info(f"Running experiments from config: {config_path}")
 
-    cmd = ["python", "run_all_experiments.py", "--config", config_path]
+    cmd = [
+        "python",
+        "experiments/run_experiments_parallelization.py",
+        "--config",
+        config_path,
+    ]
 
     if experiment_name:
         cmd.extend(["--experiment", experiment_name])
@@ -118,7 +123,7 @@ def generate_plots_for_results(results_dir: str) -> bool:
         original_cwd = os.getcwd()
 
         subprocess.run(
-            ["python", "plotting/visualize_all_results.py"],
+            ["python", "plotting/visualize_all_results.py", "-f", results_path],
             check=True,
             cwd=original_cwd,
         )
