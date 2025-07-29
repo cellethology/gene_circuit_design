@@ -108,6 +108,7 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "LINEAR": RegressionModelType.LINEAR,
             "KNN": RegressionModelType.KNN,
             "RANDOM_FOREST": RegressionModelType.RANDOM_FOREST,
+            "XGBOOST": RegressionModelType.XGBOOST,
         }
         config["regression_models"] = [
             regression_model_map[model] for model in config["regression_models"]
@@ -118,6 +119,7 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             RegressionModelType.LINEAR,
             RegressionModelType.KNN,
             RegressionModelType.RANDOM_FOREST,
+            RegressionModelType.XGBOOST,
         ]
 
     return config

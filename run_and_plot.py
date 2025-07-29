@@ -9,6 +9,7 @@ import argparse
 import logging
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,6 +23,29 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+
+
+def estimate_experiment_count(
+    config_path: str, experiment_name: Optional[str] = None
+) -> int:
+    """Estimate total number of experiments that will be run."""
+    try:
+        import yaml
+
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        if experiment_name and "experiments" in config:
+            exp_config = config["experiments"][experiment_name]
+            strategies = len(exp_config.get("strategies", []))
+            seq_mod_methods = len(exp_config.get("seq_mod_methods", []))
+            regression_models = len(exp_config.get("regression_models", []))
+            seeds = len(exp_config.get("seeds", []))
+            return strategies * seq_mod_methods * regression_models * seeds
+
+        return 0
+    except Exception:
+        return 0
 
 
 def extract_output_dir_from_config(
@@ -68,6 +92,14 @@ def run_experiment(
     """
     logger.info(f"Running experiments from config: {config_path}")
 
+    # Estimate total experiments and provide timeline info
+    total_experiments = estimate_experiment_count(config_path, experiment_name)
+    if total_experiments > 0:
+        logger.info(f"Estimated total experiments to run: {total_experiments}")
+        logger.info("=" * 60)
+        logger.info("EXPERIMENT EXECUTION STARTED")
+        logger.info("=" * 60)
+
     cmd = [
         "python",
         "experiments/run_experiments_parallelization.py",
@@ -84,17 +116,38 @@ def run_experiment(
     if max_workers:
         cmd.extend(["--max-workers", str(max_workers)])
 
+    start_time = time.time()
+
     try:
         # Run with real-time output instead of capturing
         result = subprocess.run(cmd, check=True, capture_output=False, text=True)
-        logger.info("Experiments completed successfully")
+
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        logger.info("=" * 60)
+        logger.info("EXPERIMENT EXECUTION COMPLETED")
+        logger.info("=" * 60)
+        logger.info(
+            f"Total execution time: {elapsed_time/60:.1f} minutes ({elapsed_time:.1f} seconds)"
+        )
+        if total_experiments > 0:
+            avg_time_per_experiment = elapsed_time / total_experiments
+            logger.info(
+                f"Average time per experiment: {avg_time_per_experiment:.1f} seconds"
+            )
 
         # Extract output directory from the experiment output
         output_dir = extract_output_dir_from_config(config_path, experiment_name)
 
         return True, output_dir
     except subprocess.CalledProcessError as e:
-        logger.error(f"Experiments failed: {e}")
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        logger.error("=" * 60)
+        logger.error("EXPERIMENT EXECUTION FAILED")
+        logger.error("=" * 60)
+        logger.error(f"Failed after {elapsed_time/60:.1f} minutes: {e}")
         return False, None
 
 

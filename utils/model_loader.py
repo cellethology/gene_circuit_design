@@ -4,7 +4,7 @@ Configuration for model setup for gene circuit design
 
 from enum import Enum
 
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 
@@ -16,6 +16,7 @@ class RegressionModelType(str, Enum):
     KNN = "KNN_regression"
     LINEAR = "linear_regression"
     RANDOM_FOREST = "random_forest"
+    XGBOOST = "xg_boost"
 
 
 def return_model(model: str, random_state: int = 42):
@@ -28,3 +29,5 @@ def return_model(model: str, random_state: int = 42):
     elif model == RegressionModelType.KNN:
         # KNN doesn't have random_state, but we can set n_neighbors for consistency
         return KNeighborsRegressor(n_neighbors=5, n_jobs=-1)
+    elif model == RegressionModelType.XGBOOST:
+        return HistGradientBoostingRegressor(random_state=random_state)
