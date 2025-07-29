@@ -85,7 +85,8 @@ def run_experiment(
         cmd.extend(["--max-workers", str(max_workers)])
 
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # Run with real-time output instead of capturing
+        result = subprocess.run(cmd, check=True, capture_output=False, text=True)
         logger.info("Experiments completed successfully")
 
         # Extract output directory from the experiment output
