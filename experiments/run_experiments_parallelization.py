@@ -29,7 +29,6 @@ from utils.metrics import (
 from utils.model_loader import RegressionModelType, return_model
 from utils.sequence_utils import (
     SequenceModificationMethod,
-    calculate_sequence_statistics,
     ensure_sequence_modification_method,
     flatten_one_hot_sequences,
     flatten_one_hot_sequences_with_pca,
@@ -292,14 +291,16 @@ class ActiveLearningExperiment:
         total_samples = len(self.all_sequences)
 
         # Log sequence statistics
+        # NOTE: comment out to clean clutter in logs
         # NOTE: base on sequence type, calculate statistics
-        stats = calculate_sequence_statistics(self.all_sequences)
-        logger.info(f"Sequence statistics: {stats}")
+        # stats = calculate_sequence_statistics(self.all_sequences)
+        # logger.info(f"Sequence statistics: {stats}")
 
         # Log log likelihood statistics if available
         if not np.all(np.isnan(self.all_log_likelihoods)):
             ll_stats = pd.Series(self.all_log_likelihoods).describe()
-            logger.info(f"Log likelihood statistics:\n{ll_stats}")
+            # NOTE: comment out to clean clutter in logs
+            # logger.info(f"Log likelihood statistics:\n{ll_stats}")
 
         # If no test set is used, set test size to 0 and test indices to empty list
         # NOTE: NO SPLIT ON DIFFERENT SEEDS
@@ -722,7 +723,8 @@ class ActiveLearningExperiment:
 
             # Evaluate custom metrics
             self._intermediate_evaluation_custom_metrics(next_batch)
-            logger.info(f"Custom metrics: {self.custom_metrics} evaluated")
+            # NOTE: comment out to clean clutter in logs
+            # logger.info(f"Custom metrics: {self.custom_metrics} evaluated")
 
             # Update training set
             self.train_indices.extend(next_batch)
