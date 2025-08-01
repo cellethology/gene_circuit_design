@@ -36,6 +36,7 @@ dependencies = [
     "scikit-learn>=1.0.0",
     "scipy>=1.7.0",
     "seaborn>=0.13.2",
+    "submitit>=1.5.3",
     "torch>=2.5.1",
     "tqdm>=4.67.1",
     "umap-learn",
