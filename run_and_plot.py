@@ -13,6 +13,9 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
+# Create logs directory if it doesn't exist
+Path("logs").mkdir(exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

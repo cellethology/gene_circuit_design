@@ -50,7 +50,7 @@ htmlcov/
 *.tar.gz
 *.zip
 
-# Logs and databases
+# los and databases
 *.log
 *.sqlite
 *.db
