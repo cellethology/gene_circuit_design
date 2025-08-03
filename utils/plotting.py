@@ -817,6 +817,106 @@ def plot_example():
                 folder_path, save_path=f"{folder_path}/custom_metrics_plot.pdf"
             )
 
+def create_combined_results_from_files(output_path: Path) -> None:
+    """
+    Create combined results files from individual experiment files.
+    This is useful when experiments are interrupted but individual files exist.
+    """
+    import re
+
+    # Find all individual results files (exclude combined files)
+    results_files = [
+        f
+        for f in output_path.glob("*_results.csv")
+        if "_all_seeds_" not in f.name and "combined_all_" not in f.name
+    ]
+    custom_metrics_files = [
+        f
+        for f in output_path.glob("*_custom_metrics.csv")
+        if "_all_seeds_" not in f.name and "combined_all_" not in f.name
+    ]
+
+    if not results_files:
+        # NOTE: use to be logger
+        print("No individual results files found to combine")
+        return
+
+    # Combine results files
+    all_results = []
+    for file_path in results_files:
+        filename = file_path.stem
+        # Parse filename: strategy_seqmod_regressor_seed_X_results
+        # Handle complex regressor names like "KNN_regression" or "linear_regresion"
+        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)_results"
+        match = re.match(pattern, filename)
+
+        if not match:
+            print(f"Could not parse filename {filename}")
+            continue
+
+        strategy, seq_mod_method, regression_model, seed = match.groups()
+        seed = int(seed)
+
+        try:
+            df = pd.read_csv(file_path)
+            # Add metadata columns if missing
+            df["strategy"] = strategy
+            df["seq_mod_method"] = seq_mod_method
+            df["regression_model"] = regression_model
+            df["seed"] = seed
+            all_results.append(df)
+        except Exception as e:
+            print(f"Could not read {file_path}: {e}")
+            continue
+
+    if all_results:
+        combined_df = pd.DataFrame(pd.concat(all_results, ignore_index=True))
+        combined_output_path = output_path / "combined_all_results.csv"
+        combined_df.to_csv(combined_output_path, index=False)
+        print(
+            f"Combined results from {len(results_files)} files saved to {combined_output_path}"
+        )
+
+    # Combine custom metrics files
+    all_custom_metrics = []
+    for file_path in custom_metrics_files:
+        filename = file_path.stem.replace("_custom_metrics", "")
+        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)"
+        match = re.match(pattern, filename)
+
+        if not match:
+            print(f"Could not parse custom metrics filename {filename}")
+            continue
+
+        strategy, seq_mod_method, regression_model, seed = match.groups()
+        seed = int(seed)
+
+        try:
+            df = pd.read_csv(file_path)
+            # Add metadata columns if missing
+            if "strategy" not in df.columns:
+                df["strategy"] = strategy
+            if "seq_mod_method" not in df.columns:
+                df["seq_mod_method"] = seq_mod_method
+            if "regression_model" not in df.columns:
+                df["regression_model"] = regression_model
+            if "seed" not in df.columns:
+                df["seed"] = seed
+            all_custom_metrics.append(df)
+        except Exception as e:
+            print(f"Could not read {file_path}: {e}")
+            continue
+
+    if all_custom_metrics:
+        combined_custom_df = pd.DataFrame(
+            pd.concat(all_custom_metrics, ignore_index=True)
+        )
+        combined_custom_output_path = output_path / "combined_all_custom_metrics.csv"
+        combined_custom_df.to_csv(combined_custom_output_path, index=False)
+        print(
+            f"Combined custom metrics from {len(custom_metrics_files)} files saved to {combined_custom_output_path}"
+        )
+
 
 if __name__ == "__main__":
     plot_example()
