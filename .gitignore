@@ -90,3 +90,6 @@ setting.json
 
 # dir
 .claude/
+
+# logs
+logs_experiments/
