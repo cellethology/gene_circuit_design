@@ -93,3 +93,6 @@ setting.json
 
 # logs
 logs_experiments/*
+log_test/*
+logs_test/*
+job_sub/
