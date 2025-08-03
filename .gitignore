@@ -92,4 +92,4 @@ setting.json
 .claude/
 
 # logs
-logs_experiments/
+logs_experiments/*
