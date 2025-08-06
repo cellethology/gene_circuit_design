@@ -112,6 +112,22 @@ python run_all_experiments.py --config configs/final_configs_test.yaml --max-wor
 python plotting/visualize_all_results.py
 ```
 
+## Slurm Job Submission
+
+For running experiments on a Slurm cluster, use the sequential_parallel_job_test.py script:
+
+```bash
+# Run experiments in parallel using Slurm
+python job_sub/submitit/sequential_parallel_job_test.py \
+    --config-files configs/enformer.yaml configs/another_config.yaml \
+    --experiment-names enformer_template another_experiment \
+    --timeout-min 30 \
+    --slurm-cpus-per-task 2 \
+    --slurm-mem-per-cpu 4GB
+```
+
+This script allows running multiple experiment configurations in parallel on a Slurm cluster. Each parameter combination is submitted as a separate Slurm job. The script handles job submission, monitoring, and result collection.
+
 ## Project Structure
 
 ```

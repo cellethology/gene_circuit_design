@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+
 import submitit
-from importlib.metadata import version
+
 
 def add(a, b):
     return a + b
+
 
 # the AutoExecutor class is your interface for submitting function to a cluster or run them locally.
 # The specified folder is used to dump job information, logs and result when finished
@@ -17,11 +19,19 @@ executor = submitit.AutoExecutor(folder=log_folder)
 # Cluster specific options must be appended by the cluster name:
 # Eg.: slurm partition can be specified using `slurm_partition` argument. It
 # will be ignored on other clusters:
-executor.update_parameters(slurm_partition="wzt_20250411,intel-sc3", mem_gb=128, cpus_per_task=128, slurm_mail_user="lizelun@westlake.edu.cn", slurm_mail_type="BEGIN,END,FAIL")
+executor.update_parameters(
+    slurm_partition="wzt_20250411,intel-sc3",
+    mem_gb=128,
+    cpus_per_task=128,
+    slurm_mail_user="lizelun@westlake.edu.cn",
+    slurm_mail_type="BEGIN,END,FAIL",
+)
 # The submission interface is identical to concurrent.futures.Executor
 job = executor.submit(add, 5, 7)  # will compute add(5, 7)
 print(job.job_id)  # ID of your job
 
-output = job.result()  # waits for the submitted function to complete and returns its output
+output = (
+    job.result()
+)  # waits for the submitted function to complete and returns its output
 # if ever the job failed, job.result() will raise an error with the corresponding trace
 assert output == 12  # 5 + 7 = 12...  your addition was computed in the cluster
