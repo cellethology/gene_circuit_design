@@ -1,9 +1,27 @@
-# 1. Import the run experiment function
+"""
+Sequential Parallel Job Submission Script
+
+This script provides functionality to run multiple experiment configurations on a Slurm cluster
+using submitit. It allows for running experiments with different parameter combinations in parallel,
+with each combination submitted as a separate Slurm job.
+
+Usage:
+    python sequential_parallel_job_test.py --config-files config1.yaml config2.yaml --experiment-names exp1 exp2
+
+    Or import the run_slurm_experiments function in your own script:
+    from job_sub.submitit.sequential_parallel_job_test import run_slurm_experiments
+    run_slurm_experiments(config_files=["config1.yaml"], experiment_names=["exp1"])
+"""
+
+import logging
+import os
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import submitit
+
 from experiments.run_experiments_parallelization import run_single_experiment
 from utils.config_loader import get_experiment_config
-import submitit
-import logging
 from utils.plotting import create_combined_results_from_files
 
 # Configure logging
@@ -12,67 +30,248 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# only handle single experiment at a time
-executor = submitit.AutoExecutor(folder="logs_experiments")
-executor.update_parameters(
-    timeout_min=10,
-    slurm_partition="wzt_20250411,intel-sc3",
-    slurm_cpus_per_task=1,
-    slurm_mail_user="lizelun@westlake.edu.cn",
-    slurm_mail_type="BEGIN,END,FAIL",
-    slurm_qos="huge",
-    slurm_mem_per_cpu="10GB",
-)
-# Define variables
-config_file = "configs/enformer.yaml"
-experiment_name = "enformer_template"
-config = get_experiment_config(experiment_name=experiment_name, config_file=config_file)
 
-# 2. Define the parameter combinations -> which is loaded from the config file
-initial_sample_size = config["initial_sample_size"]
-data_path = config["data_path"]
-batch_size = config["batch_size"]
-test_size = config["test_size"]
-no_test = config["no_test"]
-max_rounds = config["max_rounds"]
-output_dir = config["output_dir"]
-normalize_expression = config["normalize_expression"]
+def run_slurm_experiments(
+    config_files: List[str],
+    experiment_names: List[str],
+    slurm_params: Optional[Dict[str, Any]] = None,
+    executor_folder: str = "logs_experiments",
+) -> None:
+    """
+    Run multiple experiment configurations on a Slurm cluster using submitit.
 
-# I just need to convert config into a list of dictionaries
-experiment_params = []
-for strategy in config["strategies"]:
-    for regression_model in config["regression_models"]:
-        for seq_mod_method in config["seq_mod_methods"]:
-            for seed in config["seeds"]:
-                experiment_params.append(
-                    {
-                        "strategy": strategy,
-                        "regression_model": regression_model,
-                        "seq_mod_method": seq_mod_method,
-                        "seed": seed,
-                        "data_path": data_path,
-                        "initial_sample_size": initial_sample_size,
-                        "batch_size": batch_size,
-                        "test_size": test_size,
-                        "no_test": no_test,
-                        "max_rounds": max_rounds,
-                        "output_dir": output_dir,
-                        "normalize_expression": normalize_expression,
-                    }
-                )
+    Args:
+        config_files: List of configuration file paths
+        experiment_names: List of experiment names to run from the config files
+                         (must match the length of config_files)
+        slurm_params: Optional dictionary of Slurm parameters to override defaults
+        executor_folder: Folder to store submitit logs
+    """
+    # Validate inputs
+    if len(config_files) != len(experiment_names):
+        raise ValueError("config_files and experiment_names must have the same length")
 
-# print(experiment_params)
+    # Validate config files exist
+    for config_file in config_files:
+        if not os.path.exists(config_file):
+            raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
-# 3. Submit the jobs
-jobs = executor.map_array(run_single_experiment, experiment_params)
+    # Set up default Slurm parameters
+    default_slurm_params = {
+        "timeout_min": 10,
+        "slurm_partition": "wzt_20250411,intel-sc3",
+        "slurm_cpus_per_task": 1,
+        "slurm_mail_user": "lizelun@westlake.edu.cn",
+        "slurm_mail_type": "BEGIN,END,FAIL",
+        "slurm_qos": "huge",
+        "slurm_mem_per_cpu": "2GB",
+    }
 
-# 4. Collect the results
-# Just a holder to wait for jobs to complete
-results = [job.result() for job in jobs]
+    # Override defaults with provided parameters
+    if slurm_params:
+        default_slurm_params.update(slurm_params)
 
-# it is okay if it failed here (this is only running locally)
-# 5. Combine the results into a single csv file
-create_combined_results_from_files(output_path=Path(output_dir))
+    # Initialize the executor
+    executor = submitit.AutoExecutor(folder=executor_folder)
+    executor.update_parameters(**default_slurm_params)
 
-# 6. Call another function to plot the results
-# TODO
+    all_experiment_params = []
+    output_dirs = []
+
+    # Process each configuration
+    for config_file, experiment_name in zip(config_files, experiment_names):
+        logger.info(f"Processing experiment: {experiment_name} from {config_file}")
+
+        try:
+            # Load the configuration
+            config = get_experiment_config(
+                experiment_name=experiment_name, config_file=config_file
+            )
+
+            # Validate required parameters
+            required_params = [
+                "initial_sample_size",
+                "data_path",
+                "batch_size",
+                "test_size",
+                "no_test",
+                "max_rounds",
+                "output_dir",
+                "normalize_expression",
+                "strategies",
+                "regression_models",
+                "seq_mod_methods",
+                "seeds",
+            ]
+
+            for param in required_params:
+                if param not in config:
+                    raise ValueError(
+                        f"Required parameter '{param}' not found in experiment '{experiment_name}'"
+                    )
+
+            # Extract common parameters
+            initial_sample_size = config["initial_sample_size"]
+            data_path = config["data_path"]
+            batch_size = config["batch_size"]
+            test_size = config["test_size"]
+            no_test = config["no_test"]
+            max_rounds = config["max_rounds"]
+            output_dir = config["output_dir"]
+            normalize_expression = config["normalize_expression"]
+
+            # Store output directory for later use
+            output_dirs.append(output_dir)
+
+            # Generate parameter combinations
+            for strategy in config["strategies"]:
+                for regression_model in config["regression_models"]:
+                    for seq_mod_method in config["seq_mod_methods"]:
+                        for seed in config["seeds"]:
+                            all_experiment_params.append(
+                                {
+                                    "strategy": strategy,
+                                    "regression_model": regression_model,
+                                    "seq_mod_method": seq_mod_method,
+                                    "seed": seed,
+                                    "data_path": data_path,
+                                    "initial_sample_size": initial_sample_size,
+                                    "batch_size": batch_size,
+                                    "test_size": test_size,
+                                    "no_test": no_test,
+                                    "max_rounds": max_rounds,
+                                    "output_dir": output_dir,
+                                    "normalize_expression": normalize_expression,
+                                }
+                            )
+        except Exception as e:
+            logger.error(f"Error processing experiment {experiment_name}: {str(e)}")
+            raise
+
+    # Submit all jobs
+    logger.info(f"Submitting {len(all_experiment_params)} jobs to Slurm")
+    jobs = executor.map_array(run_single_experiment, all_experiment_params)
+
+    # Wait for all jobs to complete
+    logger.info("Waiting for jobs to complete...")
+    results = [job.result() for job in jobs]
+    logger.info("All jobs completed")
+
+    # Combine results for each output directory
+    for output_dir in set(output_dirs):
+        logger.info(f"Combining results in {output_dir}")
+        create_combined_results_from_files(output_path=Path(output_dir))
+
+
+def parse_arguments():
+    """
+    Parse command line arguments for running experiments on Slurm.
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run experiments on Slurm using submitit"
+    )
+
+    # Required arguments
+    parser.add_argument(
+        "--config-files",
+        type=str,
+        nargs="+",
+        required=True,
+        help="List of configuration file paths",
+    )
+    parser.add_argument(
+        "--experiment-names",
+        type=str,
+        nargs="+",
+        required=True,
+        help="List of experiment names to run from the config files",
+    )
+
+    # Optional Slurm parameters
+    parser.add_argument(
+        "--timeout-min", type=int, default=10, help="Timeout in minutes for each job"
+    )
+    parser.add_argument(
+        "--slurm-partition",
+        type=str,
+        default="wzt_20250411,intel-sc3",
+        help="Slurm partition to use",
+    )
+    parser.add_argument(
+        "--slurm-cpus-per-task", type=int, default=1, help="Number of CPUs per task"
+    )
+    parser.add_argument(
+        "--slurm-mem-per-cpu", type=str, default="2GB", help="Memory per CPU"
+    )
+    parser.add_argument(
+        "--slurm-mail-user",
+        type=str,
+        default="lizelun@westlake.edu.cn",
+        help="Email address for job notifications",
+    )
+    parser.add_argument(
+        "--slurm-mail-type",
+        type=str,
+        default="BEGIN,END,FAIL",
+        help="When to send email notifications",
+    )
+    parser.add_argument(
+        "--slurm-qos", type=str, default="huge", help="Slurm QOS to use"
+    )
+    parser.add_argument(
+        "--executor-folder",
+        type=str,
+        default="logs_experiments",
+        help="Folder to store submitit logs",
+    )
+
+    return parser.parse_args()
+
+
+# Example usage
+if __name__ == "__main__":
+    # Check if arguments are provided
+    import sys
+
+    if len(sys.argv) > 1:
+        # Parse command line arguments
+        args = parse_arguments()
+
+        # Extract Slurm parameters
+        slurm_params = {
+            "timeout_min": args.timeout_min,
+            "slurm_partition": args.slurm_partition,
+            "slurm_cpus_per_task": args.slurm_cpus_per_task,
+            "slurm_mem_per_cpu": args.slurm_mem_per_cpu,
+            "slurm_mail_user": args.slurm_mail_user,
+            "slurm_mail_type": args.slurm_mail_type,
+            "slurm_qos": args.slurm_qos,
+        }
+
+        # Run experiments with provided arguments
+        run_slurm_experiments(
+            config_files=args.config_files,
+            experiment_names=args.experiment_names,
+            slurm_params=slurm_params,
+            executor_folder=args.executor_folder,
+        )
+    else:
+        # Example 1: Run a single configuration
+        print("No arguments provided. Running example configuration...")
+        run_slurm_experiments(
+            config_files=["configs/enformer.yaml"],
+            experiment_names=["enformer_template"],
+        )
+
+        # Example 2: Run multiple configurations (commented out)
+        # run_slurm_experiments(
+        #     config_files=["configs/enformer.yaml", "configs/another_config.yaml"],
+        #     experiment_names=["enformer_template", "another_experiment"],
+        #     slurm_params={
+        #         "timeout_min": 30,
+        #         "slurm_cpus_per_task": 2,
+        #         "slurm_mem_per_cpu": "4GB"
+        #     }
+        # )

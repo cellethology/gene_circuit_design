@@ -1,10 +1,14 @@
-import submitit
 import time
+
+import submitit
+
 
 def slow_task(x):
     import time
+
     time.sleep(10)  # 10 second delay
     return f"Done with {x}"
+
 
 executor = submitit.AutoExecutor(folder="logs_test")
 executor.update_parameters(timeout_min=5, slurm_partition="wzt_20250411,intel-sc3")

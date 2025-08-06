@@ -95,4 +95,4 @@ setting.json
 logs_experiments/*
 log_test/*
 logs_test/*
-job_sub/
+# job_sub/

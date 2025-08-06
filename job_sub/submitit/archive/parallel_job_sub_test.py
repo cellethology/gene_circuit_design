@@ -1,7 +1,7 @@
-import os
-import submitit
 import json
 from pathlib import Path
+
+import submitit
 
 # 1. Import the run experiment function
 # 2. Define the parameter combinations -> which is loaded from the config file
@@ -10,29 +10,34 @@ from pathlib import Path
 # 5. Combine the results into a single csv file
 # 6. Call another function to plot the results
 
+
 def run_experiment(params):
     """Run one experiment with given parameters"""
     learning_rate, batch_size, epochs = params
-    
+
     # Simulate training (replace with your actual code)
-    import time
     import random
+    import time
+
     time.sleep(5)  # Simulate training time
-    
+
     # Simulate some results
     accuracy = random.uniform(0.7, 0.95)
     loss = random.uniform(0.1, 0.5)
-    
+
     results = {
-        'learning_rate': learning_rate,
-        'batch_size': batch_size, 
-        'epochs': epochs,
-        'accuracy': accuracy,
-        'loss': loss
+        "learning_rate": learning_rate,
+        "batch_size": batch_size,
+        "epochs": epochs,
+        "accuracy": accuracy,
+        "loss": loss,
     }
-    
-    print(f"Experiment completed: lr={learning_rate}, bs={batch_size}, acc={accuracy:.3f}")
+
+    print(
+        f"Experiment completed: lr={learning_rate}, bs={batch_size}, acc={accuracy:.3f}"
+    )
     return results
+
 
 # Setup
 executor = submitit.AutoExecutor(folder="logs_experiments")
@@ -42,7 +47,7 @@ executor.update_parameters(
     slurm_cpus_per_task=1,
     # Optional: email notifications
     slurm_mail_user="lizelun@westlake.edu.cn",
-    slurm_mail_type="BEGIN,END,FAIL"
+    slurm_mail_type="BEGIN,END,FAIL",
 )
 
 # Define parameter combinations
@@ -75,9 +80,9 @@ for i, job in enumerate(jobs):
         print(f"Experiment {i+1} failed: {e}")
 
 # Save results
-path_to_results = 'job_sub/submitit/results/experiment_results.json'
+path_to_results = "job_sub/submitit/results/experiment_results.json"
 Path(path_to_results).parent.mkdir(parents=True, exist_ok=True)
-with open(path_to_results, 'w') as f:
+with open(path_to_results, "w") as f:
     json.dump(results, f, indent=2)
 
 print(f"Completed {len(results)}/{len(jobs)} experiments")
