@@ -8,8 +8,7 @@ from utils.plotting import create_combined_results_from_files
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -22,7 +21,7 @@ executor.update_parameters(
     slurm_mail_user="lizelun@westlake.edu.cn",
     slurm_mail_type="BEGIN,END,FAIL",
     slurm_qos="huge",
-    slurm_mem_per_cpu="2GB",
+    slurm_mem_per_cpu="10GB",
 )
 # Define variables
 config_file = "configs/enformer.yaml"
@@ -45,20 +44,22 @@ for strategy in config["strategies"]:
     for regression_model in config["regression_models"]:
         for seq_mod_method in config["seq_mod_methods"]:
             for seed in config["seeds"]:
-                experiment_params.append({
-                    "strategy": strategy,
-                    "regression_model": regression_model,
-                    "seq_mod_method": seq_mod_method,
-                    "seed": seed,
-                    "data_path": data_path,
-                    "initial_sample_size": initial_sample_size,
-                    "batch_size": batch_size,
-                    "test_size": test_size,
-                    "no_test": no_test,
-                    "max_rounds": max_rounds,
-                    "output_dir": output_dir,
-                    "normalize_expression": normalize_expression,
-                })
+                experiment_params.append(
+                    {
+                        "strategy": strategy,
+                        "regression_model": regression_model,
+                        "seq_mod_method": seq_mod_method,
+                        "seed": seed,
+                        "data_path": data_path,
+                        "initial_sample_size": initial_sample_size,
+                        "batch_size": batch_size,
+                        "test_size": test_size,
+                        "no_test": no_test,
+                        "max_rounds": max_rounds,
+                        "output_dir": output_dir,
+                        "normalize_expression": normalize_expression,
+                    }
+                )
 
 # print(experiment_params)
 
