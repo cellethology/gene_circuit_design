@@ -63,7 +63,8 @@ htmlcov/
 *.pkl
 *.model
 *.pth
-data/
+data/*
+!data/scripts/*
 models/
 checkpoints/
 results/
