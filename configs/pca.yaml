@@ -1,0 +1,14 @@
+experiments:
+  pca:
+    data_path: "/storage2/wangzitongLab/lizelun/project/gene_circuit_design/data/166k_Data/166k_rice/post_embeddings/pca_results_32cores.safetensors"  # Update with actual path
+    strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
+    seq_mod_methods: ["EMBEDDING"]  # You'll need to implement this in sequence_utils.py
+    regression_models: ["LINEAR", "KNN", "RANDOM_FOREST", "XGBOOST"]
+    seeds: [1,2,3,4]
+    initial_sample_size: 8
+    batch_size: 8
+    test_size: 30
+    max_rounds: 20
+    normalize_expression: true
+    no_test: true
+    output_dir: "results/pca/evo_pca_first_100_seeds"
