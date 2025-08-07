@@ -191,7 +191,7 @@ def parse_arguments():
 
     # Optional Slurm parameters
     parser.add_argument(
-        "--timeout-min", type=int, default=10, help="Timeout in minutes for each job"
+        "--timeout-min", type=int, default=20, help="Timeout in minutes for each job"
     )
     parser.add_argument(
         "--slurm-partition",
@@ -200,10 +200,10 @@ def parse_arguments():
         help="Slurm partition to use",
     )
     parser.add_argument(
-        "--slurm-cpus-per-task", type=int, default=1, help="Number of CPUs per task"
+        "--slurm-cpus-per-task", type=int, default=16, help="Number of CPUs per task"
     )
     parser.add_argument(
-        "--slurm-mem-per-cpu", type=str, default="2GB", help="Memory per CPU"
+        "--slurm-mem-per-cpu", type=str, default="128GB", help="Memory per CPU"
     )
     parser.add_argument(
         "--slurm-mail-user",
@@ -261,8 +261,8 @@ if __name__ == "__main__":
         # Example 1: Run a single configuration
         print("No arguments provided. Running example configuration...")
         run_slurm_experiments(
-            config_files=["configs/enformer.yaml"],
-            experiment_names=["enformer_template"],
+            config_files=["configs/onehot.yaml"],
+            experiment_names=["onehot_pad"],
         )
 
         # Example 2: Run multiple configurations (commented out)
