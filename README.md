@@ -32,13 +32,13 @@ This will:
 ### Basic Usage
 ```bash
 # Run all experiments in a config file and generate plots
-python run_and_plot.py --config configs/final_configs_test.yaml
+python run_and_plot.py --config configs/onehot.yaml
 
 # Run specific experiment only
-python run_and_plot.py --config configs/final_configs_test.yaml --experiment onehot_pca_experiment
+python run_and_plot.py --config configs/onehot.yaml --experiment onehot_pad
 
 # Run with parallel processing (recommended)
-python run_and_plot.py --config configs/final_configs_test.yaml --max-workers 4
+python run_and_plot.py --config configs/onehot.yaml --max-workers 4
 ```
 
 ### Advanced Options

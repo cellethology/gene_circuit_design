@@ -68,10 +68,15 @@ def process_csv_to_safetensor(csv_path: str, output_path: str) -> None:
             print(f"Processed {i}/{len(sequences)} sequences")
         onehot_sequences[i] = onehot_encode_sequence(seq, max_length)
 
+    # Flatten to 2D for ML models (samples, features)
+    print("Flattening sequences for ML models...")
+    flattened_sequences = onehot_sequences.reshape(len(sequences), -1)
+    print(f"Final shape: {flattened_sequences.shape}")
+
     # Prepare data for safetensor
     tensors = {
         "variant_ids": variant_ids.astype(np.int32),
-        "onehot_sequences": onehot_sequences,
+        "embeddings": flattened_sequences,
         "expressions": expressions,
         "log_likelihoods": log_likelihoods,
     }
