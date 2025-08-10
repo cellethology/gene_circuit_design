@@ -88,8 +88,8 @@ def process_csv_to_safetensor(csv_path: str, output_path: str) -> None:
 
 
 if __name__ == "__main__":
-    csv_path = "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/166k_data/166k_rice/post_embeddings/all_data_with_sequence.csv"
-    output_path = "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/data/166k_data/166k_rice/post_embeddings/onehot_data.safetensors"
+    csv_path = "/storage2/wangzitongLab/lizelun/project/gene_circuit_design/data/166k_Data/166k_rice/post_embeddings/all_data_with_sequence.csv"
+    output_path = "/storage2/wangzitongLab/lizelun/project/gene_circuit_design/data/166k_Data/166k_rice/post_embeddings/onehot_data.safetensors"
 
     # Create output directory if needed
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

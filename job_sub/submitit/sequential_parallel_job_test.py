@@ -57,14 +57,15 @@ def run_slurm_experiments(
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
     # Set up default Slurm parameters
+    # NOTE: suits for onehot no PCA (update on the readme.md)
     default_slurm_params = {
-        "timeout_min": 10,
+        "timeout_min": 60,
         "slurm_partition": "wzt_20250411,intel-sc3",
-        "slurm_cpus_per_task": 1,
+        "slurm_cpus_per_task": 4,
         "slurm_mail_user": "lizelun@westlake.edu.cn",
         "slurm_mail_type": "BEGIN,END,FAIL",
         "slurm_qos": "huge",
-        "slurm_mem_per_cpu": "2GB",
+        "slurm_mem_per_cpu": "32GB",
     }
 
     # Override defaults with provided parameters
@@ -200,10 +201,10 @@ def parse_arguments():
         help="Slurm partition to use",
     )
     parser.add_argument(
-        "--slurm-cpus-per-task", type=int, default=16, help="Number of CPUs per task"
+        "--slurm-cpus-per-task", type=int, default=4, help="Number of CPUs per task"
     )
     parser.add_argument(
-        "--slurm-mem-per-cpu", type=str, default="128GB", help="Memory per CPU"
+        "--slurm-mem-per-cpu", type=str, default="32GB", help="Memory per CPU"
     )
     parser.add_argument(
         "--slurm-mail-user",
