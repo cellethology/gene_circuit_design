@@ -306,7 +306,7 @@ def create_custom_config(
         "batch_size": kwargs.get("batch_size", 8),
         "test_size": kwargs.get("test_size", 30),
         "max_rounds": kwargs.get("max_rounds", 20),
-        "normalize_expression": kwargs.get("normalize_expression", False),
+        "normalize_input_output": kwargs.get("normalize_input_output", False),
         "no_test": kwargs.get("no_test", True),
     }
 

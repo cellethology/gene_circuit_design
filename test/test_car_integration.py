@@ -100,7 +100,7 @@ def test_car_experiment():
             random_seed=42,
             seq_mod_method=SequenceModificationMethod.CAR,
             no_test=False,
-            normalize_expression=False,
+            normalize_input_output=False,
         )
         print("✓ Initialized CAR experiment")
         print(f"  Total samples: {len(experiment.all_sequences)}")

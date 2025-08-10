@@ -98,7 +98,7 @@ def run_slurm_experiments(
                 "no_test",
                 "max_rounds",
                 "output_dir",
-                "normalize_expression",
+                "normalize_input_output",
                 "strategies",
                 "regression_models",
                 "seq_mod_methods",
@@ -119,7 +119,7 @@ def run_slurm_experiments(
             no_test = config["no_test"]
             max_rounds = config["max_rounds"]
             output_dir = config["output_dir"]
-            normalize_expression = config["normalize_expression"]
+            normalize_input_output = config["normalize_input_output"]
 
             # Store output directory for later use
             output_dirs.append(output_dir)
@@ -142,7 +142,7 @@ def run_slurm_experiments(
                                     "no_test": no_test,
                                     "max_rounds": max_rounds,
                                     "output_dir": output_dir,
-                                    "normalize_expression": normalize_expression,
+                                    "normalize_input_output": normalize_input_output,
                                 }
                             )
         except Exception as e:

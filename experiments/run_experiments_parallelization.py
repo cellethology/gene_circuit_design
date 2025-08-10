@@ -75,7 +75,7 @@ class ActiveLearningExperiment:
         random_seed: int = 42,
         seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
         no_test: bool = True,
-        normalize_expression: bool = True,
+        normalize_input_output: bool = True,
         use_pca: bool = False,
         pca_components: int = 4096,
     ) -> None:
@@ -101,7 +101,7 @@ class ActiveLearningExperiment:
         # Convert string to enum if necessary
         self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
         self.no_test = no_test
-        self.normalize_expression = normalize_expression
+        self.normalize_input_output = normalize_input_output
         self.use_pca = use_pca
         self.pca_components = pca_components
         # Set random seeds for reproducibility
@@ -225,7 +225,7 @@ class ActiveLearningExperiment:
                 # Try to convert each element to string
                 self.all_sequences = [str(seq) for seq in sequences_np]
 
-            if self.normalize_expression:
+            if self.normalize_input_output:
                 self.all_expressions = (
                     self.all_expressions
                     - self.all_expressions.mean(axis=0, keepdims=True)
@@ -867,7 +867,7 @@ def run_single_experiment(
     test_size = experiment_config["test_size"]
     no_test = experiment_config["no_test"]
     max_rounds = experiment_config["max_rounds"]
-    normalize_expression = experiment_config["normalize_expression"]
+    normalize_input_output = experiment_config["normalize_input_output"]
     output_dir = experiment_config["output_dir"]
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
@@ -883,7 +883,7 @@ def run_single_experiment(
         random_seed=seed,
         seq_mod_method=seq_mod_method.value,
         no_test=no_test,
-        normalize_expression=normalize_expression,
+        normalize_input_output=normalize_input_output,
         use_pca=use_pca,
         pca_components=pca_components,
     )
@@ -947,7 +947,7 @@ def run_controlled_experiment(
     no_test: bool = True,
     max_rounds: int = 20,
     output_dir: str = "results",
-    normalize_expression: bool = True,
+    normalize_input_output: bool = True,
     max_workers: int = None,
     use_pca: bool = False,
     pca_components: int = 4096,
@@ -989,7 +989,7 @@ def run_controlled_experiment(
                 test_size=test_size,
                 random_seed=42,
                 no_test=no_test,
-                normalize_expression=normalize_expression,
+                normalize_input_output=normalize_input_output,
                 use_pca=use_pca,
                 pca_components=pca_components,
             )
@@ -1064,7 +1064,7 @@ def run_controlled_experiment(
                         "test_size": test_size,
                         "no_test": no_test,
                         "max_rounds": max_rounds,
-                        "normalize_expression": normalize_expression,
+                        "normalize_input_output": normalize_input_output,
                         "output_dir": output_dir,
                         "use_pca": use_pca,
                         "pca_components": pca_components,
@@ -1573,7 +1573,7 @@ def main() -> None:
         "batch_size": 8,
         "test_size": 30,
         "max_rounds": 2,
-        "normalize_expression": False,
+        "normalize_input_output": False,
         "output_dir": "results_all_strategies_ori_log_likelihood_embeddings_no_test_normalization",
         "no_test": True,
     }
