@@ -78,6 +78,7 @@ class ActiveLearningExperiment:
         normalize_input_output: bool = True,
         use_pca: bool = False,
         pca_components: int = 4096,
+        target_val_key: str = None,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -104,6 +105,7 @@ class ActiveLearningExperiment:
         self.normalize_input_output = normalize_input_output
         self.use_pca = use_pca
         self.pca_components = pca_components
+        self.target_val_key = target_val_key
         # Set random seeds for reproducibility
         random.seed(random_seed)
         np.random.seed(random_seed)
@@ -151,15 +153,27 @@ class ActiveLearningExperiment:
             if "embeddings" in tensors:
                 # Standard embeddings format
                 self.embeddings = tensors["embeddings"].float().numpy()
-                # Handle both "expressions" and "expression" keys
-                if "expressions" in tensors:
-                    self.all_expressions = tensors["expressions"].float().numpy()
-                elif "expression" in tensors:
-                    self.all_expressions = tensors["expression"].float().numpy()
+                # Handle expression data with optional target_val_key
+                if self.target_val_key:
+                    # Use specific target value key if provided
+                    if self.target_val_key in tensors:
+                        self.all_expressions = (
+                            tensors[self.target_val_key].float().numpy()
+                        )
+                    else:
+                        raise ValueError(
+                            f"Target value key '{self.target_val_key}' not found. Available keys: {list(tensors.keys())}"
+                        )
                 else:
-                    raise ValueError(
-                        f"No expression data found. Available keys: {list(tensors.keys())}"
-                    )
+                    # Use default expression keys
+                    if "expressions" in tensors:
+                        self.all_expressions = tensors["expressions"].float().numpy()
+                    elif "expression" in tensors:
+                        self.all_expressions = tensors["expression"].float().numpy()
+                    else:
+                        raise ValueError(
+                            f"No expression data found. Available keys: {list(tensors.keys())}"
+                        )
 
                 # Handle log likelihood (may not exist for enformer)
                 if "log_likelihoods" in tensors:
@@ -871,6 +885,7 @@ def run_single_experiment(
     output_dir = experiment_config["output_dir"]
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
+    target_val_key = experiment_config.get("target_val_key", "expressions")
 
     # Create experiment
     experiment = ActiveLearningExperiment(
@@ -886,6 +901,7 @@ def run_single_experiment(
         normalize_input_output=normalize_input_output,
         use_pca=use_pca,
         pca_components=pca_components,
+        target_val_key=target_val_key,
     )
 
     # Run experiment
