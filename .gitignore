@@ -57,12 +57,16 @@ htmlcov/
 *.csv
 *.pdf
 *.png
+*.err
+*.out
 
 # Model files and data
 *.h5
 *.pkl
+*.yaml
 *.model
 *.pth
+*.safetensors
 data/*
 !data/scripts/*
 models/
@@ -91,6 +95,7 @@ setting.json
 
 # dir
 .claude/
+job_sub/
 
 # logs
 logs_experiments/*
