@@ -70,6 +70,8 @@ checkpoints/
 results/
 results_*/
 wandb/
+data_assembly/
+data_analyze/
 
 # Environment management
 .python-version
