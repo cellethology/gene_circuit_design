@@ -7,16 +7,18 @@ from enum import Enum
 from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
+from sklearn.neural_network import MLPRegressor
 
 
 # NOTE: Can the Enum class be directly referring to the model
 class RegressionModelType(str, Enum):
-    """Enumeration of available selection strategies."""
+    """Enumeration of available regression models."""
 
     KNN = "KNN_regression"
     LINEAR = "linear_regression"
     RANDOM_FOREST = "random_forest"
     XGBOOST = "xg_boost"
+    MLP = "mlp_regressor"
 
 
 def return_model(model: str, random_state: int = 42):
@@ -31,3 +33,7 @@ def return_model(model: str, random_state: int = 42):
         return KNeighborsRegressor(n_neighbors=5, n_jobs=-1)
     elif model == RegressionModelType.XGBOOST:
         return HistGradientBoostingRegressor(random_state=random_state)
+    elif model == RegressionModelType.MLP:
+        return MLPRegressor(
+            hidden_layer_sizes=(100, 50), random_state=random_state, max_iter=50
+        )
