@@ -6,6 +6,9 @@ This script creates a heatmap where:
 - Y-axis: datasets (Feng_2023, Angenent-Mari_2020, alcantar_2025)
 - X-axis: embedding method + regressor combinations (e.g., onehot_KNN, sei_LinearRegression)
 - Color: area under the curve of cumulative metrics
+
+Example Usage: 
+    python plotting/area_under_curve_grid_plot.py 
 """
 import os
 from pathlib import Path
@@ -27,16 +30,18 @@ def extract_info_from_path(file_path):
     # Find dataset name
     dataset = None
     for part in path_parts:
-        if any(d in part for d in ["Feng_2023", "Angenent-Mari_2020", "alcantar_2025"]):
+        if any(d in part for d in ["Feng_2023", "angenent-Mari_2020", "alcantar_2025", "166k_2024"]):
             dataset = part
             break
 
     # Find embedding method
     embedding = None
     for part in path_parts:
-        if any(e in part for e in ["onehot", "evo", "sei"]):
-            if "onehot" in part:
-                embedding = "onehot"
+        if any(e in part for e in ["onehotPca", "onehotRaw", "evo", "sei"]):
+            if "onehotPca" in part:
+                embedding = "onehotPca"
+            elif "onehotRaw" in part:
+                embedding = "onehotRaw"
             elif "evo" in part:
                 embedding = "evo"
             elif "sei" in part:
@@ -58,9 +63,35 @@ def extract_regressor_from_filename(filename):
         return "XGBoost"
     return "Unknown"
 
+def _auc_one_seed(df, metric_column, normalize=True):
+    df = df.sort_values("round")
+    x = df["train_size"].to_numpy()
+    y = df[metric_column].to_numpy()
+    if x.size < 2 or np.all(x == x[0]):  # need at least 2 distinct x points
+        return np.nan
+    auc = integrate.trapezoid(y, x)   # if using SciPy
+    # auc = np.trapz(y, x)                   # NumPy alternative
+    if normalize:
+        xr = x.max() - x.min()
+        if xr > 0:
+            auc = auc / xr
+    return float(auc)
+
+def calculate_auc_by_seed(data: pd.DataFrame, metric_column: str = "normalized_predictions_ground_truth_values_cumulative", normalize: bool = True):
+    """
+    Returns (mean_auc_across_seeds, per_seed_auc_series)
+    """
+    if metric_column not in data.columns:
+        return np.nan, pd.Series(dtype=float)
+
+    per_seed = data.groupby("seed", group_keys=False).apply(
+        lambda df: _auc_one_seed(df, metric_column, normalize=normalize)
+    )
+    mean_auc = per_seed.mean(skipna=True)
+    return mean_auc
 
 def calculate_auc_from_cumulative(
-    data, metric_column="top_10_ratio_intersected_indices_cumulative"
+    data, metric_column="normalized_predictions_predictions_values_cumulative", file_path=None
 ):
     """Calculate area under curve from cumulative metric values."""
     if metric_column not in data.columns:
@@ -70,6 +101,7 @@ def calculate_auc_from_cumulative(
     data_sorted = data.sort_values("round")
     x = data_sorted["train_size"].values
     y = data_sorted[metric_column].values
+
 
     if len(x) < 2:
         return np.nan
@@ -81,6 +113,11 @@ def calculate_auc_from_cumulative(
     x_range = x.max() - x.min()
     if x_range > 0:
         auc = auc / x_range
+
+    if auc > 1:
+        print(f"Warning: AUC {auc} > 1 for file_path {file_path}")
+        # Don't return NaN, let's keep the value for now
+        # return np.nan
 
     return auc
 
@@ -114,82 +151,153 @@ def collect_all_results(results_base_path):
 
                         if len(regressor_data) == 0:
                             continue
+                        
+                        # Get unique strategies for this regressor
+                        strategies = regressor_data["strategy"].unique()
+                        for strategy in strategies:
+                            # Filter data for this strategy
+                            strategy_data = regressor_data[regressor_data["strategy"] == strategy]
+                            
+                            if len(strategy_data) == 0:
+                                continue
+                            
+                            # Calculate AUC for different metrics
+                            auc_normalized = calculate_auc_by_seed(
+                                strategy_data,
+                                "normalized_predictions_ground_truth_values_cumulative",
+                            )
 
-                        # Calculate AUC for different metrics
-                        auc_top10 = calculate_auc_from_cumulative(
-                            regressor_data,
-                            "top_10_ratio_intersected_indices_cumulative",
-                        )
-                        auc_normalized = calculate_auc_from_cumulative(
-                            regressor_data,
-                            "normalized_predictions_predictions_values_cumulative",
-                        )
+                            os.makedirs("./debug_result", exist_ok=True)
+                            strategy_data.to_csv(f"./debug_result/{dataset}_{embedding}_{regressor}_{strategy}.csv")
 
-                        # Store results
-                        results_list.append(
-                            {
-                                "dataset": dataset,
-                                "embedding": embedding,
-                                "regressor": regressor,
-                                "auc_top10_ratio": auc_top10,
-                                "auc_normalized_pred": auc_normalized,
-                                "file_path": file_path,
-                            }
-                        )
+                            # For random strategy, make it independent of regressor and embedding
+                            if strategy == "random":
+                                method_label = "random"
+                            else:
+                                method_label = f"{embedding}_{regressor}"
 
+                            # Store results
+                            results_list.append(
+                                {
+                                    "dataset": dataset,
+                                    "embedding": embedding,
+                                    "regressor": regressor,
+                                    "strategy": strategy,
+                                    "method_label": method_label,
+                                    "auc_normalized_pred": auc_normalized,
+                                    "file_path": file_path,
+                                }
+                            )
+                            if len(results_list) == 2:
+                                print(f"This is result_list {results_list}")
+                                break
                 except Exception as e:
                     print(f"Error processing {file_path}: {e}")
                     continue
 
-    return pd.DataFrame(results_list)
+    final_frame = pd.DataFrame(results_list)
+    final_frame.to_csv('final_frame.csv')
+    return final_frame
 
 
-def create_grid_plot(results_df, metric="auc_top10_ratio", figsize=(12, 6)):
-    """Create a grid plot of AUC values."""
+def create_grid_plot(
+    results_df: pd.DataFrame,
+    metric: str = "auc_normalized_pred",
+    figsize: tuple[int, int] = (12, 6),
+    baseline_label: str = "random",
+    drop_baseline: bool = True,
+):
+    """Create a grid plot of (method - baseline) AUC values per dataset.
+
+    Args:
+        results_df: Long-form results with columns ['dataset','embedding','regressor','strategy','method_label', metric].
+        metric: Metric column to visualize (defaults to 'auc_normalized_pred').
+        figsize: Figure size.
+        baseline_label: Column name in the pivot used as baseline (default: 'random').
+        drop_baseline: If True, remove the baseline column from the heatmap; if False, keep it (will be zeros).
+
+    Returns:
+        (fig, ax): Matplotlib Figure and Axes or (None, None) if no data.
+    """
     if results_df.empty:
         print("No data found to plot")
         return None, None
 
-    # Create combination column for x-axis
+    # Ensure method_label exists and aggregate "random" across methods per dataset
     results_df = results_df.copy()
-    results_df["embedding_regressor"] = (
-        results_df["embedding"] + "_" + results_df["regressor"]
+    if "method_label" in results_df.columns:
+        random_results = (
+            results_df[results_df["strategy"] == "random"]
+            .groupby("dataset", as_index=False)
+            .agg({metric: "median"})
+        )
+        random_results["method_label"] = baseline_label
+
+        non_random_results = results_df[results_df["strategy"] != "random"]
+        plot_data = pd.concat([non_random_results, random_results], ignore_index=True)
+    else:
+        results_df["method_label"] = results_df["embedding"] + "_" + results_df["regressor"]
+        plot_data = results_df
+
+    # Pivot to dataset x method_label
+    pivot_data = plot_data.pivot_table(
+        index="dataset", columns="method_label", values=metric, aggfunc="median"
     )
 
-    # Create pivot table for heatmap
-    pivot_data = results_df.pivot_table(
-        index="dataset",
-        columns="embedding_regressor",
-        values=metric,
-        aggfunc="mean",  # Average across seeds if multiple
-    )
+    if baseline_label not in pivot_data.columns:
+        print(f'Baseline column "{baseline_label}" not found. Showing raw values.')
+        # Fallback to raw heatmap
+        # Order columns: others sorted, baseline at end if present
+        other_cols = sorted([c for c in pivot_data.columns if c != baseline_label])
+        if baseline_label in pivot_data.columns:
+            other_cols += [baseline_label]
+        pivot_ordered = pivot_data[other_cols] if other_cols else pivot_data
+        fig, ax = plt.subplots(figsize=figsize)
+        sns.heatmap(
+            pivot_ordered, annot=True, fmt=".3f", cmap="viridis",
+            cbar_kws={"label": metric.replace("_", " ").title()}, ax=ax,
+        )
+        ax.set_title(f'Area Under Curve: {metric.replace("_", " ").title()}')
+        ax.set_xlabel("Method")
+        ax.set_ylabel("Dataset")
+        plt.xticks(rotation=45, ha="right")
+        plt.yticks(rotation=0)
+        plt.tight_layout()
+        return fig, ax
 
-    # Create the plot
+    # Compute (% difference vs baseline) per dataset
+    baseline_series = pivot_data[baseline_label]
+    delta = (pivot_data.subtract(baseline_series, axis=0)
+            .div(baseline_series, axis=0)) * 100
+
+    # Reorder columns: alphabetical methods, baseline last (or drop)
+    other_cols = sorted([c for c in delta.columns if c != baseline_label])
+    if not drop_baseline:
+        col_order = other_cols + [baseline_label]
+        # Baseline deltas are exactly 0 by construction
+    else:
+        col_order = other_cols
+        delta = delta[col_order]
+
+    # Plot diverging heatmap centered at zero
     fig, ax = plt.subplots(figsize=figsize)
-
-    # Create heatmap
     sns.heatmap(
-        pivot_data,
+        delta[col_order] if not drop_baseline else delta,
         annot=True,
-        fmt=".3f",
-        cmap="viridis",
-        cbar_kws={"label": f'{metric.replace("_", " ").title()}'},
+        fmt=".1f",
+        cmap="coolwarm",
+        center=0.0,
+        cbar_kws={"label": "Δ AUC vs random | ((method - random) / random) * 100"},
         ax=ax,
     )
 
-    # Customize the plot
-    ax.set_title(
-        f'Area Under Curve: {metric.replace("_", " ").title()}\nAcross Datasets and Methods'
-    )
-    ax.set_xlabel("Embedding Method + Regressor")
+    ax.set_title("AUC percentage change vs Random\n(method - random) across Datasets and Methods")
+    ax.set_xlabel("Method (Embedding_Regressor{})".format("" if drop_baseline else " or Random"))
     ax.set_ylabel("Dataset")
 
-    # Rotate x-axis labels for better readability
     plt.xticks(rotation=45, ha="right")
     plt.yticks(rotation=0)
-
     plt.tight_layout()
-
     return fig, ax
 
 
@@ -197,7 +305,7 @@ def main():
     """Main function to generate the grid plot."""
     # Define the base path for results
     results_base_path = (
-        "/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/results/example"
+        "/storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/auc_result"
     )
 
     # Check if path exists
@@ -218,8 +326,8 @@ def main():
     print(f"Regressors: {sorted(results_df['regressor'].unique())}")
 
     # Create plots for different metrics
-    metrics_to_plot = ["auc_top10_ratio", "auc_normalized_pred"]
-    metric_names = ["Top 10% Intersection Ratio AUC", "Normalized Predictions AUC"]
+    metrics_to_plot = ["auc_normalized_pred"]
+    metric_names = ["Normalized Predictions AUC"]
 
     for metric, name in zip(metrics_to_plot, metric_names):
         print(f"\nCreating plot for {name}...")
@@ -235,7 +343,8 @@ def main():
 
         if fig is not None:
             # Save the plot
-            output_path = f"/Users/LZL/Desktop/Westlake_Research/gene_circuit_design/plotting/auc_grid_{metric}.png"
+            output_path = f"/storage2/wangzitongLab/lizelun/project/gene_circuit_design/plots/AUC_results/auc_grid_{metric}.png"
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
             fig.savefig(output_path, dpi=300, bbox_inches="tight")
             print(f"Saved plot to: {output_path}")
 
