@@ -22,6 +22,10 @@ class SelectionStrategy(str, Enum):
     RANDOM = "random"  # Select sequences randomly
     LOG_LIKELIHOOD = "log_likelihood"  # Select sequences with highest log likelihood
     UNCERTAINTY = "uncertainty"  # Select sequences with highest prediction uncertainty (future extension)
+    KMEANS_HIGH_EXPRESSION = "kmeans_high_expression"  # K-means initial selection + high expression for subsequent batches
+    KMEANS_RANDOM = (
+        "kmeans_random"  # K-means initial selection + random for subsequent batches
+    )
 
 
 def load_experiment_config(
@@ -85,6 +89,8 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "RANDOM": SelectionStrategy.RANDOM,
             "LOG_LIKELIHOOD": SelectionStrategy.LOG_LIKELIHOOD,
             "UNCERTAINTY": SelectionStrategy.UNCERTAINTY,
+            "KMEANS_HIGH_EXPRESSION": SelectionStrategy.KMEANS_HIGH_EXPRESSION,
+            "KMEANS_RANDOM": SelectionStrategy.KMEANS_RANDOM,
         }
         config["strategies"] = [
             strategy_map[strategy] for strategy in config["strategies"]
