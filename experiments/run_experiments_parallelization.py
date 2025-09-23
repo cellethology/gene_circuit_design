@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 from scipy.stats import pearsonr, spearmanr
+from sklearn.cluster import KMeans
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
@@ -331,9 +332,21 @@ class ActiveLearningExperiment:
         self.test_indices = all_indices[: self.test_size]
         remaining_indices = all_indices[self.test_size :]
 
-        # Initial training set
-        self.train_indices = remaining_indices[: self.initial_sample_size]
-        self.unlabeled_indices = remaining_indices[self.initial_sample_size :]
+        # Initial training set selection
+        if self.selection_strategy in [
+            SelectionStrategy.KMEANS_HIGH_EXPRESSION,
+            SelectionStrategy.KMEANS_RANDOM,
+        ]:
+            # Use K-means clustering for initial selection
+            self.train_indices = self._select_initial_batch_kmeans_clustering()
+            # Remove selected indices from remaining indices
+            self.unlabeled_indices = [
+                idx for idx in remaining_indices if idx not in self.train_indices
+            ]
+        else:
+            # Use random selection for initial training set
+            self.train_indices = remaining_indices[: self.initial_sample_size]
+            self.unlabeled_indices = remaining_indices[self.initial_sample_size :]
 
         logger.info(
             f"Data split - Train: {len(self.train_indices)}, "
@@ -529,6 +542,68 @@ class ActiveLearningExperiment:
 
         return selected_indices
 
+    def _select_initial_batch_kmeans_clustering(self) -> List[int]:
+        """
+        Select initial batch using K-means clustering on the whole dataset.
+
+        Steps:
+        1. Use K-means clustering on the whole dataset
+        2. Set the centroid number to be the same as the initial sample size
+        3. Select the data point in each cluster which is closest to that cluster's centroid
+
+        Returns:
+            List of indices for initial batch
+        """
+        # Encode all sequences to get feature representations
+        all_indices = list(range(len(self.all_sequences)))
+        X_all = self._encode_sequences(all_indices)
+
+        # Apply K-means clustering with k = initial_sample_size
+        kmeans = KMeans(
+            n_clusters=self.initial_sample_size,
+            random_state=self.random_seed,
+            n_init=10,
+        )
+        cluster_labels = kmeans.fit_predict(X_all)
+        cluster_centers = kmeans.cluster_centers_
+
+        selected_indices = []
+
+        # For each cluster, find the point closest to the cluster centroid
+        for cluster_id in range(self.initial_sample_size):
+            # Get indices of points in this cluster
+            cluster_mask = cluster_labels == cluster_id
+            cluster_indices = np.where(cluster_mask)[0]
+
+            if len(cluster_indices) == 0:
+                # If cluster is empty (shouldn't happen with proper k-means), skip
+                continue
+
+            # Get feature vectors for points in this cluster
+            cluster_points = X_all[cluster_indices]
+            cluster_center = cluster_centers[cluster_id]
+
+            # Calculate distances from each point in cluster to cluster centroid
+            distances_to_center = np.linalg.norm(
+                cluster_points - cluster_center, axis=1
+            )
+
+            # Find the point in this cluster closest to cluster centroid
+            closest_idx_in_cluster = np.argmin(distances_to_center)
+            closest_global_idx = cluster_indices[closest_idx_in_cluster]
+
+            selected_indices.append(closest_global_idx)
+
+        # Log selection info
+        selected_expressions = self.all_expressions[selected_indices]
+        logger.info(
+            f"KMEANS_CLUSTERING: Selected {len(selected_indices)} sequences "
+            f"from {self.initial_sample_size} clusters with actual expressions: "
+            f"[{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
+        )
+
+        return selected_indices
+
     def _select_next_batch(self) -> List[int]:
         """
         Select next batch of sequences based on the configured strategy.
@@ -546,6 +621,12 @@ class ActiveLearningExperiment:
             return self._select_next_batch_random()
         elif self.selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
             return self._select_next_batch_log_likelihood()
+        elif self.selection_strategy == SelectionStrategy.KMEANS_HIGH_EXPRESSION:
+            # After initial K-means selection, use high expression selection for subsequent batches
+            return self._select_next_batch_active()
+        elif self.selection_strategy == SelectionStrategy.KMEANS_RANDOM:
+            # After initial K-means selection, use random selection for subsequent batches
+            return self._select_next_batch_random()
         else:
             raise ValueError(f"Unknown selection strategy: {self.selection_strategy}")
 
