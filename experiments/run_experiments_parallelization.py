@@ -883,9 +883,9 @@ def run_single_experiment(
     max_rounds = experiment_config["max_rounds"]
     normalize_input_output = experiment_config["normalize_input_output"]
     output_dir = experiment_config["output_dir"]
+    target_val_key = experiment_config['target_val_key']
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
-    target_val_key = experiment_config.get("target_val_key", "expressions")
 
     # Create experiment
     experiment = ActiveLearningExperiment(
