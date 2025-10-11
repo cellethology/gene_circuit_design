@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 
 
 def run_slurm_experiments(
-    config_files: List[str],
-    experiment_names: List[str],
+    config_files: List,
+    experiment_names: List,
     slurm_params: Optional[Dict[str, Any]] = None,
     executor_folder: str = "logs_experiments",
 ) -> None:
