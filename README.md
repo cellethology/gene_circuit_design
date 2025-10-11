@@ -19,12 +19,13 @@ For running experiments on a Slurm cluster, use the sequential_parallel_job_test
 ```bash
 # Run experiments in parallel using Slurm
 python job_sub/submitit/sequential_parallel_job_test.py \
-    --config-files configs/enformer.yaml configs/another_config.yaml \
-    --experiment-names enformer_template another_experiment \
+    --config-files configs/feng_2023.yaml \
+    --experiment-names evo2_pca \
     --timeout-min 30 \
     --slurm-cpus-per-task 2 \
     --slurm-mem-per-cpu 4GB
 ```
+- **Do check the config file to update the experiment path for it ro run properly**
 
 This script allows running multiple experiment configurations in parallel on a Slurm cluster. Each parameter combination is submitted as a separate Slurm job. The script handles job submission, monitoring, and result collection.
 
