@@ -1048,6 +1048,7 @@ def run_controlled_experiment(
     max_workers: int = None,
     use_pca: bool = False,
     pca_components: int = 4096,
+    target_val_key: str = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds using parallel processing.
