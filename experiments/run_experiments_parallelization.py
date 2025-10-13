@@ -983,7 +983,7 @@ def run_single_experiment(
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
     
-    target_val_key = experiment_config['target_val_key']
+    #target_val_key = experiment_config['target_val_key']
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
 
