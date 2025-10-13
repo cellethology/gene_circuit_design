@@ -1166,6 +1166,7 @@ def run_controlled_experiment(
                         "output_dir": output_dir,
                         "use_pca": use_pca,
                         "pca_components": pca_components,
+                        "target_val_key": target_val_key
                     }
                     experiment_configs.append(config)
 
