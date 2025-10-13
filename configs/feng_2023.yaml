@@ -1,6 +1,6 @@
 experiments:
   sei_pca:
-    data_path: "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_circuit_design/data_new/Feng_2023/ML_predictions/sei/SEI_sequence_embeddings_feng_2023_ML_predictions_PCA.safetensors"  # Update with actual path
+    data_path: "./data_new/Feng_2023/ML_predictions/sei/SEI_sequence_embeddings_feng_2023_ML_predictions_PCA.safetensors"  # Update with actual path
     strategies: ["HIGH_EXPRESSION", "RANDOM"]
     seq_mod_methods: ["EMBEDDING"]  # You'll need to implement this in sequence_utils.py
     target_val_key: "expressions"
