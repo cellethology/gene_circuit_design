@@ -951,6 +951,15 @@ def run_single_experiment(
     Returns:
         Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
     """
+    # 添加调试信息
+    logger.info(f"=== 调试信息：run_single_experiment 接收的配置 ===")
+    logger.info(f"配置键: {list(experiment_config.keys())}")
+    if 'target_val_key' in experiment_config:
+        logger.info(f"target_val_key 值: {experiment_config['target_val_key']}")
+    else:
+        logger.warning("target_val_key 不在配置中！")
+        logger.warning(f"可用的键: {list(experiment_config.keys())}")
+    
     # Extract parameters from config
     data_path = experiment_config["data_path"]
     strategy = experiment_config["strategy"]
@@ -964,6 +973,16 @@ def run_single_experiment(
     max_rounds = experiment_config["max_rounds"]
     normalize_input_output = experiment_config["normalize_input_output"]
     output_dir = experiment_config["output_dir"]
+     # 这里添加安全检查
+    if 'target_val_key' not in experiment_config:
+        logger.error("配置中缺少 target_val_key，使用默认值 'expressions'")
+        target_val_key = 'expressions'
+    else:
+        target_val_key = experiment_config['target_val_key']
+    
+    use_pca = experiment_config.get("use_pca", False)
+    pca_components = experiment_config.get("pca_components", 4096)
+    
     target_val_key = experiment_config['target_val_key']
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
