@@ -1,4 +1,4 @@
-from safetensors import torch
+import safetensors.torch
 import os
 import torch
 
