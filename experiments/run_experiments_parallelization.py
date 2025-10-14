@@ -391,8 +391,8 @@ class ActiveLearningExperiment:
         """Train the linear regression model on current training data."""
         logger.info(f"Training model with {len(self.train_indices)} samples")
 
-        X_train = self._encode_sequences(self.train_indices)
-        y_train = self.all_expressions[self.train_indices]
+        X_train = self._encode_sequences[self.train_indices]
+        y_train = self.all_expressions[self.train_indices].reshape(-1)
 
         self.model.fit(X_train, y_train)
 
