@@ -13,7 +13,7 @@ experiments:
     normalize_expression: true
     no_test: true
     normalize_input_output: true
-    output_dir: "results/Feng_2023/evo_pca_512_tiny"
+    output_dir: "results/Feng_2023/evo_pca_512_tiny_filtered"
   
   onehot_pca:
     data_path: "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_circuit_design/data_new/Feng_2023/dSort-Seq/raw/merged_data_dSort-Seq_results_onehot_encode_PCA_filtered.safetensors"
@@ -29,6 +29,6 @@ experiments:
     normalize_expression: true
     no_test: true
     normalize_input_output: true
-    output_dir: "results/Feng_2023/onehotPca_512"
+    output_dir: "results/Feng_2023/onehotPca_512_filtered"
   # sei_raw 
   # evo2_raw
