@@ -391,10 +391,10 @@ class ActiveLearningExperiment:
         """Train the linear regression model on current training data."""
         logger.info(f"Training model with {len(self.train_indices)} samples")
 
-        X_train = self._encode_sequences[self.train_indices]
+        X_train = self._encode_sequences(self.train_indices)
         print("x_train的形状：", x_train.shape)
         print("x_train的维度：", x_train.dim())
-        y_train = self.all_expressions[self.train_indices]
+        y_train = self.all_expressions(self.train_indices)
         print("y_train1的形状：", x_train.shape)
         print("y_train1的维度：", x_train.dim())
         y_train = y_train.reshape(-1)
