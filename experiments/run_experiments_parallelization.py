@@ -392,7 +392,14 @@ class ActiveLearningExperiment:
         logger.info(f"Training model with {len(self.train_indices)} samples")
 
         X_train = self._encode_sequences[self.train_indices]
-        y_train = self.all_expressions[self.train_indices].reshape(-1)
+        print("x_train的形状：", x_train.shape)
+        print("x_train的维度：", x_train.dim())
+        y_train = self.all_expressions[self.train_indices]
+        print("y_train1的形状：", x_train.shape)
+        print("y_train1的维度：", x_train.dim())
+        y_train = y_train.reshape(-1)
+        print("y_train的形状：", y_train.shape)
+        print("y_train的维度：", y_train.dim())
 
         self.model.fit(X_train, y_train)
 
