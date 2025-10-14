@@ -1,4 +1,5 @@
-import safetensors
+from safetensors import torch
+import os
 import torch
 
 data_path1 = "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_circuit_design/data_new/Feng_2023/dSort-Seq/evo2/merged_data_dSort-Seq_results_rank_0_pca_output.safetensors"
