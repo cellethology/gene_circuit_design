@@ -6,7 +6,7 @@ data_path1 = "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_ci
 data1 = safetensors.torch.load_file(data_path1)
 
 if "expressions" in data1:
-    mask = ~torch.isnan(data1["expressions"]).any(dim=1)
+    mask = ~torch.isnan(data1["expressions"]).any(dim=-1)
     filtered_data1 = {key: value[mask] for key, value in data1.items()}
     
     new_path1 = data_path1.replace(".safetensors", "_filtered.safetensors")
@@ -17,7 +17,7 @@ data_path2 = "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_ci
 data2 = safetensors.torch.load_file(data_path2)
 
 if "expressions" in data2:
-    mask = ~torch.isnan(data2["expressions"]).any(dim=1)
+    mask = ~torch.isnan(data2["expressions"]).any(dim=-1)
     filtered_data2 = {key: value[mask] for key, value in data2.items()}
     
     new_path2 = data_path2.replace(".safetensors", "_filtered.safetensors")
