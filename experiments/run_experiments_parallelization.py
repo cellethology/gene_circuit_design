@@ -4,7 +4,7 @@ Active Learning Loop for DNA Sequence-Expression Prediction.
 This script implements an active learning approach to predict gene expression
 from DNA sequences using linear regression with one-hot encoded features.
 """
-
+import sys
 import argparse
 import logging
 import random
