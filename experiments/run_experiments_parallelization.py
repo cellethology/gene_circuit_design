@@ -387,10 +387,18 @@ class ActiveLearningExperiment:
             else:
                 return flatten_one_hot_sequences(encoded)
 
-    def _train_model(self) -> None:
-        """Train the linear regression model on current training data."""
+    def _train_model(self) -> None:   
+        print("=== _train_model 方法开始 ===", flush=True, file=sys.stderr)
+        X_train = self._encode_sequences(self.train_indices)
+        print(f"第1步完成 - X_train形状: {X_train.shape}", flush=True, file=sys.stderr)
+        y_train = self.all_expressions[self.train_indices]
+        print(f"y_train形状: {y_train.shape}", flush=True, file=sys.stderr)
+        print(f"y_train维度: {y_train.ndim}", flush=True, file=sys.stderr)
+        
+        print("=== 数据检查完成，提前返回 ===", flush=True, file=sys.stderr)
+        return  # 关键：提前返回，不执行训练
+        """
         logger.info(f"Training model with {len(self.train_indices)} samples")
-
         X_train = self._encode_sequences(self.train_indices)
         print("x_train的形状：", X_train.shape,flush=True, file=sys.stderr)
         print("x_train的维度：", X_train.ndim,flush=True, file=sys.stderr)
@@ -402,6 +410,7 @@ class ActiveLearningExperiment:
         print("y_train的维度：", y_train.ndim,flush=True, file=sys.stderr)
 
         self.model.fit(X_train, y_train)
+        
 
         # Log training performance
         train_pred = self.model.predict(X_train)
@@ -409,7 +418,7 @@ class ActiveLearningExperiment:
         train_r2 = r2_score(y_train, train_pred)
 
         logger.info(f"Training RMSE: {train_mse:.2f}, R²: {train_r2:.3f}")
-
+    """
     def _evaluate_on_test_set(self) -> Dict[str, float]:
         """
         Evaluate model performance on test set.
