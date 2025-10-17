@@ -10,6 +10,7 @@ This script creates a heatmap where:
 Example Usage:
     python plotting/area_under_curve_grid_plot.py
 """
+
 import os
 from pathlib import Path
 
@@ -142,6 +143,7 @@ def collect_all_results(results_base_path):
         for file in files:
             if file == "combined_all_custom_metrics.csv":
                 file_path = os.path.join(root, file)
+                print(file_path)
 
                 # Extract dataset and embedding info
                 dataset, embedding = extract_info_from_path(file_path)
@@ -275,7 +277,7 @@ def create_grid_plot(
             cbar_kws={"label": metric.replace("_", " ").title()},
             ax=ax,
         )
-        ax.set_title(f'Area Under Curve: {metric.replace("_", " ").title()}')
+        ax.set_title(f"Area Under Curve: {metric.replace('_', ' ').title()}")
         ax.set_xlabel("Method")
         ax.set_ylabel("Dataset")
         plt.xticks(rotation=45, ha="right")
@@ -339,6 +341,7 @@ def main():
     print("Collecting results...")
     results_df = collect_all_results(results_base_path)
 
+    # results_df.to_csv("hello_auc_result.csv")
     if results_df.empty:
         print("No results found!")
         return
