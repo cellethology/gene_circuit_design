@@ -1,6 +1,6 @@
 experiments:
   evo2_pca:
-    data_path: "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_circuit_design/data_new/Feng_2023/dSort-Seq/evo2/merged_data_dSort-Seq_results_rank_0_pca_output_filtered.safetensors"
+    data_path: "data_new/Feng_2023/dSort-Seq/evo2/merged_data_dSort-Seq_results_rank_0_pca_output_filtered.safetensors"
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
     seq_mod_methods: ["EMBEDDING"]
     target_val_key: "expressions"
@@ -10,13 +10,13 @@ experiments:
     batch_size: 8
     test_size: 30
     max_rounds: 20
-    normalize_expression: true
+    #normalize_expression: true
     no_test: true
     normalize_input_output: true
     output_dir: "results/Feng_2023/evo_pca_512_tiny_filtered"
   
   onehot_pca:
-    data_path: "/storage2/wangzitongLab/liuxuyin/gene_circuit_design_study/gene_circuit_design/data_new/Feng_2023/dSort-Seq/raw/merged_data_dSort-Seq_results_onehot_encode_PCA_filtered.safetensors"
+    data_path: "data_new/Feng_2023/dSort-Seq/raw/merged_data_dSort-Seq_results_onehot_encode_PCA_filtered.safetensors"
     strategies: ["HIGH_EXPRESSION", "RANDOM"]
     seq_mod_methods: ["EMBEDDING"]
     target_val_key: "expressions"
@@ -26,7 +26,7 @@ experiments:
     batch_size: 8
     test_size: 30
     max_rounds: 20
-    normalize_expression: true
+    #normalize_expression: true
     no_test: true
     normalize_input_output: true
     output_dir: "results/Feng_2023/onehotPca_512_filtered"

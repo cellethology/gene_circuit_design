@@ -396,8 +396,8 @@ class ActiveLearningExperiment:
         print(f"y_train维度: {y_train.ndim}", flush=True, file=sys.stderr)
         
         print("=== 数据检查完成，提前返回 ===", flush=True, file=sys.stderr)
-        return  # 关键：提前返回，不执行训练
-        """
+        #return  # 关键：提前返回，不执行训练
+        
         logger.info(f"Training model with {len(self.train_indices)} samples")
         X_train = self._encode_sequences(self.train_indices)
         print("x_train的形状：", X_train.shape,flush=True, file=sys.stderr)
@@ -418,7 +418,7 @@ class ActiveLearningExperiment:
         train_r2 = r2_score(y_train, train_pred)
 
         logger.info(f"Training RMSE: {train_mse:.2f}, R²: {train_r2:.3f}")
-    """
+    
     def _evaluate_on_test_set(self) -> Dict[str, float]:
         """
         Evaluate model performance on test set.
