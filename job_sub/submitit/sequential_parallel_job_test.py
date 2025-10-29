@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import submitit
+import yaml
 
 from experiments.run_experiments_parallelization import run_single_experiment
 from utils.config_loader import get_experiment_config
@@ -29,6 +30,36 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def run_all_experiments_from_config(
+    config_path: str = "configs/166k_regulators_auto_gen.yaml",
+) -> None:
+    """Run SLURM experiments for all experiments defined in a YAML config."""
+    config_file = Path(config_path)
+
+    if not config_file.exists():
+        raise FileNotFoundError(f"Config file not found: {config_file}")
+
+    # Load YAML
+    with open(config_file, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    # Extract experiment names under the top-level 'experiments' key
+    experiments = list(config.get("experiments", {}).keys())
+
+    if not experiments:
+        print(f"No experiments found in {config_file}")
+        return
+
+    print(f"Running {len(experiments)} experiments from {config_file}...")
+
+    for exp_name in experiments:
+        print(f"→ Submitting {exp_name} ...")
+        run_slurm_experiments(
+            config_files=[str(config_file)],
+            experiment_names=[exp_name],
+        )
 
 
 def run_slurm_experiments(
@@ -59,13 +90,13 @@ def run_slurm_experiments(
     # Set up default Slurm parameters
     # NOTE: suits for onehot no PCA (update on the readme.md)
     default_slurm_params = {
-        "timeout_min": 60,
+        "timeout_min": 240,
         "slurm_partition": "wzt_20250411,intel-sc3",
-        "slurm_cpus_per_task": 4,
+        "slurm_cpus_per_task": 8,
         "slurm_mail_user": "lizelun@westlake.edu.cn",
         "slurm_mail_type": "BEGIN,END,FAIL",
         "slurm_qos": "huge",
-        "slurm_mem_per_cpu": "32GB",
+        "slurm_mem_per_cpu": "8GB",
     }
 
     # Override defaults with provided parameters
@@ -93,6 +124,7 @@ def run_slurm_experiments(
             required_params = [
                 "initial_sample_size",
                 "data_path",
+                "target_val_key",
                 "batch_size",
                 "test_size",
                 "no_test",
@@ -113,6 +145,7 @@ def run_slurm_experiments(
 
             # Extract common parameters
             initial_sample_size = config["initial_sample_size"]
+            target_val_key = config["target_val_key"]
             data_path = config["data_path"]
             batch_size = config["batch_size"]
             test_size = config["test_size"]
@@ -133,6 +166,7 @@ def run_slurm_experiments(
                                 {
                                     "strategy": strategy,
                                     "regression_model": regression_model,
+                                    "target_val_key": target_val_key,
                                     "seq_mod_method": seq_mod_method,
                                     "seed": seed,
                                     "data_path": data_path,
@@ -192,19 +226,19 @@ def parse_arguments():
 
     # Optional Slurm parameters
     parser.add_argument(
-        "--timeout-min", type=int, default=20, help="Timeout in minutes for each job"
+        "--timeout-min", type=int, default=240, help="Timeout in minutes for each job"
     )
     parser.add_argument(
         "--slurm-partition",
         type=str,
-        default="wzt_20250411,intel-sc3",
+        default="wzt_20250411,intel-fat",
         help="Slurm partition to use",
     )
     parser.add_argument(
-        "--slurm-cpus-per-task", type=int, default=4, help="Number of CPUs per task"
+        "--slurm-cpus-per-task", type=int, default=8, help="Number of CPUs per task"
     )
     parser.add_argument(
-        "--slurm-mem-per-cpu", type=str, default="32GB", help="Memory per CPU"
+        "--slurm-mem-per-cpu", type=str, default="8GB", help="Memory per CPU"
     )
     parser.add_argument(
         "--slurm-mail-user",
@@ -259,12 +293,22 @@ if __name__ == "__main__":
             executor_folder=args.executor_folder,
         )
     else:
-        # Example 1: Run a single configuration
-        print("No arguments provided. Running example configuration...")
-        run_slurm_experiments(
-            config_files=["configs/onehot.yaml"],
-            experiment_names=["onehot_pad"],
+        run_all_experiments_from_config(
+            config_path="configs/166k_regulators_auto_gen.yaml",
         )
+        # # Example 1: Run a single configuration
+        # print("No arguments provided. Running example configuration...")
+        # experiment_names = ["AD-1-3-1"]
+        # for experiment_name in experiment_names:
+        #     run_slurm_experiments(
+        #         config_files=["configs/166k_regulators_auto_gen.yaml"],
+        #         experiment_names=[f"{experiment_name}"],
+        #     )
+
+        # run_slurm_experiments(
+        #     config_files=["configs/big_experiments.yaml"],
+        #     experiment_names=["onehot_pca"],
+        # )
 
         # Example 2: Run multiple configurations (commented out)
         # run_slurm_experiments(
@@ -276,3 +320,4 @@ if __name__ == "__main__":
         #         "slurm_mem_per_cpu": "4GB"
         #     }
         # )
+# /storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/angenent-Mari_2020/evo_pca_512

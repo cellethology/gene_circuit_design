@@ -13,7 +13,7 @@ across different regressors and strategies.
   python plotting/compare_top_k_selections.py results_folder1/
   results_folder2/ \
       --output-dir plots/top_k_comparison/ \
-      --metric top_10_ratio_intersected_indices_cumulative
+      --metric "normalized_predictions_ground_truth_values_cumulative"
 
   # Custom figure size
   python plotting/compare_top_k_selections.py results_folder1/
