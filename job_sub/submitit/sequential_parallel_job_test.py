@@ -293,9 +293,14 @@ if __name__ == "__main__":
             executor_folder=args.executor_folder,
         )
     else:
-        run_all_experiments_from_config(
-            config_path="configs/166k_regulators_auto_gen.yaml",
-        )
+        for file in [
+            "configs/cis_regulations/166k_cis_regulators_sei_experiments.yaml",
+            # "configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml",
+            # "configs/cis_regulations/166k_cis_regulators_onehot_experiments.yaml",
+        ]:
+            run_all_experiments_from_config(
+                config_path=file,
+            )
         # # Example 1: Run a single configuration
         # print("No arguments provided. Running example configuration...")
         # experiment_names = ["AD-1-3-1"]
