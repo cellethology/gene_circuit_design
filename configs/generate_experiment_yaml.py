@@ -16,11 +16,11 @@ Usage:
 Optional overrides (see --help) let you change defaults like strategies, models, etc.
 
 Python: 3.10+
-python generate_experiment_yaml.py \
-  --input-dir data_new/166k/sei/cis_grouped_safetensors \
-  --output-yaml configs/cis_regulations/166k_cis_regulators_sei_experiments.yaml \
-  --output-dir-root results/166k_2024_cis_regulators_auto_gen_1_30/ \
-  --output-dir-second sei_pca --seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
+python configs/generate_experiment_yaml.py \
+  --input-dir ./data_new/Rai_2024_166k/raw/03_cis_grouped_safetensors \
+  --output-yaml ./configs/cis_regulations/166k_cis_regulators_onehot_experiments.yaml \
+  --output-dir-root ./results/166k_2024_cis_regulators_auto_gen_1_30/ \
+  --output-dir-second onehot_pca --seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
 """
 
 from __future__ import annotations

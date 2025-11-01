@@ -270,7 +270,7 @@ if __name__ == "__main__":
     # Check if arguments are provided
     import sys
 
-    if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
         # Parse command line arguments
         args = parse_arguments()
 
@@ -293,36 +293,8 @@ if __name__ == "__main__":
             executor_folder=args.executor_folder,
         )
     else:
-        for file in [
-            "configs/cis_regulations/166k_cis_regulators_sei_experiments.yaml",
-            # "configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml",
-            # "configs/cis_regulations/166k_cis_regulators_onehot_experiments.yaml",
-        ]:
-            run_all_experiments_from_config(
-                config_path=file,
-            )
-        # # Example 1: Run a single configuration
-        # print("No arguments provided. Running example configuration...")
-        # experiment_names = ["AD-1-3-1"]
-        # for experiment_name in experiment_names:
-        #     run_slurm_experiments(
-        #         config_files=["configs/166k_regulators_auto_gen.yaml"],
-        #         experiment_names=[f"{experiment_name}"],
-        #     )
-
-        # run_slurm_experiments(
-        #     config_files=["configs/big_experiments.yaml"],
-        #     experiment_names=["onehot_pca"],
-        # )
-
-        # Example 2: Run multiple configurations (commented out)
-        # run_slurm_experiments(
-        #     config_files=["configs/enformer.yaml", "configs/another_config.yaml"],
-        #     experiment_names=["enformer_template", "another_experiment"],
-        #     slurm_params={
-        #         "timeout_min": 30,
-        #         "slurm_cpus_per_task": 2,
-        #         "slurm_mem_per_cpu": "4GB"
-        #     }
-        # )
-# /storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/angenent-Mari_2020/evo_pca_512
+        args = parse_arguments()
+        config_files = args.config_files
+        run_all_experiments_from_config(
+            config_path=config_files,
+        )
