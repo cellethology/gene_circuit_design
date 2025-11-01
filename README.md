@@ -45,7 +45,7 @@ python job_sub/submitit/sequential_parallel_job_test.py \
 
 # Running all the experiments in parallel of a single config file
 python job_sub/submitit/sequential_parallel_job_test.py \
-    --config-files configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml \
+    --config-files configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml
 ```
 - **Do check the config file to update the experiment path for it to run properly**
 
@@ -165,5 +165,6 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 - Use `--max-workers` for parallel processing
 - Set `cores_per_process` in config for CPU-intensive models
 - Use filtered data files to reduce memory usage
+
 
 
