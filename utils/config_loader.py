@@ -102,7 +102,6 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "TRIM": SequenceModificationMethod.TRIM,
             "PAD": SequenceModificationMethod.PAD,
             "EMBEDDING": SequenceModificationMethod.EMBEDDING,
-            "CAR": SequenceModificationMethod.CAR,
         }
         config["seq_mod_methods"] = [
             seq_mod_map[method] for method in config["seq_mod_methods"]
@@ -115,7 +114,7 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "KNN": RegressionModelType.KNN,
             "RANDOM_FOREST": RegressionModelType.RANDOM_FOREST,
             "XGBOOST": RegressionModelType.XGBOOST,
-            "MLP": RegressionModelType.MLP
+            "MLP": RegressionModelType.MLP,
         }
         config["regression_models"] = [
             regression_model_map[model] for model in config["regression_models"]
@@ -133,7 +132,7 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def list_available_experiments(
-    config_file: str = "configs/experiment_configs.yaml"
+    config_file: str = "configs/experiment_configs.yaml",
 ) -> List[str]:
     """
     List all available experiment configurations.

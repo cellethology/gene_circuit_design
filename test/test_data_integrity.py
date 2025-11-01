@@ -23,7 +23,6 @@ from utils.sequence_utils import (
     flatten_one_hot_sequences_with_pca,
     load_log_likelihood_data,
     load_sequence_data,
-    one_hot_encode_motif_sequence,
     one_hot_encode_sequences,
     one_hot_encode_single_sequence,
     pad_sequences_to_length,
@@ -46,9 +45,6 @@ class TestSequenceModificationMethod:
         assert (
             ensure_sequence_modification_method("embedding")
             == SequenceModificationMethod.EMBEDDING
-        )
-        assert (
-            ensure_sequence_modification_method("car") == SequenceModificationMethod.CAR
         )
 
     def test_enum_passthrough(self):
@@ -185,22 +181,6 @@ class TestOneHotEncoding:
         assert len(results) == 2
         assert results[0].shape == (2, 4)
         assert results[1].shape == (4, 4)
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - num_motifs parameter not supported"
-    )
-    def test_multiple_sequences_car_type(self):
-        """Test encoding CAR motif sequences."""
-        car_sequences = [[0, 1, 2], [1, 2, 3]]
-        results = one_hot_encode_sequences(
-            car_sequences,
-            seq_mod_method=SequenceModificationMethod.CAR,
-            num_motifs=4,
-            dtype=torch.float32,
-        )
-
-        assert len(results) == 2
-        assert all(seq.shape[1] == 4 for seq in results)  # 4 motif channels
 
 
 class TestSequenceModification:

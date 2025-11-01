@@ -17,9 +17,9 @@ Optional overrides (see --help) let you change defaults like strategies, models,
 
 Python: 3.10+
 python generate_experiment_yaml.py \
-  --input-dir /storage2/wangzitongLab/lizelun/project/gene_circuit_design/data_new/166k/sei/cis_grouped_safetensors \
-  --output-yaml /storage2/wangzitongLab/lizelun/project/gene_circuit_design/configs/cis_regulations/166k_cis_regulators_sei_experiments.yaml \
-  --output-dir-root /storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/166k_2024_cis_regulators_auto_gen_1_30/ \
+  --input-dir data_new/166k/sei/cis_grouped_safetensors \
+  --output-yaml configs/cis_regulations/166k_cis_regulators_sei_experiments.yaml \
+  --output-dir-root results/166k_2024_cis_regulators_auto_gen_1_30/ \
   --output-dir-second sei_pca --seeds 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
 """
 

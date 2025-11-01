@@ -260,45 +260,35 @@ class ActiveLearningExperiment:
             # Load from CSV file
             logger.info(f"Using sequence modification method: {seq_mod_method}")
 
-            if seq_mod_method == SequenceModificationMethod.CAR:
-                # Load CAR motif data
+            # Load standard CSV data
+            df = pd.read_csv(self.data_path, encoding="latin-1")
+
+            if "Log_Likelihood" in df.columns:
+                # Combined dataset with log likelihood
+                sequences = df["Sequence"].tolist()
+                if seq_mod_method == SequenceModificationMethod.TRIM:
+                    sequences = trim_sequences_to_length(sequences)
+                    logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+                elif seq_mod_method == SequenceModificationMethod.PAD:
+                    sequences = pad_sequences_to_length(sequences)
+                    logger.info(f"Padded sequences to length {len(sequences[0])}")
+                self.all_sequences = sequences
+                self.all_expressions = df["Expression"].values
+                self.all_log_likelihoods = df["Log_Likelihood"].values
+                logger.info(
+                    f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data"
+                )
+            else:
+                # Original expression-only dataset
                 self.all_sequences, self.all_expressions = load_sequence_data(
                     self.data_path, seq_mod_method=seq_mod_method
                 )
-                self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)
+                self.all_log_likelihoods = np.full(
+                    len(self.all_sequences), np.nan
+                )  # Fill with NaN if no log likelihood
                 logger.info(
-                    f"Loaded CAR dataset with {len(self.all_sequences)} motif sequences"
+                    f"Loaded expression-only dataset with {len(self.all_sequences)} sequences"
                 )
-            else:
-                # Load standard CSV data
-                df = pd.read_csv(self.data_path, encoding="latin-1")
-
-                if "Log_Likelihood" in df.columns:
-                    # Combined dataset with log likelihood
-                    sequences = df["Sequence"].tolist()
-                    if seq_mod_method == SequenceModificationMethod.TRIM:
-                        sequences = trim_sequences_to_length(sequences)
-                        logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-                    elif seq_mod_method == SequenceModificationMethod.PAD:
-                        sequences = pad_sequences_to_length(sequences)
-                        logger.info(f"Padded sequences to length {len(sequences[0])}")
-                    self.all_sequences = sequences
-                    self.all_expressions = df["Expression"].values
-                    self.all_log_likelihoods = df["Log_Likelihood"].values
-                    logger.info(
-                        f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data"
-                    )
-                else:
-                    # Original expression-only dataset
-                    self.all_sequences, self.all_expressions = load_sequence_data(
-                        self.data_path, seq_mod_method=seq_mod_method
-                    )
-                    self.all_log_likelihoods = np.full(
-                        len(self.all_sequences), np.nan
-                    )  # Fill with NaN if no log likelihood
-                    logger.info(
-                        f"Loaded expression-only dataset with {len(self.all_sequences)} sequences"
-                    )
 
             # For CSV files, embeddings will be None (will be computed via one-hot encoding)
             self.embeddings = None
@@ -369,12 +359,8 @@ class ActiveLearningExperiment:
             return self.embeddings[indices]
         else:
             # Fall back to one-hot encoding for CSV files
-            if self.seq_mod_method == SequenceModificationMethod.CAR:
-                # For CAR data, all_sequences is a numpy array
-                sequences = self.all_sequences[indices]
-            else:
-                # For DNA data, all_sequences is a list of strings
-                sequences = [self.all_sequences[i] for i in indices]
+            # For DNA data, all_sequences is a list of strings
+            sequences = [self.all_sequences[i] for i in indices]
 
             encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
 
@@ -940,7 +926,7 @@ class ActiveLearningExperiment:
 
 
 def run_single_experiment(
-    experiment_config: Dict[str, Any]
+    experiment_config: Dict[str, Any],
 ) -> Tuple[str, str, str, int, List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Run a single experiment with given configuration.
@@ -964,7 +950,7 @@ def run_single_experiment(
     max_rounds = experiment_config["max_rounds"]
     normalize_input_output = experiment_config["normalize_input_output"]
     output_dir = experiment_config["output_dir"]
-    target_val_key = experiment_config['target_val_key']
+    target_val_key = experiment_config["target_val_key"]
     use_pca = experiment_config.get("use_pca", False)
     pca_components = experiment_config.get("pca_components", 4096)
 

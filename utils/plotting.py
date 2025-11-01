@@ -14,16 +14,29 @@ STATEGY_LABELS = {
     "highExpression": "Top-K Selection",
     "random": "Random",
     "log_likelihood": "Zero Shot",
+    "kmeans_random": "K-Means proceeds with Random",
+    "kmeans_high_expression": "K-Means proceeds with Top-K",
 }
+
+COLORS = {
+    "highExpression": "#d62728",  # tab:red
+    "random": "#2ca02c",  # tab:green
+    "kmeans_random": "#1f77b4",  # tab:blue
+    "kmeans_high_expression": "#ff7f0e",  # tab:orange
+}
+
 
 def q1(x):
     return x.quantile(0.25)
 
+
 def q3(x):
     return x.quantile(0.75)
 
+
 def sem(x):
     return x.sem()
+
 
 def regressor_line_plot(ax, stats, regressor, plot_type, regressor_colors):
     if plot_type == "mean":
@@ -79,6 +92,7 @@ def regressor_line_plot(ax, stats, regressor, plot_type, regressor_colors):
             alpha=0.2,
             color=regressor_colors[regressor],
         )
+
 
 def plot_active_learning_metrics(
     results_folder_path: str,
@@ -174,7 +188,7 @@ def plot_active_learning_metrics(
 
         # Format the plot
         ax.set_title(
-            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+            f"{metric.replace('_', ' ').title()} vs Train Size", fontsize=FONT_SIZE
         )
         ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
         ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
@@ -250,7 +264,13 @@ def plot_top10_ratio_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(
+                stats["train_size"],
+                stats["mean"],
+                marker="o",
+                label=STATEGY_LABELS[strategy],
+                color=COLORS[strategy],
+            )
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -262,7 +282,7 @@ def plot_top10_ratio_metrics(
 
         # Format the plot
         ax.set_title(
-            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+            f"{metric.replace('_', ' ').title()} vs Train Size", fontsize=FONT_SIZE
         )
         ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
         ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
@@ -358,7 +378,13 @@ def plot_value_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(
+                stats["train_size"],
+                stats["mean"],
+                marker="o",
+                label=STATEGY_LABELS[strategy],
+                color=COLORS[strategy],
+            )
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -370,7 +396,7 @@ def plot_value_metrics(
 
         # Format the plot
         ax.set_title(
-            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+            f"{metric.replace('_', ' ').title()} vs Train Size", fontsize=FONT_SIZE
         )
         ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
         ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
@@ -482,7 +508,13 @@ def plot_custom_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(
+                stats["train_size"],
+                stats["mean"],
+                marker="o",
+                label=STATEGY_LABELS[strategy],
+                color=COLORS[strategy],
+            )
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -494,7 +526,7 @@ def plot_custom_metrics(
 
         # Format the plot
         ax.set_title(
-            f'{metric.replace("_", " ").title()} vs Train Size', fontsize=FONT_SIZE
+            f"{metric.replace('_', ' ').title()} vs Train Size", fontsize=FONT_SIZE
         )
         ax.set_xlabel("Train Size", fontsize=FONT_SIZE)
         ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
@@ -552,7 +584,6 @@ def plot_regressor_comparison(
             "best_value_ground_truth_values_cumulative",
             "normalized_predictions_ground_truth_values_cumulative",
         ]
-
 
     # Construct path to combined results file
     results_path = Path(results_folder_path) / "combined_all_custom_metrics.csv"
@@ -630,7 +661,8 @@ def plot_regressor_comparison(
 
             # Format the plot
             ax.set_title(
-                f'{strategy} - {metric.replace("_", " ").title()} {(plot_type)}', fontsize=FONT_SIZE - 4
+                f"{strategy} - {metric.replace('_', ' ').title()} {(plot_type)}",
+                fontsize=FONT_SIZE - 4,
             )
             ax.set_xlabel("Train Size", fontsize=FONT_SIZE - 2)
             ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE - 2)
@@ -638,7 +670,7 @@ def plot_regressor_comparison(
             # NOTE: add this back if needed
             # Only show legend on the first subplot to avoid clutter
             # if i == 0 and j == 0:
-            ax.legend(title="Regressor", fontsize=FONT_SIZE - 2, loc='upper left')
+            ax.legend(title="Regressor", fontsize=FONT_SIZE - 2, loc="upper left")
 
             # ax.grid(True, alpha=0.3)
 
@@ -738,7 +770,7 @@ def plot_regressor_summary(
 
     # Format the plot
     ax.set_title(
-        f'Final {metric.replace("_", " ").title()} by Strategy and Regressor',
+        f"Final {metric.replace('_', ' ').title()} by Strategy and Regressor",
         fontsize=FONT_SIZE,
     )
     ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
@@ -816,6 +848,7 @@ def plot_example():
             plot_custom_metrics(
                 folder_path, save_path=f"{folder_path}/custom_metrics_plot.pdf"
             )
+
 
 def create_combined_results_from_files(output_path: Path) -> None:
     """

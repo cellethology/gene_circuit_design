@@ -4,7 +4,7 @@ Tests for data format compatibility and consistency.
 This module tests that different data formats (CSV, safetensors, etc.)
 produce consistent results and are properly handled:
 - CSV vs safetensors consistency
-- Different sequence formats (DNA, CAR motifs)
+- Different sequence formats (DNA)
 - Data type conversions
 - File format migrations
 """
@@ -164,27 +164,6 @@ class TestCSVSafetensorsCompatibility:
 
 class TestSequenceFormatCompatibility:
     """Test compatibility between different sequence formats."""
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - num_motifs parameter not supported"
-    )
-    def test_dna_car_format_distinction(self):
-        """Test that DNA and CAR formats are handled distinctly."""
-        # DNA sequences
-        dna_sequences = ["ATCG", "GCTA"]
-        dna_encoded = one_hot_encode_sequences(
-            dna_sequences, seq_mod_method=SequenceModificationMethod.PAD
-        )
-
-        # CAR motif sequences (indices)
-        car_sequences = [[0, 1, 2, 3], [3, 2, 1, 0]]
-        car_encoded = one_hot_encode_sequences(
-            car_sequences, seq_mod_method=SequenceModificationMethod.CAR, num_motifs=4
-        )
-
-        # Shapes should be similar but encoding should be different
-        assert dna_encoded[0].shape == car_encoded[0].shape  # Same dimensions
-        assert not torch.equal(dna_encoded[0], car_encoded[0])  # Different values
 
     def test_sequence_length_normalization(self):
         """Test handling of sequences with different lengths."""

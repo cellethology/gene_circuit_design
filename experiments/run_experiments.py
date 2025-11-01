@@ -188,45 +188,35 @@ class ActiveLearningExperiment:
             # Load from CSV file
             logger.info(f"Using sequence modification method: {seq_mod_method}")
 
-            if seq_mod_method == SequenceModificationMethod.CAR:
-                # Load CAR motif data
+            # Load standard CSV data
+            df = pd.read_csv(self.data_path, encoding="latin-1")
+
+            if "Log_Likelihood" in df.columns:
+                # Combined dataset with log likelihood
+                sequences = df["Sequence"].tolist()
+                if seq_mod_method == SequenceModificationMethod.TRIM:
+                    sequences = trim_sequences_to_length(sequences)
+                    logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+                elif seq_mod_method == SequenceModificationMethod.PAD:
+                    sequences = pad_sequences_to_length(sequences)
+                    logger.info(f"Padded sequences to length {len(sequences[0])}")
+                self.all_sequences = sequences
+                self.all_expressions = df["Expression"].values
+                self.all_log_likelihoods = df["Log_Likelihood"].values
+                logger.info(
+                    f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data"
+                )
+            else:
+                # Original expression-only dataset
                 self.all_sequences, self.all_expressions = load_sequence_data(
                     self.data_path, seq_mod_method=seq_mod_method
                 )
-                self.all_log_likelihoods = np.full(len(self.all_sequences), np.nan)
+                self.all_log_likelihoods = np.full(
+                    len(self.all_sequences), np.nan
+                )  # Fill with NaN if no log likelihood
                 logger.info(
-                    f"Loaded CAR dataset with {len(self.all_sequences)} motif sequences"
+                    f"Loaded expression-only dataset with {len(self.all_sequences)} sequences"
                 )
-            else:
-                # Load standard CSV data
-                df = pd.read_csv(self.data_path, encoding="latin-1")
-
-                if "Log_Likelihood" in df.columns:
-                    # Combined dataset with log likelihood
-                    sequences = df["Sequence"].tolist()
-                    if seq_mod_method == SequenceModificationMethod.TRIM:
-                        sequences = trim_sequences_to_length(sequences)
-                        logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-                    elif seq_mod_method == SequenceModificationMethod.PAD:
-                        sequences = pad_sequences_to_length(sequences)
-                        logger.info(f"Padded sequences to length {len(sequences[0])}")
-                    self.all_sequences = sequences
-                    self.all_expressions = df["Expression"].values
-                    self.all_log_likelihoods = df["Log_Likelihood"].values
-                    logger.info(
-                        f"Loaded combined dataset with {len(self.all_sequences)} sequences including log likelihood data"
-                    )
-                else:
-                    # Original expression-only dataset
-                    self.all_sequences, self.all_expressions = load_sequence_data(
-                        self.data_path, seq_mod_method=seq_mod_method
-                    )
-                    self.all_log_likelihoods = np.full(
-                        len(self.all_sequences), np.nan
-                    )  # Fill with NaN if no log likelihood
-                    logger.info(
-                        f"Loaded expression-only dataset with {len(self.all_sequences)} sequences"
-                    )
 
             # For CSV files, embeddings will be None (will be computed via one-hot encoding)
             self.embeddings = None
@@ -299,12 +289,8 @@ class ActiveLearningExperiment:
             return self.embeddings[indices]
         else:
             # Fall back to one-hot encoding for CSV files
-            if self.seq_mod_method == SequenceModificationMethod.CAR:
-                # For CAR data, all_sequences is a numpy array
-                sequences = self.all_sequences[indices]
-            else:
-                # For DNA data, all_sequences is a list of strings
-                sequences = [self.all_sequences[i] for i in indices]
+            # For DNA data, all_sequences is a list of strings
+            sequences = [self.all_sequences[i] for i in indices]
 
             encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
             return flatten_one_hot_sequences(encoded)
@@ -841,11 +827,11 @@ def run_controlled_experiment(
         for strategy in strategies:
             for seq_mod_method in seq_mod_methods:
                 for regression_model in regression_models:
-                    logger.info(f"\n{'='*60}")
+                    logger.info(f"\n{'=' * 60}")
                     logger.info(
                         f"Running {strategy.value.upper()} strategy with regressor {regression_model} with {len(seeds)} seeds and {seq_mod_method.value.upper()} sequence modification method"
                     )
-                    logger.info(f"{'='*60}")
+                    logger.info(f"{'=' * 60}")
 
                     for seed_idx, seed in enumerate(seeds):
                         logger.info(
@@ -1093,7 +1079,7 @@ def create_combined_results_from_files(output_path: Path) -> None:
 
 
 def analyze_multi_seed_results(
-    results: Dict[str, List[Dict[str, Any]]]
+    results: Dict[str, List[Dict[str, Any]]],
 ) -> Dict[str, Dict[str, Any]]:
     """
     Analyze results across multiple seeds for each strategy.
@@ -1286,9 +1272,9 @@ def main() -> None:
         logger.info(f"Running all {len(experiments)} experiments...")
 
         for exp_name in experiments:
-            logger.info(f"\n{'='*60}")
+            logger.info(f"\n{'=' * 60}")
             logger.info(f"Running experiment: {exp_name}")
-            logger.info(f"{'='*60}")
+            logger.info(f"{'=' * 60}")
 
             try:
                 if args.dry_run:

@@ -19,7 +19,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+import argparse
 from scipy import integrate
+from new_file_plot_gen import create_grid_plot_avg_col as create_grid_plot
 
 matplotlib.use("Agg")  # Use non-interactive backend
 
@@ -33,7 +35,9 @@ def extract_info_from_path(file_path):
     for part in path_parts:
         if any(
             d in part
-            for d in ["Feng_2023", "angenent-Mari_2020", "alcantar_2025", "166k_2024"]
+            for d in ["AD"]
+            # TODO: need to revisit the plotting logics here
+            # for d in ["Feng_2023", "angenent-Mari_2020", "alcantar_2025", "166k_2024", ""]
         ):
             dataset = part
             break
@@ -140,6 +144,7 @@ def collect_all_results(results_base_path):
 
     # Walk through all directories
     for root, _dirs, files in os.walk(results_base_path):
+        # print(f"SANITY CHECK PRINTS: files {root}")
         for file in files:
             if file == "combined_all_custom_metrics.csv":
                 file_path = os.path.join(root, file)
@@ -214,124 +219,20 @@ def collect_all_results(results_base_path):
     return final_frame
 
 
-def create_grid_plot(
-    results_df: pd.DataFrame,
-    metric: str = "auc_normalized_pred",
-    figsize: tuple[int, int] = (12, 6),
-    baseline_label: str = "random",
-    drop_baseline: bool = True,
-):
-    """Create a grid plot of (method - baseline) AUC values per dataset.
-
-    Args:
-        results_df: Long-form results with columns ['dataset','embedding','regressor','strategy','method_label', metric].
-        metric: Metric column to visualize (defaults to 'auc_normalized_pred').
-        figsize: Figure size.
-        baseline_label: Column name in the pivot used as baseline (default: 'random').
-        drop_baseline: If True, remove the baseline column from the heatmap; if False, keep it (will be zeros).
-
-    Returns:
-        (fig, ax): Matplotlib Figure and Axes or (None, None) if no data.
-    """
-    if results_df.empty:
-        print("No data found to plot")
-        return None, None
-
-    # Ensure method_label exists and aggregate "random" across methods per dataset
-    results_df = results_df.copy()
-    if "method_label" in results_df.columns:
-        random_results = (
-            results_df[results_df["strategy"] == "random"]
-            .groupby("dataset", as_index=False)
-            .agg({metric: "median"})
-        )
-        random_results["method_label"] = baseline_label
-
-        non_random_results = results_df[results_df["strategy"] != "random"]
-        plot_data = pd.concat([non_random_results, random_results], ignore_index=True)
-    else:
-        results_df["method_label"] = (
-            results_df["embedding"] + "_" + results_df["regressor"]
-        )
-        plot_data = results_df
-
-    # Pivot to dataset x method_label
-    pivot_data = plot_data.pivot_table(
-        index="dataset", columns="method_label", values=metric, aggfunc="median"
-    )
-
-    if baseline_label not in pivot_data.columns:
-        print(f'Baseline column "{baseline_label}" not found. Showing raw values.')
-        # Fallback to raw heatmap
-        # Order columns: others sorted, baseline at end if present
-        other_cols = sorted([c for c in pivot_data.columns if c != baseline_label])
-        if baseline_label in pivot_data.columns:
-            other_cols += [baseline_label]
-        pivot_ordered = pivot_data[other_cols] if other_cols else pivot_data
-        fig, ax = plt.subplots(figsize=figsize)
-        sns.heatmap(
-            pivot_ordered,
-            annot=True,
-            fmt=".3f",
-            cmap="viridis",
-            cbar_kws={"label": metric.replace("_", " ").title()},
-            ax=ax,
-        )
-        ax.set_title(f"Area Under Curve: {metric.replace('_', ' ').title()}")
-        ax.set_xlabel("Method")
-        ax.set_ylabel("Dataset")
-        plt.xticks(rotation=45, ha="right")
-        plt.yticks(rotation=0)
-        plt.tight_layout()
-        return fig, ax
-
-    # Compute (% difference vs baseline) per dataset
-    baseline_series = pivot_data[baseline_label]
-    delta = (
-        pivot_data.subtract(baseline_series, axis=0).div(baseline_series, axis=0)
-    ) * 100
-
-    # Reorder columns: alphabetical methods, baseline last (or drop)
-    other_cols = sorted([c for c in delta.columns if c != baseline_label])
-    if not drop_baseline:
-        col_order = other_cols + [baseline_label]
-        # Baseline deltas are exactly 0 by construction
-    else:
-        col_order = other_cols
-        delta = delta[col_order]
-
-    # Plot diverging heatmap centered at zero
-    fig, ax = plt.subplots(figsize=figsize)
-    sns.heatmap(
-        delta[col_order] if not drop_baseline else delta,
-        annot=True,
-        fmt=".1f",
-        cmap="coolwarm",
-        center=0.0,
-        cbar_kws={"label": "Δ AUC vs random | ((method - random) / random) * 100"},
-        ax=ax,
-    )
-
-    ax.set_title(
-        "AUC percentage change vs Random\n(method - random) across Datasets and Methods"
-    )
-    ax.set_xlabel(
-        "Method (Embedding_Regressor{})".format("" if drop_baseline else " or Random")
-    )
-    ax.set_ylabel("Dataset")
-
-    plt.xticks(rotation=45, ha="right")
-    plt.yticks(rotation=0)
-    plt.tight_layout()
-    return fig, ax
-
-
 def main():
     """Main function to generate the grid plot."""
-    # Define the base path for results
-    results_base_path = (
-        "/storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/auc_result"
+
+    parser = argparse.ArgumentParser(description="Generate grid plot for AUC results")
+    parser.add_argument(
+        "--results-base-path",
+        type=str,
+        default="results/auc_result",
+        help="Base path for results",
     )
+    args = parser.parse_args()
+    results_base_path = args.results_base_path
+
+    # results_base_path = "results/auc_result"
 
     # Check if path exists
     if not os.path.exists(results_base_path):
@@ -365,11 +266,11 @@ def main():
             print(f"No valid data for {metric}")
             continue
 
-        fig, _ax = create_grid_plot(valid_data, metric=metric, figsize=(14, 8))
+        fig, _ax = create_grid_plot(valid_data, metric=metric, figsize=(14, 12))
 
         if fig is not None:
             # Save the plot
-            output_path = f"/storage2/wangzitongLab/lizelun/project/gene_circuit_design/plots/AUC_results/auc_grid_{metric}.png"
+            output_path = f"plots/AUC_results/auc_grid_avg_col_{metric}.png"
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             fig.savefig(output_path, dpi=300, bbox_inches="tight")
             print(f"Saved plot to: {output_path}")

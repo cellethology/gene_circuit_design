@@ -1085,13 +1085,13 @@ def calculate_percentage_improvement_vs_baseline(
     df[f"{metric}_improvement_vs_baseline_pct"] = np.nan
 
     # Get unique datasets
-    datasets = df['dataset'].unique()
+    datasets = df["dataset"].unique()
 
     for dataset in datasets:
-        dataset_data = df[df['dataset'] == dataset]
+        dataset_data = df[df["dataset"] == dataset]
 
         # Get baseline (random strategy) performance for this dataset
-        baseline_data = dataset_data[dataset_data['strategy'] == 'random']
+        baseline_data = dataset_data[dataset_data["strategy"] == "random"]
 
         if baseline_data.empty:
             continue
@@ -1103,13 +1103,15 @@ def calculate_percentage_improvement_vs_baseline(
             continue
 
         # Calculate percentage improvement for non-random strategies
-        non_random_mask = dataset_data['strategy'] != 'random'
+        non_random_mask = dataset_data["strategy"] != "random"
         non_random_indices = dataset_data[non_random_mask].index
 
         for idx in non_random_indices:
             method_value = df.loc[idx, metric]
             if not pd.isna(method_value):
-                improvement_pct = ((method_value - baseline_value) / baseline_value) * 100
+                improvement_pct = (
+                    (method_value - baseline_value) / baseline_value
+                ) * 100
                 df.loc[idx, f"{metric}_improvement_vs_baseline_pct"] = improvement_pct
 
     return df
@@ -1123,13 +1125,13 @@ def main():
     parser.add_argument(
         "--results-base-path",
         type=str,
-        default="/storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/166k_2024_regulators_auto_gen",
+        default="results/166k_2024_regulators_auto_gen",
         help="Base path for results",
     )
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="/storage2/wangzitongLab/lizelun/project/gene_circuit_design/plots/166k_2024_regulators_summary",
+        default="plots/166k_2024_regulators_summary",
         help="Output directory for plots",
     )
     parser.add_argument(
@@ -1176,7 +1178,7 @@ def main():
 
     # Print summary of improvements
     improvement_col = f"{args.metric}_improvement_vs_baseline_pct"
-    non_random_data = results_df[results_df['strategy'] != 'random']
+    non_random_data = results_df[results_df["strategy"] != "random"]
     if not non_random_data.empty and improvement_col in non_random_data.columns:
         valid_improvements = non_random_data[improvement_col].dropna()
         if not valid_improvements.empty:
@@ -1185,7 +1187,9 @@ def main():
             print(f"  Median improvement: {valid_improvements.median():.2f}%")
             print(f"  Min improvement: {valid_improvements.min():.2f}%")
             print(f"  Max improvement: {valid_improvements.max():.2f}%")
-            print(f"  Methods with positive improvement: {(valid_improvements > 0).sum()}/{len(valid_improvements)}")
+            print(
+                f"  Methods with positive improvement: {(valid_improvements > 0).sum()}/{len(valid_improvements)}"
+            )
 
     # Print summary statistics
     print_summary_statistics(results_df, args.metric)
