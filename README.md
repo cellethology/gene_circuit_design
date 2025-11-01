@@ -11,7 +11,16 @@ cd gene_circuit_design
 # Install all dependencies
 uv sync --python 3.9
 ```
+
 ## Data Directory
+Symlink can be made
+```
+cd gene_circuit_design
+ln -s "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new" "data_new" # create symlink
+ls -l "data_new" # verify link
+```
+
+The structure of the `data_new` directory should look something like this
 ```bash
 ./data_new
 ├── 166k    
@@ -26,13 +35,17 @@ uv sync --python 3.9
 For running experiments on a Slurm cluster, use the sequential_parallel_job_test.py script:
 
 ```bash
-# Run experiments in parallel using Slurm
+# Running 1 experiments in parallel on Slurm
 python job_sub/submitit/sequential_parallel_job_test.py \
-    --config-files configs/feng_2023.yaml \
+    --config-files configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml \
     --experiment-names evo2_pca \
     --timeout-min 30 \
     --slurm-cpus-per-task 2 \
     --slurm-mem-per-cpu 4GB
+
+# Running all the experiments in parallel of a single config file
+python job_sub/submitit/sequential_parallel_job_test.py \
+    --config-files configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml \
 ```
 - **Do check the config file to update the experiment path for it to run properly**
 
@@ -152,3 +165,5 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 - Use `--max-workers` for parallel processing
 - Set `cores_per_process` in config for CPU-intensive models
 - Use filtered data files to reduce memory usage
+
+
