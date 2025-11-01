@@ -11,7 +11,16 @@ cd gene_circuit_design
 # Install all dependencies
 uv sync --python 3.9
 ```
+
 ## Data Directory
+Symlink can be made
+```
+cd gene_circuit_design
+ln -s "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new" "data_new" # create symlink
+ls -l "data_new" # verify link
+```
+
+The structure of the `data_new` directory should look something like this
 ```bash
 ./data_new
 ├── 166k    
@@ -152,3 +161,4 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 - Use `--max-workers` for parallel processing
 - Set `cores_per_process` in config for CPU-intensive models
 - Use filtered data files to reduce memory usage
+
