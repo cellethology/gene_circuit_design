@@ -220,7 +220,7 @@ def parse_arguments():
         "--experiment-names",
         type=str,
         nargs="+",
-        required=True,
+        required=False,
         help="List of experiment names to run from the config files",
     )
 
@@ -270,7 +270,12 @@ if __name__ == "__main__":
     # Check if arguments are provided
     import sys
 
-    if len(sys.argv) > 2:
+    # If only --config-files is provided as the only argument (besides the script name),
+    # or if there are no more than 2 arguments (script + --config-files), do the else branch.
+    # Otherwise, go to the main branch expecting more options.
+    # This handles: python script.py --config-files ...   [should go to "else"]
+    #           vs python script.py --config-files ... --experiment-names ... [go to "if"]
+    if "--experiment-names" in sys.argv and len(sys.argv) > 4:
         # Parse command line arguments
         args = parse_arguments()
 
@@ -295,6 +300,8 @@ if __name__ == "__main__":
     else:
         args = parse_arguments()
         config_files = args.config_files
-        run_all_experiments_from_config(
-            config_path=config_files,
-        )
+        for config_file in config_files:
+            print(f"Running all experiments from {config_file}...")
+            run_all_experiments_from_config(
+                config_path=config_file,
+            )
