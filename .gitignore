@@ -66,8 +66,10 @@ htmlcov/
 *.yaml
 *.model
 *.pth
+*.7z
 *.safetensors
 data/*
+data_new/*
 !data/scripts/*
 models/
 checkpoints/
@@ -105,3 +107,7 @@ logs_experiments/*
 log_test/*
 logs_test/*
 # job_sub/
+
+
+# hidden directories
+.*
