@@ -12,8 +12,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn.functional as F
 from sklearn.decomposition import PCA
 
 # Configure logging
@@ -22,8 +20,6 @@ logger = logging.getLogger(__name__)
 
 
 class SequenceModificationMethod(Enum):
-    TRIM = "trim"
-    PAD = "pad"
     EMBEDDING = "embedding"
 
 
@@ -43,6 +39,7 @@ def ensure_sequence_modification_method(
         ValueError: If string is not a valid enum value
     """
     if isinstance(seq_mod_method, str):
+        # Only EMBEDDING is supported now
         return SequenceModificationMethod(seq_mod_method)
     return seq_mod_method
 
@@ -101,7 +98,7 @@ def one_hot_encode_sequences(
     if len(sequences) == 0:
         raise ValueError("Sequences cannot be empty")
 
-    # Convert string to enum if necessary
+    # Convert string to enum if necessary (kept for backward compatibility)
     seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
 
     encoded_sequences = []
@@ -206,7 +203,7 @@ def flatten_one_hot_sequences_with_pca(
 
 def load_sequence_data(
     file_path: str,
-    seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
+    seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
     max_length: Optional[int] = None,
 ) -> Tuple[List[str], np.ndarray]:
     """
@@ -243,35 +240,28 @@ def load_sequence_data(
         targets = None
         data_type = None
 
-        if (
-            seq_mod_method == SequenceModificationMethod.TRIM
-            or seq_mod_method == SequenceModificationMethod.PAD
-        ):
-            df = pd.read_csv(file_path)
-            logger.info(f"Loaded CSV with columns: {list(df.columns)}")
-            # Determine data format and extract sequences and targets
-            if "seqs" in df.columns and "scores" in df.columns:
-                # Log likelihood format
-                sequences = df["seqs"].tolist()
-                targets = df["scores"].values
-                data_type = "log likelihood"
-                logger.info("Detected log likelihood data format (seqs/scores)")
+        # Load CSV and infer format. Only EMBEDDING mode is supported now.
+        df = pd.read_csv(file_path)
+        logger.info(f"Loaded CSV with columns: {list(df.columns)}")
+        # Determine data format and extract sequences and targets
+        if "seqs" in df.columns and "scores" in df.columns:
+            # Log likelihood format
+            sequences = df["seqs"].tolist()
+            targets = df["scores"].values
+            data_type = "log likelihood"
+            logger.info("Detected log likelihood data format (seqs/scores)")
 
-            elif "Sequence" in df.columns and "Expression" in df.columns:
-                # Expression format
-                sequences = df["Sequence"].tolist()
-                targets = df["Expression"].values
-                data_type = "expression"
-                logger.info("Detected expression data format (Sequence/Expression)")
+        elif "Sequence" in df.columns and "Expression" in df.columns:
+            # Expression format
+            sequences = df["Sequence"].tolist()
+            targets = df["Expression"].values
+            data_type = "expression"
+            logger.info("Detected expression data format (Sequence/Expression)")
 
-            else:
-                raise ValueError(
-                    "CSV must contain either ('seqs', 'scores') or ('Sequence', 'Expression') columns. "
-                    f"Found columns: {list(df.columns)}"
-                )
         else:
             raise ValueError(
-                f"Unsupported sequence modification method: {seq_mod_method}"
+                "CSV must contain either ('seqs', 'scores') or ('Sequence', 'Expression') columns. "
+                f"Found columns: {list(df.columns)}"
             )
 
         # Verify data was loaded
@@ -280,15 +270,7 @@ def load_sequence_data(
 
         logger.info(f"Loaded {len(sequences)} sequences with {data_type} targets")
 
-        # Trim sequences if requested
-        if seq_mod_method == SequenceModificationMethod.TRIM:
-            sequences = trim_sequences_to_length(sequences, max_length)
-            logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-        elif seq_mod_method == SequenceModificationMethod.PAD:
-            sequences = pad_sequences_to_length(sequences, max_length)
-            logger.info(f"Padded sequences to length {len(sequences[0])}")
-        else:
-            raise ValueError(f"Invalid sequence modification method: {seq_mod_method}")
+        # Trimming/Padding has been removed. Sequences are returned as-is.
 
         return sequences, targets.astype(np.float32)
 
@@ -340,10 +322,7 @@ def load_log_likelihood_data(
 
         logger.info(f"Loaded {len(sequences)} sequences with log likelihood scores")
 
-        # Trim sequences if requested
-        if trim_sequences:
-            sequences = trim_sequences_to_length(sequences)
-            logger.info(f"Trimmed sequences to length {len(sequences[0])}")
+        # Trimming has been removed. Sequences are returned as-is.
 
         return sequences, log_likelihoods.astype(np.float32)
 
@@ -353,66 +332,10 @@ def load_log_likelihood_data(
         ) from e
 
 
-def pad_sequences_to_length(
-    sequences: List[str], max_length: Optional[int] = None
-) -> List[str]:
-    """
-    Pad all sequences to the same length by adding N characters.
-
-    Args:
-        sequences: List of DNA sequences
-        max_length: Maximum length to pad to (uses maximum sequence length if None)
-
-    Returns:
-        List of padded sequences
-
-    Raises:
-        ValueError: If sequences list is empty
-    """
-    if not sequences:
-        raise ValueError("Sequences list cannot be empty")
-
-    # Determine target length
-    if max_length is None:
-        max_length = max(len(seq) for seq in sequences)
-
-    # Pad sequences with N
-    padded_sequences = [seq + "N" * (max_length - len(seq)) for seq in sequences]
-
-    return padded_sequences
+# pad_sequences_to_length removed
 
 
-def trim_sequences_to_length(
-    sequences: List[str], max_length: Optional[int] = None
-) -> List[str]:
-    """
-    Trim all sequences to the same length.
-
-    Args:
-        sequences: List of DNA sequences
-        max_length: Maximum length to trim to (uses minimum length if None)
-
-    Returns:
-        List of trimmed sequences
-
-    Raises:
-        ValueError: If sequences list is empty
-    """
-    if not sequences:
-        raise ValueError("Sequences list cannot be empty")
-
-    # Determine target length
-    if max_length is None:
-        target_length = min(len(seq) for seq in sequences)
-    else:
-        target_length = min(max_length, min(len(seq) for seq in sequences))
-
-    logger.info(f"Trimming {len(sequences)} sequences to length {target_length}")
-
-    # Trim sequences
-    trimmed_sequences = [seq[:target_length] for seq in sequences]
-
-    return trimmed_sequences
+# trim_sequences_to_length removed
 
 
 def calculate_sequence_statistics(sequences) -> Dict[str, Any]:

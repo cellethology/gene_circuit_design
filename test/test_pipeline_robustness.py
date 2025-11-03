@@ -29,8 +29,6 @@ from utils.sequence_utils import (
     load_sequence_data,
     one_hot_encode_sequences,
     one_hot_encode_single_sequence,
-    pad_sequences_to_length,
-    trim_sequences_to_length,
 )
 
 
@@ -120,7 +118,7 @@ class TestInvalidInputData:
     def test_empty_sequence_list(self):
         """Test processing empty sequence lists."""
         result = one_hot_encode_sequences(
-            [], seq_mod_method=SequenceModificationMethod.PAD
+            [], seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         assert result == []
 
@@ -131,7 +129,7 @@ class TestInvalidInputData:
 
         with pytest.raises((TypeError, AttributeError)):
             one_hot_encode_sequences(
-                sequences, seq_mod_method=SequenceModificationMethod.PAD
+                sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
 
     def test_extremely_long_sequences(self):
@@ -172,21 +170,7 @@ class TestInvalidInputData:
         result = one_hot_encode_single_sequence(unicode_seq)
         assert isinstance(result, torch.Tensor)
 
-    @pytest.mark.skipif(True, reason="Implementation doesn't validate negative length")
-    def test_trim_with_negative_length(self):
-        """Test trimming with negative max_length."""
-        sequences = ["ATCG", "GCTA"]
-
-        with pytest.raises(ValueError):
-            trim_sequences_to_length(sequences, max_length=-1)
-
-    @pytest.mark.skipif(True, reason="Implementation doesn't validate negative length")
-    def test_pad_with_negative_length(self):
-        """Test padding with negative max_length."""
-        sequences = ["ATG"]
-
-        with pytest.raises(ValueError):
-            pad_sequences_to_length(sequences, max_length=-1)
+    # trim/pad functions removed; corresponding negative length tests removed
 
 
 class TestMemoryAndPerformanceEdgeCases:
@@ -200,7 +184,7 @@ class TestMemoryAndPerformanceEdgeCases:
 
         # Should complete without memory errors
         results = one_hot_encode_sequences(
-            large_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            large_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         assert len(results) == 10000
 
@@ -210,7 +194,7 @@ class TestMemoryAndPerformanceEdgeCases:
 
         # Monitor that we can process without issues
         results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # Verify results are correct
@@ -229,7 +213,7 @@ class TestMemoryAndPerformanceEdgeCases:
         ]
 
         results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         assert len(results) == 5
 
@@ -412,7 +396,7 @@ class TestGracefulDegradation:
         # Should complete or fail gracefully
         try:
             results = one_hot_encode_sequences(
-                sequences, seq_mod_method=SequenceModificationMethod.PAD
+                sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             assert len(results) == 100
         except MemoryError:

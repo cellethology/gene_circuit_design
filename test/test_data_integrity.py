@@ -25,8 +25,6 @@ from utils.sequence_utils import (
     load_sequence_data,
     one_hot_encode_sequences,
     one_hot_encode_single_sequence,
-    pad_sequences_to_length,
-    trim_sequences_to_length,
 )
 
 
@@ -36,13 +34,6 @@ class TestSequenceModificationMethod:
     def test_string_to_enum_conversion(self):
         """Test conversion of valid strings to enum."""
         assert (
-            ensure_sequence_modification_method("trim")
-            == SequenceModificationMethod.TRIM
-        )
-        assert (
-            ensure_sequence_modification_method("pad") == SequenceModificationMethod.PAD
-        )
-        assert (
             ensure_sequence_modification_method("embedding")
             == SequenceModificationMethod.EMBEDDING
         )
@@ -50,8 +41,8 @@ class TestSequenceModificationMethod:
     def test_enum_passthrough(self):
         """Test that enum values pass through unchanged."""
         assert (
-            ensure_sequence_modification_method(SequenceModificationMethod.TRIM)
-            == SequenceModificationMethod.TRIM
+            ensure_sequence_modification_method(SequenceModificationMethod.EMBEDDING)
+            == SequenceModificationMethod.EMBEDDING
         )
 
     def test_invalid_string_raises_error(self):
@@ -113,48 +104,14 @@ class TestOneHotEncoding:
         with pytest.raises(ValueError, match="Invalid nucleotides found: {'X'}"):
             one_hot_encode_single_sequence(sequence)
 
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - motif_indices expects np.ndarray"
-    )
-    def test_motif_sequence_basic(self):
-        """Test one-hot encoding for motif sequences."""
-        motif_indices = [0, 1, 2, 3]  # Simple motif
-        result = torch.tensor(
-            one_hot_encode_motif_sequence(motif_indices, num_motifs=4),
-            dtype=torch.float32,
-        )
+    # Motif sequence encoding tests removed (function not supported)
 
-        expected = torch.tensor(
-            [
-                [1, 0, 0, 0],  # motif 0
-                [0, 1, 0, 0],  # motif 1
-                [0, 0, 1, 0],  # motif 2
-                [0, 0, 0, 1],  # motif 3
-            ],
-            dtype=torch.float32,
-        )
-
-        assert torch.equal(result, expected)
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - motif_indices expects np.ndarray"
-    )
-    def test_motif_sequence_out_of_range(self):
-        """Test motif encoding with indices out of range."""
-        motif_indices = [0, 5, 2]  # Index 5 is out of range for 4 motifs
-        with pytest.raises(ValueError, match="Index 5 is out of range for 4 motifs"):
-            one_hot_encode_motif_sequence(motif_indices, num_motifs=4)
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - dtype parameter not supported"
-    )
     def test_multiple_sequences_same_length(self):
         """Test encoding multiple sequences of the same length."""
         sequences = ["ATCG", "GCTA"]
         results = one_hot_encode_sequences(
             sequences,
-            seq_mod_method=SequenceModificationMethod.PAD,
-            dtype=torch.float32,
+            seq_mod_method=SequenceModificationMethod.EMBEDDING,
         )
 
         assert len(results) == 2
@@ -175,7 +132,7 @@ class TestOneHotEncoding:
         """Test encoding sequences of different lengths."""
         sequences = ["AT", "GCTA"]
         results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         assert len(results) == 2
@@ -184,56 +141,9 @@ class TestOneHotEncoding:
 
 
 class TestSequenceModification:
-    """Test sequence trimming and padding functions."""
+    """Deprecated trimming/padding functions are removed; no tests here."""
 
-    def test_trim_sequences_basic(self):
-        """Test basic sequence trimming."""
-        sequences = ["ATCGAA", "GCTAGC", "TTAACC"]
-        trimmed = trim_sequences_to_length(sequences, max_length=4)
-
-        expected = ["ATCG", "GCTA", "TTAA"]
-        assert trimmed == expected
-
-    def test_trim_sequences_no_trimming_needed(self):
-        """Test trimming when sequences are already short enough."""
-        sequences = ["ATG", "GCA"]
-        trimmed = trim_sequences_to_length(sequences, max_length=4)
-
-        assert trimmed == sequences  # Should be unchanged
-
-    @pytest.mark.skipif(True, reason="Implementation rejects empty sequences")
-    def test_trim_sequences_empty_list(self):
-        """Test trimming empty list."""
-        trimmed = trim_sequences_to_length([], max_length=4)
-        assert trimmed == []
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - pad_char parameter not supported"
-    )
-    def test_pad_sequences_basic(self):
-        """Test basic sequence padding."""
-        sequences = ["AT", "GCA"]
-        padded = pad_sequences_to_length(sequences, max_length=4, pad_char="N")
-
-        expected = ["ATNN", "GCAN"]
-        assert padded == expected
-
-    def test_pad_sequences_no_padding_needed(self):
-        """Test padding when sequences are already long enough."""
-        sequences = ["ATCG", "GCTA"]
-        padded = pad_sequences_to_length(sequences, max_length=4)
-
-        assert padded == sequences  # Should be unchanged
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - pad_char parameter not supported"
-    )
-    def test_pad_sequences_custom_pad_char(self):
-        """Test padding with custom character."""
-        sequences = ["AT"]
-        padded = pad_sequences_to_length(sequences, max_length=4, pad_char="X")
-
-        assert padded == ["ATXX"]
+    pass
 
 
 class TestDataLoading:
@@ -383,7 +293,7 @@ class TestSequenceValidation:
 
         # Test that all sequences are processed
         results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         assert len(results) == len(sequences)
 
@@ -396,7 +306,7 @@ class TestSequenceValidation:
         """Test handling of empty sequences in batch processing."""
         sequences = ["ATCG", "", "GCTA"]
         results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         assert len(results) == 3

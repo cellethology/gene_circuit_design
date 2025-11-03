@@ -33,8 +33,6 @@ from utils.sequence_utils import (
     flatten_one_hot_sequences,
     load_sequence_data,
     one_hot_encode_sequences,
-    pad_sequences_to_length,
-    trim_sequences_to_length,
 )
 
 # Create a file handler
@@ -72,7 +70,7 @@ class ActiveLearningExperiment:
         batch_size: int = 8,
         test_size: int = 50,
         random_seed: int = 42,
-        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
+        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
         no_test: bool = True,
         normalize_input_output: bool = True,
     ) -> None:
@@ -128,7 +126,7 @@ class ActiveLearningExperiment:
 
     def _load_and_prepare_data(
         self,
-        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.TRIM,
+        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
     ) -> None:
         """Load data and create train/test/unlabeled splits."""
         logger.info(f"Loading data from {self.data_path}")
@@ -194,12 +192,6 @@ class ActiveLearningExperiment:
             if "Log_Likelihood" in df.columns:
                 # Combined dataset with log likelihood
                 sequences = df["Sequence"].tolist()
-                if seq_mod_method == SequenceModificationMethod.TRIM:
-                    sequences = trim_sequences_to_length(sequences)
-                    logger.info(f"Trimmed sequences to length {len(sequences[0])}")
-                elif seq_mod_method == SequenceModificationMethod.PAD:
-                    sequences = pad_sequences_to_length(sequences)
-                    logger.info(f"Padded sequences to length {len(sequences[0])}")
                 self.all_sequences = sequences
                 self.all_expressions = df["Expression"].values
                 self.all_log_likelihoods = df["Log_Likelihood"].values

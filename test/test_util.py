@@ -97,7 +97,9 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_same_length(self):
         """Test encoding multiple sequences of same length."""
         sequences = ["ATGC", "GCTA", "TTAA"]
-        result = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
+        result = one_hot_encode_sequences(
+            sequences, SequenceModificationMethod.EMBEDDING
+        )
 
         assert len(result) == 3
         for encoded_seq in result:
@@ -107,7 +109,9 @@ class TestOneHotEncodeSequences:
     def test_multiple_sequences_different_lengths(self):
         """Test encoding multiple sequences of different lengths."""
         sequences = ["AT", "GCTA", "TTAAGG"]
-        result = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
+        result = one_hot_encode_sequences(
+            sequences, SequenceModificationMethod.EMBEDDING
+        )
 
         assert len(result) == 3
         assert result[0].shape == (2, 4)
@@ -118,14 +122,14 @@ class TestOneHotEncodeSequences:
         """Test encoding empty sequence list."""
         sequences = []
         with pytest.raises(ValueError, match="Sequences cannot be empty"):
-            one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
+            one_hot_encode_sequences(sequences, SequenceModificationMethod.EMBEDDING)
 
     def test_sequence_with_invalid_nucleotide(self):
         """Test handling sequences with invalid nucleotides."""
         sequences = ["ATGC", "GCTX", "TTAA"]  # Second sequence has invalid X
 
         with pytest.raises(ValueError):
-            one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
+            one_hot_encode_sequences(sequences, SequenceModificationMethod.EMBEDDING)
 
 
 class TestFlattenOneHotSequences:
@@ -189,7 +193,7 @@ class TestLoadSequenceData:
 
         try:
             sequences, expressions = load_sequence_data(
-                temp_path, SequenceModificationMethod.TRIM
+                temp_path, SequenceModificationMethod.EMBEDDING
             )
 
             assert len(sequences) == 3
@@ -215,14 +219,16 @@ class TestLoadSequenceData:
 
         try:
             with pytest.raises(ValueError):
-                load_sequence_data(temp_path, SequenceModificationMethod.TRIM)
+                load_sequence_data(temp_path, SequenceModificationMethod.EMBEDDING)
         finally:
             os.unlink(temp_path)
 
     def test_load_nonexistent_file(self):
         """Test loading non-existent file."""
         with pytest.raises(FileNotFoundError):
-            load_sequence_data("nonexistent_file.csv", SequenceModificationMethod.TRIM)
+            load_sequence_data(
+                "nonexistent_file.csv", SequenceModificationMethod.EMBEDDING
+            )
 
     def test_load_with_trimming(self):
         """Test loading with sequence trimming."""
@@ -237,7 +243,7 @@ class TestLoadSequenceData:
 
         try:
             sequences, expressions = load_sequence_data(
-                temp_path, SequenceModificationMethod.TRIM
+                temp_path, SequenceModificationMethod.EMBEDDING
             )
 
             # All sequences should be trimmed to the length of the shortest (12)
@@ -307,7 +313,7 @@ class TestSequenceProcessingIntegration:
         try:
             # Load data
             sequences, expressions = load_sequence_data(
-                temp_path, SequenceModificationMethod.TRIM
+                temp_path, SequenceModificationMethod.EMBEDDING
             )
 
             # Calculate statistics
@@ -316,7 +322,7 @@ class TestSequenceProcessingIntegration:
 
             # Encode sequences
             encoded = one_hot_encode_sequences(
-                sequences, SequenceModificationMethod.TRIM
+                sequences, SequenceModificationMethod.EMBEDDING
             )
             assert len(encoded) == 3
 
@@ -367,7 +373,7 @@ class TestWithFixtures:
     def test_encode_sample_sequences(self, sample_sequences):
         """Test encoding sample sequences using fixture."""
         encoded = one_hot_encode_sequences(
-            sample_sequences, SequenceModificationMethod.TRIM
+            sample_sequences, SequenceModificationMethod.EMBEDDING
         )
         assert len(encoded) == 4
         for seq_encoded in encoded:
@@ -376,7 +382,7 @@ class TestWithFixtures:
     def test_load_temp_csv(self, temp_csv_file):
         """Test loading temporary CSV file using fixture."""
         sequences, expressions = load_sequence_data(
-            temp_csv_file, SequenceModificationMethod.TRIM
+            temp_csv_file, SequenceModificationMethod.EMBEDDING
         )
         assert len(sequences) == 4
         assert len(expressions) == 4
@@ -394,7 +400,9 @@ def test_numpy_float32_dtype():
     assert encoded.dtype == np.float32
 
     sequences = ["ATGC", "GGCC"]
-    multi_encoded = one_hot_encode_sequences(sequences, SequenceModificationMethod.TRIM)
+    multi_encoded = one_hot_encode_sequences(
+        sequences, SequenceModificationMethod.EMBEDDING
+    )
     for encoded in multi_encoded:
         assert encoded.dtype == np.float32
 

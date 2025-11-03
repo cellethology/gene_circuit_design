@@ -103,7 +103,7 @@ class TestCSVSafetensorsCompatibility:
             csv_data = load_sequence_data(csv_path, data_format="expression")
             csv_sequences = [item[0] for item in csv_data]
             csv_encoded = one_hot_encode_sequences(
-                csv_sequences, seq_mod_method=SequenceModificationMethod.PAD
+                csv_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             csv_flattened = flatten_one_hot_sequences(csv_encoded)
 
@@ -111,7 +111,8 @@ class TestCSVSafetensorsCompatibility:
             safetensors_dict = load_file(safetensors_path)
             safetensors_sequences = safetensors_dict["sequences"].tolist()
             safetensors_encoded = one_hot_encode_sequences(
-                safetensors_sequences, seq_mod_method=SequenceModificationMethod.PAD
+                safetensors_sequences,
+                seq_mod_method=SequenceModificationMethod.EMBEDDING,
             )
             safetensors_flattened = flatten_one_hot_sequences(safetensors_encoded)
 
@@ -173,13 +174,13 @@ class TestSequenceFormatCompatibility:
 
         # All should encode without errors
         short_encoded = one_hot_encode_sequences(
-            short_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            short_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         long_encoded = one_hot_encode_sequences(
-            long_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            long_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         mixed_encoded = one_hot_encode_sequences(
-            mixed_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            mixed_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # Check shapes are as expected
@@ -197,13 +198,13 @@ class TestSequenceFormatCompatibility:
         mixed_sequences = ["AtCg", "GcTa"]
 
         upper_encoded = one_hot_encode_sequences(
-            upper_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            upper_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         lower_encoded = one_hot_encode_sequences(
-            lower_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            lower_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         mixed_encoded = one_hot_encode_sequences(
-            mixed_sequences, seq_mod_method=SequenceModificationMethod.PAD
+            mixed_sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # All should produce identical results
@@ -220,13 +221,13 @@ class TestSequenceFormatCompatibility:
 
         # All should process without crashing
         n_encoded = one_hot_encode_sequences(
-            sequences_with_n, seq_mod_method=SequenceModificationMethod.PAD
+            sequences_with_n, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         gap_encoded = one_hot_encode_sequences(
-            sequences_with_gaps, seq_mod_method=SequenceModificationMethod.PAD
+            sequences_with_gaps, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         num_encoded = one_hot_encode_sequences(
-            sequences_with_numbers, seq_mod_method=SequenceModificationMethod.PAD
+            sequences_with_numbers, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # Invalid characters should result in zero vectors
@@ -278,7 +279,7 @@ class TestDataTypeConsistency:
         """Test that tensor data types are consistent."""
         sequences = ["ATCG", "GCTA"]
         encoded = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # All tensors should have consistent dtype
@@ -290,7 +291,7 @@ class TestDataTypeConsistency:
         """Test that numpy array data types are consistent."""
         sequences = ["ATCG", "GCTA"] * 10
         encoded = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
         flattened = flatten_one_hot_sequences(encoded)
 

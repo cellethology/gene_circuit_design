@@ -112,7 +112,7 @@ class TestSequenceProcessingDeterminism:
         results1 = torch.tensor(
             np.vstack(
                 one_hot_encode_sequences(
-                    sequences, seq_mod_method=SequenceModificationMethod.PAD
+                    sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
                 )
             ),
             dtype=torch.float32,
@@ -120,7 +120,7 @@ class TestSequenceProcessingDeterminism:
         results2 = torch.tensor(
             np.vstack(
                 one_hot_encode_sequences(
-                    sequences, seq_mod_method=SequenceModificationMethod.PAD
+                    sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
                 )
             ),
             dtype=torch.float32,
@@ -128,7 +128,7 @@ class TestSequenceProcessingDeterminism:
         results3 = torch.tensor(
             np.vstack(
                 one_hot_encode_sequences(
-                    sequences, seq_mod_method=SequenceModificationMethod.PAD
+                    sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
                 )
             ),
             dtype=torch.float32,
@@ -143,7 +143,7 @@ class TestSequenceProcessingDeterminism:
         """Test that sequence flattening is deterministic."""
         sequences = ["ATCG"] * 10
         encoded = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.PAD
+            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
         )
 
         # Flatten multiple times
@@ -426,7 +426,7 @@ class TestCrossValidationReproducibility:
 
             # Process sequences
             encoded = one_hot_encode_sequences(
-                sequences, seq_mod_method=SequenceModificationMethod.PAD
+                sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             X = flatten_one_hot_sequences(encoded)
 

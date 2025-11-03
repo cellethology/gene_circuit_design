@@ -21,7 +21,7 @@ import pandas as pd
 import seaborn as sns
 import argparse
 from scipy import integrate
-from new_file_plot_gen import create_grid_plot_avg_col as create_grid_plot
+from new_file_plot_gen import create_grid_plot_no_norm as create_grid_plot
 
 matplotlib.use("Agg")  # Use non-interactive backend
 
@@ -35,7 +35,7 @@ def extract_info_from_path(file_path):
     for part in path_parts:
         if any(
             d in part
-            for d in ["AD"]
+            for d in ["CIS"]
             # TODO: need to revisit the plotting logics here
             # for d in ["Feng_2023", "angenent-Mari_2020", "alcantar_2025", "166k_2024", ""]
         ):
@@ -45,7 +45,7 @@ def extract_info_from_path(file_path):
     # Find embedding method
     embedding = None
     for part in path_parts:
-        if any(e in part for e in ["onehotPca", "onehotRaw", "evo", "sei"]):
+        if any(e in part for e in ["evo"]):
             if "onehotPca" in part:
                 embedding = "onehotPca"
             elif "onehotRaw" in part:
@@ -266,7 +266,7 @@ def main():
             print(f"No valid data for {metric}")
             continue
 
-        fig, _ax = create_grid_plot(valid_data, metric=metric, figsize=(14, 12))
+        fig, _ax = create_grid_plot(valid_data, metric=metric, figsize=(28, 32))
 
         if fig is not None:
             # Save the plot

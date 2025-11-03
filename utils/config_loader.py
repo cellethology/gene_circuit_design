@@ -99,8 +99,6 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
     # Convert sequence modification methods from strings to enums
     if "seq_mod_methods" in config:
         seq_mod_map = {
-            "TRIM": SequenceModificationMethod.TRIM,
-            "PAD": SequenceModificationMethod.PAD,
             "EMBEDDING": SequenceModificationMethod.EMBEDDING,
         }
         config["seq_mod_methods"] = [
