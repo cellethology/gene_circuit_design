@@ -286,12 +286,6 @@ class ActiveLearningExperiment:
 
             encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
             return flatten_one_hot_sequences(encoded)
-            # # Flatten first, then apply PCA to reduce dimensionality, keeping 90% of variance
-            # flattened = flatten_one_hot_sequences(encoded)
-            # pca = PCA(n_components=0.9)  # 0.9 = 90% variance explained
-            # reduced = pca.fit_transform(flattened)
-            # logger.info(f"PCA reduced dimensions from {flattened.shape[1]} to {reduced.shape[1]} (90% variance explained)")
-            # return reduced
 
     def _train_model(self) -> None:
         """Train the linear regression model on current training data."""
