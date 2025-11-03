@@ -6,21 +6,23 @@ from DNA sequences using linear regression with one-hot encoded features.
 """
 
 import argparse
-import logging
-import random
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+import random
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 from scipy.stats import pearsonr, spearmanr
-from sklearn.cluster import KMeans
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
+from experiments.util import (
+    encode_sequences as util_encode_sequences,
+    select_initial_batch_kmeans_from_features,
+)
 from utils.config_loader import SelectionStrategy
 from utils.metrics import (
     get_best_value_metric,
@@ -31,10 +33,7 @@ from utils.model_loader import RegressionModelType, return_model
 from utils.sequence_utils import (
     SequenceModificationMethod,
     ensure_sequence_modification_method,
-    flatten_one_hot_sequences,
-    flatten_one_hot_sequences_with_pca,
     load_sequence_data,
-    one_hot_encode_sequences,
 )
 
 # Create a file handler
@@ -346,24 +345,14 @@ class ActiveLearningExperiment:
         Returns:
             Encoded sequences (either pre-computed embeddings or flattened one-hot encoded sequences)
         """
-        if self.embeddings is not None:
-            # Use pre-computed embeddings from safetensors file
-            return self.embeddings[indices]
-        else:
-            # Fall back to one-hot encoding for CSV files
-            # For DNA data, all_sequences is a list of strings
-            sequences = [self.all_sequences[i] for i in indices]
-
-            encoded = one_hot_encode_sequences(sequences, self.seq_mod_method)
-
-            # Apply PCA if specified
-            if self.use_pca:
-                logger.info(f"PCA enabled with {self.pca_components} components")
-                return flatten_one_hot_sequences_with_pca(
-                    encoded, n_components=self.pca_components
-                )
-            else:
-                return flatten_one_hot_sequences(encoded)
+        return util_encode_sequences(
+            indices=indices,
+            all_sequences=self.all_sequences,
+            embeddings=self.embeddings,
+            seq_mod_method=self.seq_mod_method,
+            use_pca=self.use_pca,
+            pca_components=self.pca_components,
+        )
 
     def _train_model(self) -> None:
         """Train the linear regression model on current training data."""
@@ -536,43 +525,12 @@ class ActiveLearningExperiment:
         all_indices = list(range(len(self.all_sequences)))
         X_all = self._encode_sequences(all_indices)
 
-        # Apply K-means clustering with k = initial_sample_size
-        kmeans = KMeans(
-            n_clusters=self.initial_sample_size,
-            random_state=self.random_seed,
-            n_init=10,
+        selected_indices = select_initial_batch_kmeans_from_features(
+            X_all=X_all,
+            initial_sample_size=self.initial_sample_size,
+            random_seed=self.random_seed,
         )
-        cluster_labels = kmeans.fit_predict(X_all)
-        cluster_centers = kmeans.cluster_centers_
 
-        selected_indices = []
-
-        # For each cluster, find the point closest to the cluster centroid
-        for cluster_id in range(self.initial_sample_size):
-            # Get indices of points in this cluster
-            cluster_mask = cluster_labels == cluster_id
-            cluster_indices = np.where(cluster_mask)[0]
-
-            if len(cluster_indices) == 0:
-                # If cluster is empty (shouldn't happen with proper k-means), skip
-                continue
-
-            # Get feature vectors for points in this cluster
-            cluster_points = X_all[cluster_indices]
-            cluster_center = cluster_centers[cluster_id]
-
-            # Calculate distances from each point in cluster to cluster centroid
-            distances_to_center = np.linalg.norm(
-                cluster_points - cluster_center, axis=1
-            )
-
-            # Find the point in this cluster closest to cluster centroid
-            closest_idx_in_cluster = np.argmin(distances_to_center)
-            closest_global_idx = cluster_indices[closest_idx_in_cluster]
-
-            selected_indices.append(closest_global_idx)
-
-        # Log selection info
         selected_expressions = self.all_expressions[selected_indices]
         logger.info(
             f"KMEANS_CLUSTERING: Selected {len(selected_indices)} sequences "
