@@ -6,10 +6,11 @@ from DNA sequences using linear regression with one-hot encoded features.
 """
 
 import argparse
+import logging
+import random
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-import random
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -19,8 +20,11 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
 
+from experiments.selection_strategies import create_selection_strategy
 from experiments.util import (
     encode_sequences as util_encode_sequences,
+)
+from experiments.util import (
     select_initial_batch_kmeans_from_features,
 )
 from utils.config_loader import SelectionStrategy
@@ -409,106 +413,6 @@ class ActiveLearningExperiment:
 
         return metrics
 
-    def _select_next_batch_active(self) -> List[int]:
-        """
-        Select next batch using active learning (highest predicted values).
-
-        Returns:
-            List of indices for next batch
-        """
-        # Predict on all unlabeled sequences
-        X_unlabeled = self._encode_sequences(self.unlabeled_indices)
-        predictions = self.model.predict(X_unlabeled)
-
-        # Select indices with highest predicted values
-        sorted_indices = np.argsort(predictions)[::-1]  # Descending order
-        batch_size = min(self.batch_size, len(self.unlabeled_indices))
-        selected_local_indices = sorted_indices[:batch_size]
-
-        # Convert to global indices
-        selected_indices = [self.unlabeled_indices[i] for i in selected_local_indices]
-
-        # Log selection info
-        selected_predictions = predictions[selected_local_indices]
-        logger.info(
-            f"HIGH_EXPRESSION: Selected {len(selected_indices)} sequences with predicted expressions: "
-            f"[{', '.join(f'{pred:.1f}' for pred in selected_predictions)}]"
-        )
-
-        return selected_indices
-
-    def _select_next_batch_random(self) -> List[int]:
-        """
-        Select next batch randomly.
-
-        Returns:
-            List of indices for next batch
-        """
-        batch_size = min(self.batch_size, len(self.unlabeled_indices))
-        selected_indices = random.sample(self.unlabeled_indices, batch_size)
-
-        # Log selection info
-        selected_expressions = self.all_expressions[selected_indices]
-        logger.info(
-            f"RANDOM: Selected {len(selected_indices)} sequences with actual expressions: "
-            f"[{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
-        )
-
-        return selected_indices
-
-    def _select_next_batch_log_likelihood(self) -> List[int]:
-        """
-        Select next batch using log likelihood (highest log likelihood values).
-
-        Returns:
-            List of indices for next batch
-        """
-        # Check if log likelihood data is available
-        if np.all(np.isnan(self.all_log_likelihoods)):
-            logger.warning(
-                "No log likelihood data available. Falling back to random selection."
-            )
-            return self._select_next_batch_random()
-
-        # Get log likelihood values for unlabeled sequences
-        unlabeled_log_likelihoods = self.all_log_likelihoods[self.unlabeled_indices]
-
-        # Filter out NaN values
-        valid_mask = ~np.isnan(unlabeled_log_likelihoods)
-        valid_unlabeled_indices = [
-            self.unlabeled_indices[i]
-            for i in range(len(self.unlabeled_indices))
-            if valid_mask[i]
-        ]
-        valid_log_likelihoods = unlabeled_log_likelihoods[valid_mask]
-
-        if len(valid_unlabeled_indices) == 0:
-            logger.warning(
-                "No valid log likelihood values for unlabeled sequences. Falling back to random selection."
-            )
-            return self._select_next_batch_random()
-
-        # Select indices with highest log likelihood values (less negative = higher probability)
-        sorted_indices = np.argsort(valid_log_likelihoods)[
-            ::-1
-        ]  # Descending order (highest first)
-        batch_size = min(self.batch_size, len(valid_unlabeled_indices))
-        selected_local_indices = sorted_indices[:batch_size]
-
-        # Convert to global indices
-        selected_indices = [valid_unlabeled_indices[i] for i in selected_local_indices]
-
-        # Log selection info
-        selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
-        selected_expressions = self.all_expressions[selected_indices]
-        logger.info(
-            f"LOG_LIKELIHOOD: Selected {len(selected_indices)} sequences with log likelihoods: "
-            f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "
-            f"and actual expressions: [{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
-        )
-
-        return selected_indices
-
     def _select_initial_batch_kmeans_clustering(self) -> List[int]:
         """
         Select initial batch using K-means clustering on the whole dataset.
@@ -544,27 +448,26 @@ class ActiveLearningExperiment:
         """
         Select next batch of sequences based on the configured strategy.
 
+        Uses the Strategy pattern to delegate selection to the appropriate
+        strategy implementation.
+
         Returns:
             List of indices for next batch
         """
         if len(self.unlabeled_indices) == 0:
             return []
 
-        # TODO: make this into a function
-        if self.selection_strategy == SelectionStrategy.HIGH_EXPRESSION:
-            return self._select_next_batch_active()
-        elif self.selection_strategy == SelectionStrategy.RANDOM:
-            return self._select_next_batch_random()
-        elif self.selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
-            return self._select_next_batch_log_likelihood()
-        elif self.selection_strategy == SelectionStrategy.KMEANS_HIGH_EXPRESSION:
-            # After initial K-means selection, use high expression selection for subsequent batches
-            return self._select_next_batch_active()
-        elif self.selection_strategy == SelectionStrategy.KMEANS_RANDOM:
-            # After initial K-means selection, use random selection for subsequent batches
-            return self._select_next_batch_random()
-        else:
-            raise ValueError(f"Unknown selection strategy: {self.selection_strategy}")
+        # Create and use the appropriate selection strategy
+        strategy = create_selection_strategy(
+            strategy=self.selection_strategy,
+            batch_size=self.batch_size,
+            unlabeled_indices=self.unlabeled_indices,
+            all_expressions=self.all_expressions,
+            experiment=self,
+            all_log_likelihoods=self.all_log_likelihoods,
+        )
+
+        return strategy.select()
 
     def _intermediate_evaluation_custom_metrics(self, next_batch: List[int]) -> None:
         """

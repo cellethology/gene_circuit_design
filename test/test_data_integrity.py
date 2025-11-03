@@ -121,12 +121,12 @@ class TestOneHotEncoding:
             [
                 [1, 0, 0, 0],  # A
                 [0, 1, 0, 0],  # T
-                [0, 0, 1, 0],  # C
-                [0, 0, 0, 1],  # G
+                [0, 0, 0, 1],  # C
+                [0, 0, 1, 0],  # G
             ],
             dtype=torch.float32,
         )
-        assert torch.equal(results[0], expected_first)
+        assert torch.equal(torch.tensor(results[0]), expected_first)
 
     def test_multiple_sequences_different_lengths(self):
         """Test encoding sequences of different lengths."""

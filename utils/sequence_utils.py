@@ -332,12 +332,6 @@ def load_log_likelihood_data(
         ) from e
 
 
-# pad_sequences_to_length removed
-
-
-# trim_sequences_to_length removed
-
-
 def calculate_sequence_statistics(sequences) -> Dict[str, Any]:
     """
     Calculate basic statistics about DNA sequences.

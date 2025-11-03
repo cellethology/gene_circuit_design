@@ -181,13 +181,13 @@ class TestSequenceProcessingDeterminism:
 
         results1 = torch.tensor(
             one_hot_encode_sequences(
-                sequences1, seq_mod_method=SequenceModificationMethod.PAD
+                sequences1, seq_mod_method=SequenceModificationMethod.EMBEDDING
             ),
             dtype=torch.float32,
         )
         results2 = torch.tensor(
             one_hot_encode_sequences(
-                sequences2, seq_mod_method=SequenceModificationMethod.PAD
+                sequences2, seq_mod_method=SequenceModificationMethod.EMBEDDING
             ),
             dtype=torch.float32,
         )
@@ -349,13 +349,13 @@ class TestDataLoadingConsistency:
         try:
             # Load data multiple times
             data1 = load_sequence_data(
-                temp_path, seq_mod_method=SequenceModificationMethod.PAD
+                temp_path, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             data2 = load_sequence_data(
-                temp_path, seq_mod_method=SequenceModificationMethod.PAD
+                temp_path, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             data3 = load_sequence_data(
-                temp_path, seq_mod_method=SequenceModificationMethod.PAD
+                temp_path, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
 
             # All results should be identical
@@ -373,7 +373,7 @@ class TestDataLoadingConsistency:
         def process_sequences(seqs):
             """Complete processing pipeline."""
             encoded = one_hot_encode_sequences(
-                seqs, seq_mod_method=SequenceModificationMethod.PAD
+                seqs, seq_mod_method=SequenceModificationMethod.EMBEDDING
             )
             flattened = flatten_one_hot_sequences(encoded)
             return flattened
