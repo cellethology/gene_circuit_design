@@ -1,8 +1,9 @@
-import pandas as pd
 from typing import Literal
+
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
+import pandas as pd
+import seaborn as sns
 
 
 def create_grid_plot_no_norm(
@@ -59,6 +60,11 @@ def create_grid_plot_no_norm(
         if baseline_label in pivot_data.columns:
             other_cols += [baseline_label]
         pivot_ordered = pivot_data[other_cols] if other_cols else pivot_data
+
+        # Check if we have enough data for clustering (need at least 2 rows and 2 columns)
+        can_cluster_rows = len(pivot_ordered) >= 2
+        can_cluster_cols = len(pivot_ordered.columns) >= 2
+
         g = sns.clustermap(
             pivot_ordered,
             cmap="viridis",
@@ -66,6 +72,8 @@ def create_grid_plot_no_norm(
             fmt=".3f",
             method="average",  # clustering linkage method
             metric="euclidean",  # distance metric
+            row_cluster=can_cluster_rows,  # Disable row clustering if < 2 rows
+            col_cluster=can_cluster_cols,  # Disable col clustering if < 2 cols
             cbar_kws={"label": metric.replace("_", " ").title()},
             figsize=figsize,
         )
@@ -76,6 +84,35 @@ def create_grid_plot_no_norm(
         g.ax_heatmap.set_ylabel("Dataset")
         plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha="right")
         plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+
+        # Explicitly set all y-tick labels to ensure every row label is shown
+        if not pivot_ordered.empty:
+            num_rows = len(pivot_ordered)
+
+            # Get the row indices in the order shown after clustering
+            try:
+                row_indices = g.dendrogram_row.reordered_ind
+                if row_indices is not None:
+                    # Use the clustered row order
+                    reordered_labels = [pivot_ordered.index[i] for i in row_indices]
+                else:
+                    # Fallback to original order if no clustering
+                    reordered_labels = pivot_ordered.index.tolist()
+            except AttributeError:
+                # No dendrogram available, use original order
+                reordered_labels = pivot_ordered.index.tolist()
+
+            # Set ticks at every row position
+            yticks = np.arange(num_rows) + 0.5  # Center of each cell
+            g.ax_heatmap.set_yticks(yticks)
+            g.ax_heatmap.set_yticklabels(reordered_labels, rotation=0)
+
+            # Adjust font size based on number of rows
+            if num_rows > 15:
+                plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=8)
+            elif num_rows > 10:
+                plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=9)
+
         plt.show()
         return g.fig, g.ax_heatmap
 
@@ -90,31 +127,40 @@ def create_grid_plot_no_norm(
     if not drop_baseline:
         col_order = other_cols + [baseline_label]
         # Baseline deltas are exactly 0 by construction
+        delta_subset = delta[col_order]
     else:
         col_order = other_cols
-        delta = delta[col_order]
+        delta_subset = delta[col_order]
+
+    # Check if we have enough data for clustering after filtering
+    can_cluster_rows_delta = len(delta_subset) >= 2
+    can_cluster_cols_delta = len(delta_subset.columns) >= 2
 
     # Plot clustered heatmap centered at zero
     try:
         g = sns.clustermap(
-            delta[col_order] if not drop_baseline else delta,
+            delta_subset,
             cmap="coolwarm",
             center=0.0,
             annot=True,  # requires seaborn >= 0.13
             fmt=".1f",
             method="average",  # linkage: "average", "complete", "single", "ward"
             metric="euclidean",  # distance: "euclidean", "correlation", etc.
+            row_cluster=can_cluster_rows_delta,  # Disable row clustering if < 2 rows
+            col_cluster=can_cluster_cols_delta,  # Disable col clustering if < 2 cols
             figsize=figsize,
             cbar_kws={"label": "Δ AUC vs random | ((method - random) / random) * 100"},
         )
     except TypeError:
         # Fallback for seaborn < 0.13 (no native annot)
         g = sns.clustermap(
-            delta[col_order] if not drop_baseline else delta,
+            delta_subset,
             cmap="coolwarm",
             center=0.0,
             method="average",
             metric="euclidean",
+            row_cluster=can_cluster_rows_delta,  # Disable row clustering if < 2 rows
+            col_cluster=can_cluster_cols_delta,  # Disable col clustering if < 2 cols
             figsize=figsize,
             cbar_kws={"label": "Δ AUC vs random | ((method - random) / random) * 100"},
         )
@@ -122,9 +168,7 @@ def create_grid_plot_no_norm(
         ax = g.ax_heatmap
         row_labels = [t.get_text() for t in ax.get_yticklabels()]
         col_labels = [t.get_text() for t in ax.get_xticklabels()]
-        shown = (delta[col_order] if not drop_baseline else delta).loc[
-            row_labels, col_labels
-        ]
+        shown = delta_subset.loc[row_labels, col_labels]
         for i, r in enumerate(shown.index):
             for j, c in enumerate(shown.columns):
                 v = shown.loc[r, c]
@@ -149,6 +193,36 @@ def create_grid_plot_no_norm(
     g.ax_heatmap.set_ylabel("Dataset")
     plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha="right")
     plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+
+    # Explicitly set all y-tick labels to ensure every row label is shown
+    # Get the actual row order after clustering (from dendrogram)
+    if not delta.empty:
+        num_rows = len(delta)
+
+        # Get the row indices in the order shown after clustering
+        try:
+            row_indices = g.dendrogram_row.reordered_ind
+            if row_indices is not None:
+                # Use the clustered row order
+                reordered_labels = [delta.index[i] for i in row_indices]
+            else:
+                # Fallback to original order if no clustering
+                reordered_labels = delta.index.tolist()
+        except AttributeError:
+            # No dendrogram available, use original order
+            reordered_labels = delta.index.tolist()
+
+        # Set ticks at every row position
+        yticks = np.arange(num_rows) + 0.5  # Center of each cell
+        g.ax_heatmap.set_yticks(yticks)
+        g.ax_heatmap.set_yticklabels(reordered_labels, rotation=0)
+
+        # Adjust font size based on number of rows
+        if num_rows > 15:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=8)
+        elif num_rows > 10:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=9)
+
     plt.tight_layout()
 
     return g.fig, g.ax_heatmap
@@ -239,6 +313,35 @@ def create_grid_plot_avg_row(
         g.ax_heatmap.set_ylabel("Dataset")
         plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha="right")
         plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+
+        # Explicitly set all y-tick labels to ensure every row label is shown
+        if not pivot_ordered.empty:
+            num_rows = len(pivot_ordered)
+
+            # Get the row indices in the order shown after clustering
+            try:
+                row_indices = g.dendrogram_row.reordered_ind
+                if row_indices is not None:
+                    # Use the clustered row order
+                    reordered_labels = [pivot_ordered.index[i] for i in row_indices]
+                else:
+                    # Fallback to original order if no clustering
+                    reordered_labels = pivot_ordered.index.tolist()
+            except AttributeError:
+                # No dendrogram available, use original order
+                reordered_labels = pivot_ordered.index.tolist()
+
+            # Set ticks at every row position
+            yticks = np.arange(num_rows) + 0.5  # Center of each cell
+            g.ax_heatmap.set_yticks(yticks)
+            g.ax_heatmap.set_yticklabels(reordered_labels, rotation=0)
+
+            # Adjust font size based on number of rows
+            if num_rows > 15:
+                plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=8)
+            elif num_rows > 10:
+                plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=9)
+
         plt.show()
         return g.fig, g.ax_heatmap
 
@@ -307,6 +410,35 @@ def create_grid_plot_avg_row(
     g.ax_heatmap.set_ylabel("Dataset")
     plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha="right")
     plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+
+    # Explicitly set all y-tick labels to ensure every row label is shown
+    if not delta_norm.empty:
+        num_rows = len(delta_norm)
+
+        # Get the row indices in the order shown after clustering
+        try:
+            row_indices = g.dendrogram_row.reordered_ind
+            if row_indices is not None:
+                # Use the clustered row order
+                reordered_labels = [delta_norm.index[i] for i in row_indices]
+            else:
+                # Fallback to original order if no clustering
+                reordered_labels = delta_norm.index.tolist()
+        except AttributeError:
+            # No dendrogram available, use original order
+            reordered_labels = delta_norm.index.tolist()
+
+        # Set ticks at every row position
+        yticks = np.arange(num_rows) + 0.5  # Center of each cell
+        g.ax_heatmap.set_yticks(yticks)
+        g.ax_heatmap.set_yticklabels(reordered_labels, rotation=0)
+
+        # Adjust font size based on number of rows
+        if num_rows > 15:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=8)
+        elif num_rows > 10:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=9)
+
     plt.show()
     return g.fig, g.ax_heatmap
 
@@ -468,5 +600,34 @@ def create_grid_plot_avg_col(
     g.ax_heatmap.set_ylabel("Dataset")
     plt.setp(g.ax_heatmap.get_xticklabels(), rotation=45, ha="right")
     plt.setp(g.ax_heatmap.get_yticklabels(), rotation=0)
+
+    # Explicitly set all y-tick labels to ensure every row label is shown
+    if not mat_norm.empty:
+        num_rows = len(mat_norm)
+
+        # Get the row indices in the order shown after clustering
+        try:
+            row_indices = g.dendrogram_row.reordered_ind
+            if row_indices is not None:
+                # Use the clustered row order
+                reordered_labels = [mat_norm.index[i] for i in row_indices]
+            else:
+                # Fallback to original order if no clustering
+                reordered_labels = mat_norm.index.tolist()
+        except AttributeError:
+            # No dendrogram available, use original order
+            reordered_labels = mat_norm.index.tolist()
+
+        # Set ticks at every row position
+        yticks = np.arange(num_rows) + 0.5  # Center of each cell
+        g.ax_heatmap.set_yticks(yticks)
+        g.ax_heatmap.set_yticklabels(reordered_labels, rotation=0)
+
+        # Adjust font size based on number of rows
+        if num_rows > 15:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=8)
+        elif num_rows > 10:
+            plt.setp(g.ax_heatmap.get_yticklabels(), fontsize=9)
+
     plt.tight_layout()
     return g.fig, g.ax_heatmap

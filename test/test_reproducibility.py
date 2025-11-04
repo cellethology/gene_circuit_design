@@ -180,14 +180,18 @@ class TestSequenceProcessingDeterminism:
         sequences2 = ["GCTA", "ATCG", "TTAA"]  # Different order
 
         results1 = torch.tensor(
-            one_hot_encode_sequences(
-                sequences1, seq_mod_method=SequenceModificationMethod.EMBEDDING
+            np.array(
+                one_hot_encode_sequences(
+                    sequences1, seq_mod_method=SequenceModificationMethod.EMBEDDING
+                )
             ),
             dtype=torch.float32,
         )
         results2 = torch.tensor(
-            one_hot_encode_sequences(
-                sequences2, seq_mod_method=SequenceModificationMethod.EMBEDDING
+            np.array(
+                one_hot_encode_sequences(
+                    sequences2, seq_mod_method=SequenceModificationMethod.EMBEDDING
+                )
             ),
             dtype=torch.float32,
         )
