@@ -365,6 +365,8 @@ class ActiveLearningExperiment:
         X_train = self._encode_sequences(self.train_indices)
         y_train = self.all_expressions[self.train_indices]
 
+        logger.info(f"DEBUG: model type: {self.model.__class__.__name__}")
+        print(f"DEBUG: model type: {self.model.__class__.__name__}")
         self.model.fit(X_train, y_train)
 
         # Log training performance

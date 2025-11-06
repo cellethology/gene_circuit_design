@@ -8,26 +8,41 @@ This script creates a heatmap where:
 - Color: area under the curve of cumulative metrics
 
 Example Usage:
-- Single:
+- Single directory:
     python plotting/area_under_curve_grid_plot.py --results-base-path /path/to/directory
-- Double:
+- Dual directory comparison:
     python plotting/area_under_curve_grid_plot.py \
     --results-base-path-1 /path/to/directory1 \
     --results-base-path-2 /path/to/directory2 \
     --title-1 "Experiment Trans" \
     --title-2 "Experiment Cis"
+- Strategy comparison (compare two strategies from same directory):
+    python plotting/area_under_curve_grid_plot.py \
+    --results-base-path /storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/166k_kmeans_versus_random \
+    --strategy-1 kmeans_high_expression \
+    --strategy-2 highExpression \
+    --title-1 "KMeans High Expression" \
+    --title-2 "High Expression"
+
+    # To show raw AUC values instead of comparing to baseline:
+    python plotting/area_under_curve_grid_plot.py \
+    --results-base-path /storage2/wangzitongLab/lizelun/project/gene_circuit_design/results/166k_kmeans_versus_random \
+    --strategy-1 kmeans_high_expression \
+    --strategy-2 highExpression \
+    --no-compare-to-baseline
 """
 
 import argparse
 import os
 from pathlib import Path
+from typing import Optional
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from new_file_plot_gen import create_grid_plot_avg_col as create_grid_plot
+from new_file_plot_gen import create_grid_plot_no_norm as create_grid_plot
 from scipy import integrate
 
 matplotlib.use("Agg")  # Use non-interactive backend
@@ -147,8 +162,33 @@ def calculate_auc_from_cumulative(
     return auc
 
 
-def collect_all_results(results_base_path):
-    """Collect all AUC results from the results directory."""
+def collect_all_results(
+    results_base_path: str, cache_file: Optional[str] = None
+) -> pd.DataFrame:
+    """
+    Collect all AUC results from the results directory.
+
+    Args:
+        results_base_path: Base path to search for results.
+        cache_file: Optional path to cache file. If provided and file exists,
+                   load from cache instead of re-collecting. Results are saved
+                   to this file after collection.
+
+    Returns:
+        DataFrame containing collected results.
+    """
+    # Check if cache file exists and load from it
+    if cache_file is not None and os.path.exists(cache_file):
+        print(f"Loading cached results from: {cache_file}")
+        try:
+            cached_df = pd.read_csv(cache_file)
+            print(f"Loaded {len(cached_df)} cached result combinations")
+            return cached_df
+        except Exception as e:
+            print(
+                f"Error loading cache file {cache_file}: {e}. Re-collecting results..."
+            )
+
     results_list = []
 
     # Walk through all directories
@@ -225,7 +265,299 @@ def collect_all_results(results_base_path):
 
     final_frame = pd.DataFrame(results_list)
     final_frame.to_csv("final_frame.csv")
+
+    # Save to cache file if provided
+    if cache_file is not None:
+        try:
+            # Ensure the directory exists
+            cache_dir = os.path.dirname(cache_file)
+            if cache_dir:
+                os.makedirs(cache_dir, exist_ok=True)
+            final_frame.to_csv(cache_file, index=False)
+            print(f"Saved collected results to cache: {cache_file}")
+        except Exception as e:
+            print(f"Warning: Could not save cache file {cache_file}: {e}")
+
     return final_frame
+
+
+def create_strategy_comparison_heatmap(
+    results_df: pd.DataFrame,
+    strategy1: str,
+    strategy2: str,
+    metric: str = "auc_normalized_pred",
+    title1: str = None,
+    title2: str = None,
+    figsize: tuple[int, int] = (56, 32),
+    use_strategy1_as_baseline: bool = True,
+    compare_to_baseline: bool = True,
+    normalize_raw_values: bool = True,
+):
+    """
+    Create two heatmaps side by side comparing two strategies.
+
+    Args:
+        results_df: DataFrame with results containing both strategies.
+        strategy1: First strategy name to compare.
+        strategy2: Second strategy name to compare.
+        metric: Metric column to visualize.
+        title1: Title for the first heatmap (defaults to strategy1).
+        title2: Title for the second heatmap (defaults to strategy2).
+        figsize: Figure size (width, height).
+        use_strategy1_as_baseline: If True, use strategy1 as baseline for both plots.
+        compare_to_baseline: If True, show delta vs baseline; if False, show raw values.
+        normalize_raw_values: If True (default), apply column-wise minmax normalization
+                              to raw values (0-100 scale). If False, show actual raw AUC scores.
+
+    Returns:
+        (fig, axes): Matplotlib Figure and list of Axes, or (None, None) if no data.
+    """
+    if results_df.empty:
+        print("No data found to plot")
+        return None, None
+
+    # Determine baseline strategy: prefer "random" if available, otherwise use strategy1
+    available_strategies = set(results_df["strategy"].unique())
+    if compare_to_baseline:
+        if "random" in available_strategies:
+            baseline_strategy = "random"
+        elif use_strategy1_as_baseline:
+            baseline_strategy = strategy1
+        else:
+            baseline_strategy = strategy2
+    else:
+        baseline_strategy = None
+
+    # Filter to include the two strategies plus baseline if comparing to baseline
+    strategies_to_include = [strategy1, strategy2]
+    if (
+        compare_to_baseline
+        and baseline_strategy
+        and baseline_strategy not in strategies_to_include
+    ):
+        strategies_to_include.append(baseline_strategy)
+
+    strategy_data = results_df[
+        results_df["strategy"].isin(strategies_to_include)
+    ].copy()
+
+    if strategy_data.empty:
+        print(f"No data found for strategies {strategy1} and {strategy2}")
+        return None, None
+
+    # Set default titles
+    if title1 is None:
+        title1 = strategy1.replace("_", " ").title()
+    if title2 is None:
+        title2 = strategy2.replace("_", " ").title()
+
+    # Process data for each strategy
+    def prepare_strategy_data(
+        df: pd.DataFrame,
+        strategy: str,
+        baseline_strategy: Optional[str],
+        compare_to_baseline: bool,
+        normalize_raw_values: bool,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Prepare data for heatmap: returns (pivot_data, mat_norm)."""
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame()
+
+        df_copy = df.copy()
+        if "method_label" not in df_copy.columns:
+            df_copy["method_label"] = (
+                df_copy["embedding"].astype(str)
+                + "_"
+                + df_copy["regressor"].astype(str)
+            )
+
+        # Filter to current strategy
+        strategy_df = df_copy[df_copy["strategy"] == strategy].copy()
+
+        if compare_to_baseline and baseline_strategy:
+            # Get baseline data (aggregated per dataset)
+            baseline_df = df_copy[df_copy["strategy"] == baseline_strategy].copy()
+            baseline_agg = baseline_df.groupby("dataset", as_index=False).agg(
+                {metric: "median"}
+            )
+            baseline_agg["method_label"] = "baseline"
+
+            # Combine strategy data with baseline
+            plot_data = pd.concat([strategy_df, baseline_agg], ignore_index=True)
+        else:
+            # Use raw strategy data only
+            plot_data = strategy_df
+
+        # Create pivot table
+        pivot_data = plot_data.pivot_table(
+            index="dataset", columns="method_label", values=metric, aggfunc="median"
+        )
+        if pivot_data.empty:
+            return pd.DataFrame(), pd.DataFrame()
+
+        if (
+            compare_to_baseline
+            and baseline_strategy
+            and "baseline" in pivot_data.columns
+        ):
+            # Calculate delta vs baseline
+            baseline_series = pivot_data["baseline"]
+            # Calculate delta for each method column
+            method_cols = [c for c in pivot_data.columns if c != "baseline"]
+            mat = pivot_data[method_cols].subtract(baseline_series, axis=0)
+        else:
+            # Use raw values
+            mat = pivot_data.copy()
+
+        # Column-wise minmax normalization
+        if compare_to_baseline:
+            # Always normalize when comparing to baseline
+            col_min = mat.min(axis=0)
+            col_max = mat.max(axis=0)
+            denom = (col_max - col_min).replace(0, np.nan)
+            mat_norm = (mat - col_min) / denom * 100.0  # 0–100 per column
+        elif normalize_raw_values:
+            # For raw values, optionally normalize for visualization consistency
+            # This scales each column (method) independently to 0-100 range
+            # Formula: normalized_value = (value - col_min) / (col_max - col_min) * 100
+            # This means: best method in each column becomes 100, worst becomes 0
+            # Note: This normalization is done PER METHOD (column), not globally
+            col_min = mat.min(axis=0)
+            col_max = mat.max(axis=0)
+            denom = (col_max - col_min).replace(0, np.nan)
+            mat_norm = (mat - col_min) / denom * 100.0  # 0–100 per column
+        else:
+            # Show truly raw values without any normalization
+            # These are the actual AUC scores from the data
+            mat_norm = mat.copy()
+
+        return pivot_data, mat_norm
+
+    # Prepare data for both strategies
+    pivot1, mat_norm1 = prepare_strategy_data(
+        strategy_data,
+        strategy1,
+        baseline_strategy,
+        compare_to_baseline,
+        normalize_raw_values,
+    )
+    pivot2, mat_norm2 = prepare_strategy_data(
+        strategy_data,
+        strategy2,
+        baseline_strategy,
+        compare_to_baseline,
+        normalize_raw_values,
+    )
+
+    if mat_norm1.empty and mat_norm2.empty:
+        print("No valid data to plot")
+        return None, None
+
+    # Find common scale for both heatmaps
+    all_values = []
+    if not mat_norm1.empty:
+        all_values.extend(mat_norm1.values.flatten())
+    if not mat_norm2.empty:
+        all_values.extend(mat_norm2.values.flatten())
+
+    all_values = [v for v in all_values if pd.notna(v) and np.isfinite(v)]
+    if not all_values:
+        print("No finite values found")
+        return None, None
+
+    vmin = min(all_values)
+    vmax = max(all_values)
+    # Center value only makes sense for normalized data (0-100 scale)
+    center_val = 50.0 if (compare_to_baseline or normalize_raw_values) else None
+
+    # Create figure with 2 subplots side by side
+    fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=True)
+    if compare_to_baseline and baseline_strategy:
+        baseline_label_text = baseline_strategy.replace("_", " ").title()
+        fig.suptitle(
+            f"Strategy Comparison: {metric.replace('_', ' ').title()} (vs {baseline_label_text})",
+            y=1.02,
+            fontsize=16,
+        )
+        cbar_label = "Column-normalized ΔAUC (0-100)"
+    elif normalize_raw_values:
+        fig.suptitle(
+            f"Strategy Comparison: {metric.replace('_', ' ').title()} (Column-normalized Raw Values)",
+            y=1.02,
+            fontsize=16,
+        )
+        cbar_label = "Column-normalized AUC (0-100)\n(Each method scaled independently)"
+    else:
+        fig.suptitle(
+            f"Strategy Comparison: {metric.replace('_', ' ').title()} (Raw AUC Scores)",
+            y=1.02,
+            fontsize=16,
+        )
+        cbar_label = f"{metric.replace('_', ' ').title()} (Raw Values)"
+
+    # Plot first heatmap (without colorbar)
+    if not mat_norm1.empty:
+        ax1 = axes[0]
+        # Rank rows by mean
+        row_scores1 = mat_norm1.mean(axis=1, skipna=True)
+        row_order1 = row_scores1.sort_values(ascending=False, na_position="last").index
+        mat_norm1_ordered = mat_norm1.reindex(row_order1)
+
+        sns.heatmap(
+            mat_norm1_ordered,
+            ax=ax1,
+            cmap="RdBu_r",
+            vmin=vmin,
+            vmax=vmax,
+            center=center_val,
+            annot=True,
+            fmt=".3f" if not (compare_to_baseline or normalize_raw_values) else ".1f",
+            cbar=False,  # No colorbar for first plot
+        )
+        ax1.set_title(title1, fontsize=14, pad=20)
+        ax1.set_xlabel("Method", fontsize=12)
+        ax1.set_ylabel("Dataset", fontsize=12)
+        plt.setp(ax1.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax1.get_yticklabels(), rotation=0)
+    else:
+        axes[0].text(
+            0.5, 0.5, "No data", ha="center", va="center", transform=axes[0].transAxes
+        )
+        axes[0].set_title(title1, fontsize=14, pad=20)
+
+    # Plot second heatmap (with shared colorbar)
+    if not mat_norm2.empty:
+        ax2 = axes[1]
+        # Rank rows by mean
+        row_scores2 = mat_norm2.mean(axis=1, skipna=True)
+        row_order2 = row_scores2.sort_values(ascending=False, na_position="last").index
+        mat_norm2_ordered = mat_norm2.reindex(row_order2)
+
+        # Create heatmap with colorbar
+        sns.heatmap(
+            mat_norm2_ordered,
+            ax=ax2,
+            cmap="RdBu_r",
+            vmin=vmin,
+            vmax=vmax,
+            center=center_val,
+            annot=True,
+            fmt=".3f" if not (compare_to_baseline or normalize_raw_values) else ".1f",
+            cbar_kws={"label": cbar_label, "shrink": 0.8},
+        )
+        ax2.set_title(title2, fontsize=14, pad=20)
+        ax2.set_xlabel("Method", fontsize=12)
+        ax2.set_ylabel("", fontsize=12)
+        plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax2.get_yticklabels(), rotation=0)
+    else:
+        axes[1].text(
+            0.5, 0.5, "No data", ha="center", va="center", transform=axes[1].transAxes
+        )
+        axes[1].set_title(title2, fontsize=14, pad=20)
+
+    plt.tight_layout()
+    return fig, axes
 
 
 def create_dual_heatmap(
@@ -350,7 +682,7 @@ def create_dual_heatmap(
         sns.heatmap(
             mat_norm1_ordered,
             ax=ax1,
-            cmap="coolwarm",
+            cmap="RdBu_r",
             vmin=vmin,
             vmax=vmax,
             center=center_val,
@@ -381,7 +713,7 @@ def create_dual_heatmap(
         sns.heatmap(
             mat_norm2_ordered,
             ax=ax2,
-            cmap="coolwarm",
+            cmap="RdBu_r",
             vmin=vmin,
             vmax=vmax,
             center=center_val,
@@ -412,7 +744,7 @@ def main():
         "--results-base-path",
         type=str,
         default=None,
-        help="Base path for results (single directory mode)",
+        help="Base path for results (single directory mode or strategy comparison mode)",
     )
     parser.add_argument(
         "--results-base-path-1",
@@ -427,25 +759,180 @@ def main():
         help="Base path for second results directory (dual directory mode)",
     )
     parser.add_argument(
+        "--strategy-1",
+        type=str,
+        default=None,
+        help="First strategy to compare (strategy comparison mode)",
+    )
+    parser.add_argument(
+        "--strategy-2",
+        type=str,
+        default=None,
+        help="Second strategy to compare (strategy comparison mode)",
+    )
+    parser.add_argument(
         "--title-1",
         type=str,
-        default="Directory 1",
+        default=None,
         help="Title for the first heatmap",
     )
     parser.add_argument(
         "--title-2",
         type=str,
-        default="Directory 2",
+        default=None,
         help="Title for the second heatmap",
+    )
+    parser.add_argument(
+        "--compare-to-baseline",
+        action="store_true",
+        default=True,
+        help="Compare strategies to baseline (default: True). Use --no-compare-to-baseline for raw values.",
+    )
+    parser.add_argument(
+        "--no-compare-to-baseline",
+        dest="compare_to_baseline",
+        action="store_false",
+        help="Show raw AUC values instead of comparing to baseline",
+    )
+    parser.add_argument(
+        "--no-normalize-raw",
+        dest="normalize_raw_values",
+        action="store_false",
+        default=True,
+        help="When showing raw values, skip column-wise normalization to show actual AUC scores",
     )
     args = parser.parse_args()
 
-    # Determine mode: single or dual directory
+    # Determine mode: strategy comparison, dual directory, or single directory
+    strategy_comparison_mode = (
+        args.strategy_1 is not None and args.strategy_2 is not None
+    )
     dual_mode = (
         args.results_base_path_1 is not None and args.results_base_path_2 is not None
     )
 
-    if dual_mode:
+    if strategy_comparison_mode:
+        # Strategy comparison mode
+        if args.results_base_path is None:
+            print("Error: --results-base-path is required for strategy comparison mode")
+            return
+
+        results_base_path = args.results_base_path
+
+        # Check if path exists
+        if not os.path.exists(results_base_path):
+            print(f"Results path not found: {results_base_path}")
+            return
+
+        # Derive output directory from results_base_path
+        results_path = Path(results_base_path)
+        results_base_name = results_path.name or results_path.stem
+        strategy1_safe = args.strategy_1.replace("_", "-")
+        strategy2_safe = args.strategy_2.replace("_", "-")
+        output_dir = (
+            Path("plots")
+            / results_base_name
+            / "AUC_results"
+            / f"{strategy1_safe}_vs_{strategy2_safe}"
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Set up cache file path in input directory
+        cache_file = os.path.join(results_base_path, "collected_all_results_cache.csv")
+
+        print("Loading results from cache...")
+        results_df = collect_all_results(results_base_path, cache_file=cache_file)
+
+        if results_df.empty:
+            print("No results found!")
+            return
+
+        print(f"Found {len(results_df)} result combinations")
+        print(f"Available strategies: {sorted(results_df['strategy'].unique())}")
+        print(f"Comparing strategies: {args.strategy_1} vs {args.strategy_2}")
+
+        # Explain what normalization is being applied
+        if not args.compare_to_baseline:
+            if args.normalize_raw_values:
+                print(
+                    "\nNOTE: Raw values are being column-wise normalized (0-100 scale)"
+                )
+                print("  - Each method (column) is scaled independently")
+                print("  - Formula: (value - col_min) / (col_max - col_min) * 100")
+                print("  - Best method per column = 100, worst = 0")
+                print("  - Use --no-normalize-raw to see actual AUC scores")
+            else:
+                print("\nNOTE: Showing actual raw AUC scores (no normalization)")
+
+        # Check if strategies exist in data
+        available_strategies = set(results_df["strategy"].unique())
+        if args.strategy_1 not in available_strategies:
+            print(
+                f"Warning: Strategy '{args.strategy_1}' not found in data. Available: {sorted(available_strategies)}"
+            )
+        if args.strategy_2 not in available_strategies:
+            print(
+                f"Warning: Strategy '{args.strategy_2}' not found in data. Available: {sorted(available_strategies)}"
+            )
+
+        # Create plots for different metrics
+        metrics_to_plot = ["auc_normalized_pred"]
+        metric_names = ["Normalized Predictions AUC"]
+
+        for metric, name in zip(metrics_to_plot, metric_names):
+            print(f"\nCreating strategy comparison plot for {name}...")
+
+            # Filter out NaN values for this metric
+            valid_data = results_df.dropna(subset=[metric])
+
+            if valid_data.empty:
+                print(f"No valid data for {metric}")
+                continue
+
+            fig, axes = create_strategy_comparison_heatmap(
+                valid_data,
+                strategy1=args.strategy_1,
+                strategy2=args.strategy_2,
+                metric=metric,
+                title1=args.title_1,
+                title2=args.title_2,
+                figsize=(56, 32),
+                compare_to_baseline=args.compare_to_baseline,
+                normalize_raw_values=args.normalize_raw_values,
+            )
+
+            if fig is not None:
+                # Save the plot
+                if args.compare_to_baseline:
+                    comparison_type = "vs_baseline"
+                elif args.normalize_raw_values:
+                    comparison_type = "raw_normalized"
+                else:
+                    comparison_type = "raw"
+                output_path = (
+                    output_dir
+                    / f"auc_grid_strategy_comparison_{args.strategy_1}_vs_{args.strategy_2}_{metric}_{comparison_type}.png"
+                )
+                fig.savefig(output_path, dpi=300, bbox_inches="tight")
+                print(f"Saved plot to: {output_path}")
+
+                # Close the plot to save memory
+                plt.close(fig)
+
+        # Print summary statistics
+        print("\nSummary Statistics:")
+        for metric in metrics_to_plot:
+            valid_data = results_df.dropna(subset=[metric])
+            for strategy in [args.strategy_1, args.strategy_2]:
+                strategy_data = valid_data[valid_data["strategy"] == strategy]
+                if not strategy_data.empty:
+                    print(f"\n{metric} - {strategy}:")
+                    print(f"  Mean: {strategy_data[metric].mean():.4f}")
+                    print(f"  Std:  {strategy_data[metric].std():.4f}")
+                    print(f"  Min:  {strategy_data[metric].min():.4f}")
+                    print(f"  Max:  {strategy_data[metric].max():.4f}")
+
+    elif dual_mode:
         # Dual directory mode
         results_base_path1 = args.results_base_path_1
         results_base_path2 = args.results_base_path_2
@@ -466,11 +953,19 @@ def main():
         output_dir = Path("plots") / f"{base_name1}_vs_{base_name2}" / "AUC_results"
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Set up cache file paths in respective input directories
+        cache_file1 = os.path.join(
+            results_base_path1, "collected_all_results_cache.csv"
+        )
+        cache_file2 = os.path.join(
+            results_base_path2, "collected_all_results_cache.csv"
+        )
+
         print("Collecting results from first directory...")
-        results_df1 = collect_all_results(results_base_path1)
+        results_df1 = collect_all_results(results_base_path1, cache_file=cache_file1)
 
         print("Collecting results from second directory...")
-        results_df2 = collect_all_results(results_base_path2)
+        results_df2 = collect_all_results(results_base_path2, cache_file=cache_file2)
 
         if results_df1.empty and results_df2.empty:
             print("No results found in either directory!")
@@ -563,8 +1058,11 @@ def main():
         output_dir = Path("plots") / results_base_name / "AUC_results"
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Set up cache file path in input directory
+        cache_file = os.path.join(results_base_path, "collected_all_results_cache.csv")
+
         print("Collecting results...")
-        results_df = collect_all_results(results_base_path)
+        results_df = collect_all_results(results_base_path, cache_file=cache_file)
 
         if results_df.empty:
             print("No results found!")

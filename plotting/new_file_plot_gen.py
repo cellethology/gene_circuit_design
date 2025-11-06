@@ -67,7 +67,7 @@ def create_grid_plot_no_norm(
 
         g = sns.clustermap(
             pivot_ordered,
-            cmap="viridis",
+            cmap="RdBu_r",
             annot=True,
             fmt=".3f",
             method="average",  # clustering linkage method
@@ -140,7 +140,7 @@ def create_grid_plot_no_norm(
     try:
         g = sns.clustermap(
             delta_subset,
-            cmap="coolwarm",
+            cmap="RdBu_r",
             center=0.0,
             annot=True,  # requires seaborn >= 0.13
             fmt=".1f",
@@ -155,7 +155,7 @@ def create_grid_plot_no_norm(
         # Fallback for seaborn < 0.13 (no native annot)
         g = sns.clustermap(
             delta_subset,
-            cmap="coolwarm",
+            cmap="RdBu_r",
             center=0.0,
             method="average",
             metric="euclidean",
@@ -298,7 +298,7 @@ def create_grid_plot_avg_row(
         fig, ax = plt.subplots(figsize=figsize)
         g = sns.clustermap(
             pivot_ordered,
-            cmap="viridis",
+            cmap="RdBu_r",
             annot=True,
             fmt=".3f",
             method="average",  # clustering linkage method
@@ -392,7 +392,7 @@ def create_grid_plot_avg_row(
     # fig, ax = plt.subplots(figsize=figsize)
     g = sns.clustermap(
         delta_norm,
-        cmap="coolwarm",
+        cmap="RdBu_r",
         annot=True,
         fmt=annot_fmt,
         center=heat_center,
@@ -575,7 +575,7 @@ def create_grid_plot_avg_col(
 
     g = sns.clustermap(
         mat_norm,
-        cmap="coolwarm",
+        cmap="RdBu_r",
         vmin=vmin,
         vmax=vmax,
         center=center_val,  # <- explicit limits

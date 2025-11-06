@@ -23,6 +23,7 @@ import argparse
 import os
 import warnings
 from itertools import combinations
+from pathlib import Path
 from typing import Dict, Literal, Optional, Tuple
 
 import matplotlib
@@ -92,6 +93,10 @@ def create_embedding_performance_heatmap(
     metric: str = "auc_normalized_pred",
     figsize: Tuple[int, int] = (12, 8),
     save_path: Optional[str] = None,
+    aggregation_method: Literal["mean", "median"] = "median",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create heatmap showing average performance by embedding method across datasets and models.
@@ -101,6 +106,10 @@ def create_embedding_performance_heatmap(
         metric: Metric to visualize
         figsize: Figure size
         save_path: Optional path to save the plot
+        aggregation_method: How to aggregate values (mean or median)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -124,30 +133,86 @@ def create_embedding_performance_heatmap(
 
     # Create pivot table
     pivot_data = non_random_data.pivot_table(
-        index="dataset", columns="embedding_regressor", values=metric, aggfunc="median"
+        index="dataset",
+        columns="embedding_regressor",
+        values=metric,
+        aggfunc=aggregation_method,
     )
 
     if pivot_data.empty:
         print("No pivot data available")
         return None, None
 
+    # Clean data: Drop rows/columns that are all NaN
+    pivot_data = pivot_data.dropna(axis=0, how="all").dropna(axis=1, how="all")
+
+    if pivot_data.empty:
+        print("No valid data after removing NaN rows/columns")
+        return None, None
+
+    # Replace remaining NaN values with 0 for clustering (but keep track for masking)
+    # We need finite values for distance computation
+    pivot_data_clean = pivot_data.fillna(0)
+
+    # Check for any non-finite values and replace them
+    if not np.isfinite(pivot_data_clean.values).all():
+        print("Warning: Found non-finite values, replacing with 0")
+        pivot_data_clean = pivot_data_clean.replace([np.inf, -np.inf], 0)
+        pivot_data_clean = pivot_data_clean.fillna(0)
+
+    # Ensure we have at least 2 rows and 2 columns for clustering
+    if pivot_data_clean.shape[0] < 2 or pivot_data_clean.shape[1] < 2:
+        print(f"Not enough data for clustering (shape: {pivot_data_clean.shape})")
+        # Use regular heatmap instead
+        fig, ax = plt.subplots(figsize=figsize)
+        sns.heatmap(
+            pivot_data_clean,
+            cmap="viridis",
+            annot=True,
+            fmt=".3f",
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+            cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+        )
+        title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+        ax.set_title(
+            f"{aggregation_method.title()} Performance by Embedding-Model Combination{title_suffix}\n{metric.replace('_', ' ').title()}"
+        )
+        ax.set_xlabel("Embedding-Model Combination")
+        ax.set_ylabel("Dataset")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax.get_yticklabels(), rotation=0)
+        if save_path:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
+            print(f"Saved embedding performance heatmap to: {save_path}")
+        return fig, ax
+
     # Create the heatmap
     fig, ax = plt.subplots(figsize=figsize)
 
+    # Create mask for original NaN values (to show them differently)
+    mask = pivot_data.isna()
+
     # Use clustermap for better visualization
     g = sns.clustermap(
-        pivot_data,
+        pivot_data_clean,
         cmap="viridis",
         annot=True,
         fmt=".3f",
         method="average",
         metric="euclidean",
         figsize=figsize,
+        vmin=vmin,
+        vmax=vmax,
         cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+        mask=mask,
     )
 
+    title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
     g.fig.suptitle(
-        f"Average Performance by Embedding-Model Combination\n{metric.replace('_', ' ').title()}",
+        f"{aggregation_method.title()} Performance by Embedding-Model Combination{title_suffix}\n{metric.replace('_', ' ').title()}",
         y=1.02,
     )
     g.ax_heatmap.set_xlabel("Embedding-Model Combination")
@@ -168,6 +233,10 @@ def create_model_performance_heatmap(
     metric: str = "auc_normalized_pred",
     figsize: Tuple[int, int] = (10, 6),
     save_path: Optional[str] = None,
+    aggregation_method: Literal["mean", "median"] = "median",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create heatmap showing average performance by model across datasets and embeddings.
@@ -177,6 +246,10 @@ def create_model_performance_heatmap(
         metric: Metric to visualize
         figsize: Figure size
         save_path: Optional path to save the plot
+        aggregation_method: How to aggregate values (mean or median)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -194,29 +267,83 @@ def create_model_performance_heatmap(
 
     # Create pivot table: dataset x regressor
     pivot_data = non_random_data.pivot_table(
-        index="dataset", columns="regressor", values=metric, aggfunc="median"
+        index="dataset", columns="regressor", values=metric, aggfunc=aggregation_method
     )
 
     if pivot_data.empty:
         print("No pivot data available")
         return None, None
 
+    # Clean data: Drop rows/columns that are all NaN
+    pivot_data = pivot_data.dropna(axis=0, how="all").dropna(axis=1, how="all")
+
+    if pivot_data.empty:
+        print("No valid data after removing NaN rows/columns")
+        return None, None
+
+    # Replace remaining NaN values with 0 for clustering (but keep track for masking)
+    # We need finite values for distance computation
+    pivot_data_clean = pivot_data.fillna(0)
+
+    # Check for any non-finite values and replace them
+    if not np.isfinite(pivot_data_clean.values).all():
+        print("Warning: Found non-finite values, replacing with 0")
+        pivot_data_clean = pivot_data_clean.replace([np.inf, -np.inf], 0)
+        pivot_data_clean = pivot_data_clean.fillna(0)
+
+    # Ensure we have at least 2 rows and 2 columns for clustering
+    if pivot_data_clean.shape[0] < 2 or pivot_data_clean.shape[1] < 2:
+        print(f"Not enough data for clustering (shape: {pivot_data_clean.shape})")
+        # Use regular heatmap instead
+        fig, ax = plt.subplots(figsize=figsize)
+        sns.heatmap(
+            pivot_data_clean,
+            cmap="viridis",
+            annot=True,
+            fmt=".3f",
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+            cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+        )
+        title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+        ax.set_title(
+            f"{aggregation_method.title()} Performance by Model{title_suffix}\n{metric.replace('_', ' ').title()}"
+        )
+        ax.set_xlabel("Model")
+        ax.set_ylabel("Dataset")
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        plt.setp(ax.get_yticklabels(), rotation=0)
+        if save_path:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            fig.savefig(save_path, dpi=300, bbox_inches="tight")
+            print(f"Saved model performance heatmap to: {save_path}")
+        return fig, ax
+
     # Create the heatmap
     fig, ax = plt.subplots(figsize=figsize)
 
+    # Create mask for original NaN values (to show them differently)
+    mask = pivot_data.isna()
+
     g = sns.clustermap(
-        pivot_data,
+        pivot_data_clean,
         cmap="viridis",
         annot=True,
         fmt=".3f",
         method="average",
         metric="euclidean",
         figsize=figsize,
+        vmin=vmin,
+        vmax=vmax,
         cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+        mask=mask,
     )
 
+    title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
     g.fig.suptitle(
-        f"Average Performance by Model\n{metric.replace('_', ' ').title()}", y=1.02
+        f"{aggregation_method.title()} Performance by Model{title_suffix}\n{metric.replace('_', ' ').title()}",
+        y=1.02,
     )
     g.ax_heatmap.set_xlabel("Model")
     g.ax_heatmap.set_ylabel("Dataset")
@@ -236,6 +363,8 @@ def create_embedding_summary_plot(
     metric: str = "auc_normalized_pred",
     figsize: Tuple[int, int] = (14, 8),
     save_path: Optional[str] = None,
+    aggregation_method: Literal["mean", "median"] = "mean",
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create summary plot showing average performance by embedding method with error bars.
@@ -245,6 +374,8 @@ def create_embedding_summary_plot(
         metric: Metric to visualize
         figsize: Figure size
         save_path: Optional path to save the plot
+        aggregation_method: How to aggregate values (mean or median)
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -275,16 +406,18 @@ def create_embedding_summary_plot(
         "std"
     ] / np.sqrt(embedding_stats["count"])
 
-    # Sort by mean performance
-    embedding_stats = embedding_stats.sort_values("mean", ascending=True)
+    # Sort by chosen aggregation method
+    sort_col = aggregation_method
+    embedding_stats = embedding_stats.sort_values(sort_col, ascending=True)
 
     # Create the plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
     # Bar plot with error bars
+    value_col = aggregation_method
     bars = ax1.bar(
         embedding_stats["embedding"],
-        embedding_stats["mean"],
+        embedding_stats[value_col],
         yerr=[
             embedding_stats["mean"] - embedding_stats["ci_lower"],
             embedding_stats["ci_upper"] - embedding_stats["mean"],
@@ -295,17 +428,20 @@ def create_embedding_summary_plot(
         alpha=0.7,
     )
 
-    ax1.set_title(f"Average {metric.replace('_', ' ').title()} by Embedding Method")
+    title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+    ax1.set_title(
+        f"{aggregation_method.title()} {metric.replace('_', ' ').title()} by Embedding Method{title_suffix}"
+    )
     ax1.set_xlabel("Embedding Method")
     ax1.set_ylabel(f"{metric.replace('_', ' ').title()}")
     ax1.tick_params(axis="x", rotation=45)
 
     # Add value labels on bars
-    for bar, mean_val in zip(bars, embedding_stats["mean"]):
+    for bar, val in zip(bars, embedding_stats[value_col]):
         ax1.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.01,
-            f"{mean_val:.3f}",
+            f"{val:.3f}",
             ha="center",
             va="bottom",
             fontsize=9,
@@ -328,7 +464,7 @@ def create_embedding_summary_plot(
         patch.set_alpha(0.7)
 
     ax2.set_title(
-        f"Distribution of {metric.replace('_', ' ').title()} by Embedding Method"
+        f"Distribution of {metric.replace('_', ' ').title()} by Embedding Method{title_suffix}"
     )
     ax2.set_xlabel("Embedding Method")
     ax2.set_ylabel(f"{metric.replace('_', ' ').title()}")
@@ -349,6 +485,8 @@ def create_model_summary_plot(
     metric: str = "auc_normalized_pred",
     figsize: Tuple[int, int] = (14, 8),
     save_path: Optional[str] = None,
+    aggregation_method: Literal["mean", "median"] = "mean",
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create summary plot showing average performance by model with error bars.
@@ -358,6 +496,8 @@ def create_model_summary_plot(
         metric: Metric to visualize
         figsize: Figure size
         save_path: Optional path to save the plot
+        aggregation_method: How to aggregate values (mean or median)
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -388,16 +528,18 @@ def create_model_summary_plot(
         model_stats["count"]
     )
 
-    # Sort by mean performance
-    model_stats = model_stats.sort_values("mean", ascending=True)
+    # Sort by chosen aggregation method
+    sort_col = aggregation_method
+    model_stats = model_stats.sort_values(sort_col, ascending=True)
 
     # Create the plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
     # Bar plot with error bars
+    value_col = aggregation_method
     bars = ax1.bar(
         model_stats["regressor"],
-        model_stats["mean"],
+        model_stats[value_col],
         yerr=[
             model_stats["mean"] - model_stats["ci_lower"],
             model_stats["ci_upper"] - model_stats["mean"],
@@ -408,17 +550,20 @@ def create_model_summary_plot(
         alpha=0.7,
     )
 
-    ax1.set_title(f"Average {metric.replace('_', ' ').title()} by Model")
+    title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+    ax1.set_title(
+        f"{aggregation_method.title()} {metric.replace('_', ' ').title()} by Model{title_suffix}"
+    )
     ax1.set_xlabel("Model")
     ax1.set_ylabel(f"{metric.replace('_', ' ').title()}")
     ax1.tick_params(axis="x", rotation=45)
 
     # Add value labels on bars
-    for bar, mean_val in zip(bars, model_stats["mean"]):
+    for bar, val in zip(bars, model_stats[value_col]):
         ax1.text(
             bar.get_x() + bar.get_width() / 2,
             bar.get_height() + 0.01,
-            f"{mean_val:.3f}",
+            f"{val:.3f}",
             ha="center",
             va="bottom",
             fontsize=9,
@@ -440,7 +585,9 @@ def create_model_summary_plot(
         patch.set_facecolor(color)
         patch.set_alpha(0.7)
 
-    ax2.set_title(f"Distribution of {metric.replace('_', ' ').title()} by Model")
+    ax2.set_title(
+        f"Distribution of {metric.replace('_', ' ').title()} by Model{title_suffix}"
+    )
     ax2.set_xlabel("Model")
     ax2.set_ylabel(f"{metric.replace('_', ' ').title()}")
     ax2.tick_params(axis="x", rotation=45)
@@ -463,6 +610,9 @@ def create_embedding_model_heatmap(
     aggregation_method: Literal["mean", "median"] = "mean",
     compare_to_baseline: bool = False,
     baseline_aggregation: Literal["mean", "median"] = "mean",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create heatmap with embeddings on one axis and models on the other axis.
@@ -475,6 +625,9 @@ def create_embedding_model_heatmap(
         aggregation_method: How to aggregate across datasets (mean or median)
         compare_to_baseline: If True, show relative performance vs random baseline
         baseline_aggregation: How to aggregate baseline improvements across datasets (mean or median)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -531,13 +684,27 @@ def create_embedding_model_heatmap(
         method_columns = [col for col in delta.columns if col != "random"]
         delta_methods = delta[method_columns]
 
+        # Get unique embeddings from original data to properly split combined names
+        unique_embeddings = sorted(all_data["embedding"].unique())
+
         # Convert back to embedding x regressor format
         embedding_regressor_data = []
         for col in method_columns:
             if "_" in col:
-                embedding, regressor = col.split("_", 1)
+                # Try to match known embeddings first (longest match first)
+                embedding = None
+                regressor = None
+                for emb in sorted(unique_embeddings, key=len, reverse=True):
+                    if col.startswith(emb + "_"):
+                        embedding = emb
+                        regressor = col[len(emb) + 1 :]  # Remove embedding + "_"
+                        break
+
+                # Fallback: if no match found, use simple split on first underscore
+                if embedding is None:
+                    embedding, regressor = col.split("_", 1)
                 # Use specified aggregation method for baseline improvements
-                if baseline_aggregation == "median":
+                if aggregation_method == "median":
                     avg_improvement = delta_methods[col].median()
                 else:  # mean
                     avg_improvement = delta_methods[col].mean()
@@ -558,8 +725,10 @@ def create_embedding_model_heatmap(
             print("No embedding-regressor combinations found")
             return None, None
 
-        title_suffix = f"Relative to Random Baseline (% Improvement, {baseline_aggregation.title()})"
-        cbar_label = f"% Improvement vs Random ({baseline_aggregation.title()})"
+        title_suffix = (
+            f"Relative to Random Baseline (% Improvement, {aggregation_method.title()})"
+        )
+        cbar_label = f"% Improvement vs Random ({aggregation_method.title()})"
     else:
         # Create pivot table: embedding x model (raw values)
         pivot_data = non_random_data.pivot_table(
@@ -592,12 +761,15 @@ def create_embedding_model_heatmap(
         fmt=fmt,
         cmap=cmap,
         center=center,
+        vmin=vmin if not compare_to_baseline else None,
+        vmax=vmax if not compare_to_baseline else None,
         cbar_kws={"label": cbar_label},
         ax=ax,
     )
 
+    dataset_label = f" ({dataset_type.upper()})" if dataset_type else ""
     ax.set_title(
-        f"Performance Heatmap: Embeddings vs Models\n{title_suffix}",
+        f"Performance Heatmap: Embeddings vs Models{dataset_label}\n{title_suffix}",
         fontsize=14,
         pad=20,
     )
@@ -626,6 +798,9 @@ def create_embedding_model_heatmap_with_stats(
     aggregation_method: Literal["mean", "median"] = "mean",
     compare_to_baseline: bool = False,
     baseline_aggregation: Literal["mean", "median"] = "mean",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    dataset_type: Optional[str] = None,
 ) -> Tuple[plt.Figure, plt.Axes]:
     """
     Create heatmap with embeddings vs models, including statistical information.
@@ -638,6 +813,9 @@ def create_embedding_model_heatmap_with_stats(
         aggregation_method: How to aggregate across datasets (mean or median)
         compare_to_baseline: If True, show relative performance vs random baseline
         baseline_aggregation: How to aggregate baseline improvements across datasets (mean or median)
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+        dataset_type: Optional dataset type label ("trans", "cis", or "together") to include in title
 
     Returns:
         Figure and Axes objects
@@ -694,13 +872,27 @@ def create_embedding_model_heatmap_with_stats(
         method_columns = [col for col in delta.columns if col != "random"]
         delta_methods = delta[method_columns]
 
+        # Get unique embeddings from original data to properly split combined names
+        unique_embeddings = sorted(all_data["embedding"].unique())
+
         # Convert back to embedding x regressor format
         embedding_regressor_data = []
         for col in method_columns:
             if "_" in col:
-                embedding, regressor = col.split("_", 1)
+                # Try to match known embeddings first (longest match first)
+                embedding = None
+                regressor = None
+                for emb in sorted(unique_embeddings, key=len, reverse=True):
+                    if col.startswith(emb + "_"):
+                        embedding = emb
+                        regressor = col[len(emb) + 1 :]  # Remove embedding + "_"
+                        break
+
+                # Fallback: if no match found, use simple split on first underscore
+                if embedding is None:
+                    embedding, regressor = col.split("_", 1)
                 # Use specified aggregation method for baseline improvements
-                if baseline_aggregation == "median":
+                if aggregation_method == "median":
                     avg_improvement = delta_methods[col].median()
                 else:  # mean
                     avg_improvement = delta_methods[col].mean()
@@ -721,8 +913,10 @@ def create_embedding_model_heatmap_with_stats(
             print("No embedding-regressor combinations found")
             return None, None
 
-        title_suffix = f"Relative to Random Baseline (% Improvement, {baseline_aggregation.title()})"
-        cbar_label = f"% Improvement vs Random ({baseline_aggregation.title()})"
+        title_suffix = (
+            f"Relative to Random Baseline (% Improvement, {aggregation_method.title()})"
+        )
+        cbar_label = f"% Improvement vs Random ({aggregation_method.title()})"
     else:
         # Create pivot table: embedding x model (raw values)
         pivot_data = non_random_data.pivot_table(
@@ -764,10 +958,13 @@ def create_embedding_model_heatmap_with_stats(
         fmt=fmt,
         cmap=cmap,
         center=center,
+        vmin=vmin if not compare_to_baseline else None,
+        vmax=vmax if not compare_to_baseline else None,
         cbar_kws={"label": cbar_label},
         ax=ax1,
     )
-    ax1.set_title(f"Performance: {title_suffix}")
+    dataset_label = f" ({dataset_type.upper()})" if dataset_type else ""
+    ax1.set_title(f"Performance{dataset_label}: {title_suffix}")
     ax1.set_xlabel("Model")
     ax1.set_ylabel("Embedding Method")
     plt.setp(ax1.get_xticklabels(), rotation=45, ha="right")
@@ -782,7 +979,7 @@ def create_embedding_model_heatmap_with_stats(
         cbar_kws={"label": "Number of Samples"},
         ax=ax2,
     )
-    ax2.set_title("Sample Count per Embedding-Model Combination")
+    ax2.set_title(f"Sample Count per Embedding-Model Combination{dataset_label}")
     ax2.set_xlabel("Model")
     ax2.set_ylabel("Embedding Method")
     plt.setp(ax2.get_xticklabels(), rotation=45, ha="right")
@@ -796,6 +993,574 @@ def create_embedding_model_heatmap_with_stats(
         print(f"Saved embedding-model heatmap with stats to: {save_path}")
 
     return fig, (ax1, ax2)
+
+
+def create_combined_analysis_figure(
+    results_df: pd.DataFrame,
+    metric: str = "auc_normalized_pred",
+    figsize: Tuple[int, int] = (24, 20),
+    save_path: Optional[str] = None,
+    aggregation_method: Literal["mean", "median"] = "mean",
+    compare_to_baseline: bool = False,
+    baseline_aggregation: Literal["mean", "median"] = "mean",
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    dataset_type: Optional[str] = None,
+) -> Tuple[plt.Figure, np.ndarray]:
+    """
+    Create a combined figure with all 6 analysis plots in a single figure.
+
+    Args:
+        results_df: Results DataFrame
+        metric: Metric to visualize
+        figsize: Overall figure size (will be adjusted for subplots)
+        save_path: Optional path to save the plot
+        aggregation_method: How to aggregate values (mean or median)
+        compare_to_baseline: If True, show relative performance vs random baseline
+        baseline_aggregation: How to aggregate baseline improvements across datasets
+        vmin: Minimum value for color scale
+        vmax: Maximum value for color scale
+        dataset_type: Optional dataset type label ("trans", "cis", or "together")
+
+    Returns:
+        Figure and array of Axes objects
+    """
+    if results_df.empty:
+        print("No data found for combined analysis figure")
+        return None, None
+
+    # Create figure with 3 rows and 2 columns
+    fig, axes = plt.subplots(3, 2, figsize=figsize)
+    axes = axes.flatten()
+
+    # Calculate global color scale if not provided
+    non_random_for_scale = results_df[results_df["strategy"] != "random"]
+    if vmin is None or vmax is None:
+        if not non_random_for_scale.empty:
+            valid_metric_values = non_random_for_scale[metric].dropna()
+            if not valid_metric_values.empty:
+                if vmin is None:
+                    vmin = float(valid_metric_values.min())
+                if vmax is None:
+                    vmax = float(valid_metric_values.max())
+
+    # 1. Embedding performance heatmap (top-left)
+    print("Creating embedding performance heatmap (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[0].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[0].set_title("1. Embedding Performance Heatmap")
+    else:
+        # Create pivot table for embedding performance
+        results_df_copy = results_df.copy()
+        results_df_copy["embedding_regressor"] = (
+            results_df_copy["embedding"] + "_" + results_df_copy["regressor"]
+        )
+        non_random_data = results_df_copy[results_df_copy["strategy"] != "random"]
+        if not non_random_data.empty:
+            pivot_data = non_random_data.pivot_table(
+                index="dataset",
+                columns="embedding_regressor",
+                values=metric,
+                aggfunc=aggregation_method,
+            )
+            pivot_data = pivot_data.dropna(axis=0, how="all").dropna(axis=1, how="all")
+            if not pivot_data.empty:
+                pivot_data_clean = pivot_data.fillna(0).replace([np.inf, -np.inf], 0)
+                mask = pivot_data.isna()
+                sns.heatmap(
+                    pivot_data_clean,
+                    cmap="viridis",
+                    annot=True,
+                    fmt=".3f",
+                    ax=axes[0],
+                    vmin=vmin,
+                    vmax=vmax,
+                    mask=mask,
+                    cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+                )
+                title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+                axes[0].set_title(
+                    f"1. Embedding-Model Performance Heatmap{title_suffix}",
+                    fontsize=10,
+                )
+                axes[0].set_xlabel("Embedding-Model Combination", fontsize=9)
+                axes[0].set_ylabel("Dataset", fontsize=9)
+                plt.setp(axes[0].get_xticklabels(), rotation=45, ha="right", fontsize=7)
+                plt.setp(axes[0].get_yticklabels(), fontsize=7)
+            else:
+                axes[0].text(0.5, 0.5, "No data available", ha="center", va="center")
+                axes[0].set_title("1. Embedding Performance Heatmap")
+        else:
+            axes[0].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[0].set_title("1. Embedding Performance Heatmap")
+
+    # 2. Model performance heatmap (top-right)
+    print("Creating model performance heatmap (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[1].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[1].set_title("2. Model Performance Heatmap")
+    else:
+        non_random_data = results_df[results_df["strategy"] != "random"]
+        if not non_random_data.empty:
+            pivot_data = non_random_data.pivot_table(
+                index="dataset",
+                columns="regressor",
+                values=metric,
+                aggfunc=aggregation_method,
+            )
+            pivot_data = pivot_data.dropna(axis=0, how="all").dropna(axis=1, how="all")
+            if not pivot_data.empty:
+                pivot_data_clean = pivot_data.fillna(0).replace([np.inf, -np.inf], 0)
+                mask = pivot_data.isna()
+                sns.heatmap(
+                    pivot_data_clean,
+                    cmap="viridis",
+                    annot=True,
+                    fmt=".3f",
+                    ax=axes[1],
+                    vmin=vmin,
+                    vmax=vmax,
+                    mask=mask,
+                    cbar_kws={"label": f"{metric.replace('_', ' ').title()}"},
+                )
+                title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+                axes[1].set_title(
+                    f"2. Model Performance Heatmap{title_suffix}", fontsize=10
+                )
+                axes[1].set_xlabel("Model", fontsize=9)
+                axes[1].set_ylabel("Dataset", fontsize=9)
+                plt.setp(axes[1].get_xticklabels(), rotation=45, ha="right", fontsize=7)
+                plt.setp(axes[1].get_yticklabels(), fontsize=7)
+            else:
+                axes[1].text(0.5, 0.5, "No data available", ha="center", va="center")
+                axes[1].set_title("2. Model Performance Heatmap")
+        else:
+            axes[1].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[1].set_title("2. Model Performance Heatmap")
+
+    # 3. Embedding summary plot (middle-left) - bar plot only
+    print("Creating embedding summary plot (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[2].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[2].set_title("3. Embedding Summary")
+    else:
+        non_random_data = results_df[results_df["strategy"] != "random"]
+        if not non_random_data.empty:
+            embedding_stats = (
+                non_random_data.groupby("embedding")[metric]
+                .agg(["mean", "std", "count", "median"])
+                .reset_index()
+            )
+            embedding_stats["ci_lower"] = embedding_stats[
+                "mean"
+            ] - 1.96 * embedding_stats["std"] / np.sqrt(embedding_stats["count"])
+            embedding_stats["ci_upper"] = embedding_stats[
+                "mean"
+            ] + 1.96 * embedding_stats["std"] / np.sqrt(embedding_stats["count"])
+            sort_col = aggregation_method
+            embedding_stats = embedding_stats.sort_values(sort_col, ascending=True)
+            value_col = aggregation_method
+            bars = axes[2].bar(
+                embedding_stats["embedding"],
+                embedding_stats[value_col],
+                yerr=[
+                    embedding_stats["mean"] - embedding_stats["ci_lower"],
+                    embedding_stats["ci_upper"] - embedding_stats["mean"],
+                ],
+                capsize=5,
+                color="skyblue",
+                edgecolor="navy",
+                alpha=0.7,
+            )
+            title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+            axes[2].set_title(f"3. Embedding Summary{title_suffix}", fontsize=10)
+            axes[2].set_xlabel("Embedding Method", fontsize=9)
+            axes[2].set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=9)
+            axes[2].tick_params(axis="x", rotation=45, labelsize=7)
+            axes[2].tick_params(axis="y", labelsize=7)
+            for bar, val in zip(bars, embedding_stats[value_col]):
+                axes[2].text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.01,
+                    f"{val:.3f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=6,
+                )
+        else:
+            axes[2].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[2].set_title("3. Embedding Summary")
+
+    # 4. Model summary plot (middle-right) - bar plot only
+    print("Creating model summary plot (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[3].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[3].set_title("4. Model Summary")
+    else:
+        non_random_data = results_df[results_df["strategy"] != "random"]
+        if not non_random_data.empty:
+            model_stats = (
+                non_random_data.groupby("regressor")[metric]
+                .agg(["mean", "std", "count", "median"])
+                .reset_index()
+            )
+            model_stats["ci_lower"] = model_stats["mean"] - 1.96 * model_stats[
+                "std"
+            ] / np.sqrt(model_stats["count"])
+            model_stats["ci_upper"] = model_stats["mean"] + 1.96 * model_stats[
+                "std"
+            ] / np.sqrt(model_stats["count"])
+            sort_col = aggregation_method
+            model_stats = model_stats.sort_values(sort_col, ascending=True)
+            value_col = aggregation_method
+            bars = axes[3].bar(
+                model_stats["regressor"],
+                model_stats[value_col],
+                yerr=[
+                    model_stats["mean"] - model_stats["ci_lower"],
+                    model_stats["ci_upper"] - model_stats["mean"],
+                ],
+                capsize=5,
+                color="lightcoral",
+                edgecolor="darkred",
+                alpha=0.7,
+            )
+            title_suffix = f" ({dataset_type.upper()})" if dataset_type else ""
+            axes[3].set_title(f"4. Model Summary{title_suffix}", fontsize=10)
+            axes[3].set_xlabel("Model", fontsize=9)
+            axes[3].set_ylabel(f"{metric.replace('_', ' ').title()}", fontsize=9)
+            axes[3].tick_params(axis="x", rotation=45, labelsize=7)
+            axes[3].tick_params(axis="y", labelsize=7)
+            for bar, val in zip(bars, model_stats[value_col]):
+                axes[3].text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + 0.01,
+                    f"{val:.3f}",
+                    ha="center",
+                    va="bottom",
+                    fontsize=6,
+                )
+        else:
+            axes[3].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[3].set_title("4. Model Summary")
+
+    # 5. Embedding vs Model heatmap (bottom-left)
+    print("Creating embedding vs model heatmap (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[4].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[4].set_title("5. Embedding vs Model Heatmap")
+    else:
+        non_random_data = results_df[results_df["strategy"] != "random"]
+        if not non_random_data.empty:
+            if compare_to_baseline:
+                random_data = results_df[results_df["strategy"] == "random"]
+                if not random_data.empty:
+                    all_data = pd.concat(
+                        [non_random_data, random_data], ignore_index=True
+                    )
+                    all_data["embedding_regressor"] = (
+                        all_data["embedding"] + "_" + all_data["regressor"]
+                    )
+                    all_data.loc[
+                        all_data["strategy"] == "random", "embedding_regressor"
+                    ] = "random"
+                    pivot_data = all_data.pivot_table(
+                        index="dataset",
+                        columns="embedding_regressor",
+                        values=metric,
+                        aggfunc=aggregation_method,
+                    )
+                    if "random" in pivot_data.columns:
+                        baseline_series = pivot_data["random"]
+                        delta = (
+                            pivot_data.subtract(baseline_series, axis=0).div(
+                                baseline_series, axis=0
+                            )
+                        ) * 100
+                        method_columns = [
+                            col for col in delta.columns if col != "random"
+                        ]
+                        delta_methods = delta[method_columns]
+                        unique_embeddings = sorted(all_data["embedding"].unique())
+                        embedding_regressor_data = []
+                        for col in method_columns:
+                            if "_" in col:
+                                embedding = None
+                                regressor = None
+                                for emb in sorted(
+                                    unique_embeddings, key=len, reverse=True
+                                ):
+                                    if col.startswith(emb + "_"):
+                                        embedding = emb
+                                        regressor = col[len(emb) + 1 :]
+                                        break
+                                if embedding is None:
+                                    embedding, regressor = col.split("_", 1)
+                                if aggregation_method == "median":
+                                    avg_improvement = delta_methods[col].median()
+                                else:
+                                    avg_improvement = delta_methods[col].mean()
+                                embedding_regressor_data.append(
+                                    {
+                                        "embedding": embedding,
+                                        "regressor": regressor,
+                                        "improvement": avg_improvement,
+                                    }
+                                )
+                        if embedding_regressor_data:
+                            df_temp = pd.DataFrame(embedding_regressor_data)
+                            pivot_data = df_temp.pivot_table(
+                                index="embedding",
+                                columns="regressor",
+                                values="improvement",
+                            )
+                            cmap = "coolwarm"
+                            center = 0.0
+                            fmt = ".1f"
+                            cbar_label = f"% Improvement vs Random ({aggregation_method.title()})"
+                        else:
+                            pivot_data = pd.DataFrame()
+                    else:
+                        pivot_data = pd.DataFrame()
+                else:
+                    pivot_data = non_random_data.pivot_table(
+                        index="embedding",
+                        columns="regressor",
+                        values=metric,
+                        aggfunc=aggregation_method,
+                    )
+                    cmap = "viridis"
+                    center = None
+                    fmt = ".3f"
+                    cbar_label = f"{metric.replace('_', ' ').title()}"
+            else:
+                pivot_data = non_random_data.pivot_table(
+                    index="embedding",
+                    columns="regressor",
+                    values=metric,
+                    aggfunc=aggregation_method,
+                )
+                cmap = "viridis"
+                center = None
+                fmt = ".3f"
+                cbar_label = f"{metric.replace('_', ' ').title()}"
+
+            if not pivot_data.empty:
+                sns.heatmap(
+                    pivot_data,
+                    annot=True,
+                    fmt=fmt,
+                    cmap=cmap,
+                    center=center,
+                    vmin=vmin if not compare_to_baseline else None,
+                    vmax=vmax if not compare_to_baseline else None,
+                    cbar_kws={"label": cbar_label},
+                    ax=axes[4],
+                )
+                dataset_label = f" ({dataset_type.upper()})" if dataset_type else ""
+                title_suffix = (
+                    f"Relative to Random Baseline (% Improvement, {aggregation_method.title()})"
+                    if compare_to_baseline
+                    else f"{aggregation_method.title()} {metric.replace('_', ' ').title()}"
+                )
+                axes[4].set_title(
+                    f"5. Embeddings vs Models{dataset_label}\n{title_suffix}",
+                    fontsize=10,
+                )
+                axes[4].set_xlabel("Model", fontsize=9)
+                axes[4].set_ylabel("Embedding Method", fontsize=9)
+                plt.setp(axes[4].get_xticklabels(), rotation=45, ha="right", fontsize=7)
+                plt.setp(axes[4].get_yticklabels(), fontsize=7)
+            else:
+                axes[4].text(0.5, 0.5, "No data available", ha="center", va="center")
+                axes[4].set_title("5. Embedding vs Model Heatmap")
+        else:
+            axes[4].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[4].set_title("5. Embedding vs Model Heatmap")
+
+    # 6. Embedding vs Model heatmap with statistics (bottom-right) - performance only
+    print("Creating embedding vs model heatmap with stats (combined figure)...")
+    if non_random_for_scale.empty:
+        axes[5].text(0.5, 0.5, "No data available", ha="center", va="center")
+        axes[5].set_title("6. Embedding vs Model Heatmap (with stats)")
+    else:
+        non_random_data = results_df[results_df["strategy"] != "random"]
+        if not non_random_data.empty:
+            # Same logic as plot 5 for the performance heatmap
+            if compare_to_baseline:
+                random_data = results_df[results_df["strategy"] == "random"]
+                if not random_data.empty:
+                    all_data = pd.concat(
+                        [non_random_data, random_data], ignore_index=True
+                    )
+                    all_data["embedding_regressor"] = (
+                        all_data["embedding"] + "_" + all_data["regressor"]
+                    )
+                    all_data.loc[
+                        all_data["strategy"] == "random", "embedding_regressor"
+                    ] = "random"
+                    pivot_data = all_data.pivot_table(
+                        index="dataset",
+                        columns="embedding_regressor",
+                        values=metric,
+                        aggfunc=aggregation_method,
+                    )
+                    if "random" in pivot_data.columns:
+                        baseline_series = pivot_data["random"]
+                        delta = (
+                            pivot_data.subtract(baseline_series, axis=0).div(
+                                baseline_series, axis=0
+                            )
+                        ) * 100
+                        method_columns = [
+                            col for col in delta.columns if col != "random"
+                        ]
+                        delta_methods = delta[method_columns]
+                        unique_embeddings = sorted(all_data["embedding"].unique())
+                        embedding_regressor_data = []
+                        for col in method_columns:
+                            if "_" in col:
+                                embedding = None
+                                regressor = None
+                                for emb in sorted(
+                                    unique_embeddings, key=len, reverse=True
+                                ):
+                                    if col.startswith(emb + "_"):
+                                        embedding = emb
+                                        regressor = col[len(emb) + 1 :]
+                                        break
+                                if embedding is None:
+                                    embedding, regressor = col.split("_", 1)
+                                if aggregation_method == "median":
+                                    avg_improvement = delta_methods[col].median()
+                                else:
+                                    avg_improvement = delta_methods[col].mean()
+                                embedding_regressor_data.append(
+                                    {
+                                        "embedding": embedding,
+                                        "regressor": regressor,
+                                        "improvement": avg_improvement,
+                                    }
+                                )
+                        if embedding_regressor_data:
+                            df_temp = pd.DataFrame(embedding_regressor_data)
+                            pivot_data = df_temp.pivot_table(
+                                index="embedding",
+                                columns="regressor",
+                                values="improvement",
+                            )
+                            cmap = "coolwarm"
+                            center = 0.0
+                            fmt = ".1f"
+                            cbar_label = f"% Improvement vs Random ({aggregation_method.title()})"
+                        else:
+                            pivot_data = pd.DataFrame()
+                    else:
+                        pivot_data = pd.DataFrame()
+                else:
+                    pivot_data = non_random_data.pivot_table(
+                        index="embedding",
+                        columns="regressor",
+                        values=metric,
+                        aggfunc=aggregation_method,
+                    )
+                    cmap = "viridis"
+                    center = None
+                    fmt = ".3f"
+                    cbar_label = f"{metric.replace('_', ' ').title()}"
+            else:
+                pivot_data = non_random_data.pivot_table(
+                    index="embedding",
+                    columns="regressor",
+                    values=metric,
+                    aggfunc=aggregation_method,
+                )
+                cmap = "viridis"
+                center = None
+                fmt = ".3f"
+                cbar_label = f"{metric.replace('_', ' ').title()}"
+
+            if not pivot_data.empty:
+                # Calculate count for annotation
+                count_data = non_random_data.pivot_table(
+                    index="embedding",
+                    columns="regressor",
+                    values=metric,
+                    aggfunc="count",
+                )
+                # Create annotation with count in parentheses
+                annot_data = pivot_data.copy()
+                for emb in pivot_data.index:
+                    for reg in pivot_data.columns:
+                        val = pivot_data.loc[emb, reg]
+                        count = (
+                            count_data.loc[emb, reg]
+                            if emb in count_data.index and reg in count_data.columns
+                            else 0
+                        )
+                        if pd.notna(val):
+                            if fmt == ".1f":
+                                annot_data.loc[
+                                    emb, reg
+                                ] = f"{val:.1f}\n(n={int(count)})"
+                            elif fmt == ".3f":
+                                annot_data.loc[
+                                    emb, reg
+                                ] = f"{val:.3f}\n(n={int(count)})"
+                            else:
+                                annot_data.loc[
+                                    emb, reg
+                                ] = f"{val:.2f}\n(n={int(count)})"
+                        else:
+                            annot_data.loc[emb, reg] = ""
+                sns.heatmap(
+                    pivot_data,
+                    annot=annot_data,
+                    fmt="",
+                    cmap=cmap,
+                    center=center,
+                    vmin=vmin if not compare_to_baseline else None,
+                    vmax=vmax if not compare_to_baseline else None,
+                    cbar_kws={"label": cbar_label},
+                    ax=axes[5],
+                )
+                dataset_label = f" ({dataset_type.upper()})" if dataset_type else ""
+                title_suffix = (
+                    f"Relative to Random Baseline (% Improvement, {aggregation_method.title()})"
+                    if compare_to_baseline
+                    else f"{aggregation_method.title()} {metric.replace('_', ' ').title()} (with sample counts)"
+                )
+                axes[5].set_title(
+                    f"6. Embeddings vs Models{dataset_label}\n{title_suffix}",
+                    fontsize=10,
+                )
+                axes[5].set_xlabel("Model", fontsize=9)
+                axes[5].set_ylabel("Embedding Method", fontsize=9)
+                plt.setp(axes[5].get_xticklabels(), rotation=45, ha="right", fontsize=7)
+                plt.setp(axes[5].get_yticklabels(), fontsize=7)
+            else:
+                axes[5].text(0.5, 0.5, "No data available", ha="center", va="center")
+                axes[5].set_title("6. Embedding vs Model Heatmap (with stats)")
+        else:
+            axes[5].text(0.5, 0.5, "No data available", ha="center", va="center")
+            axes[5].set_title("6. Embedding vs Model Heatmap (with stats)")
+
+    # Add overall title
+    dataset_label = f" ({dataset_type.upper()})" if dataset_type else ""
+    fig.suptitle(
+        f"Comprehensive Performance Analysis{dataset_label}\n{aggregation_method.title()} {metric.replace('_', ' ').title()}",
+        fontsize=14,
+        y=0.995,
+    )
+
+    plt.tight_layout(rect=[0, 0, 1, 0.99])
+
+    if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        fig.savefig(save_path, dpi=300, bbox_inches="tight")
+        print(f"Saved combined analysis figure to: {save_path}")
+
+    return fig, axes
 
 
 def perform_statistical_tests(
@@ -1131,14 +1896,21 @@ def main():
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="plots/166k_2024_regulators_summary",
-        help="Output directory for plots",
+        default=None,
+        help="Output directory for plots (default: derived from results-base-path)",
     )
     parser.add_argument(
         "--metric",
         type=str,
         default="auc_normalized_pred",
         help="Metric to analyze",
+    )
+    parser.add_argument(
+        "--aggregation-method",
+        type=str,
+        choices=["mean", "median"],
+        default="median",
+        help="Aggregation method to use for plots (mean or median). Default: median",
     )
     parser.add_argument(
         "--compare-to-baseline",
@@ -1152,6 +1924,13 @@ def main():
         default="mean",
         help="How to aggregate baseline improvements across datasets (mean or median)",
     )
+    parser.add_argument(
+        "--dataset-type",
+        type=str,
+        choices=["trans", "cis", "together"],
+        default=None,
+        help="Dataset type label to include in plot titles (trans, cis, or together)",
+    )
     args = parser.parse_args()
 
     # Check if path exists
@@ -1159,8 +1938,26 @@ def main():
         print(f"Results path not found: {args.results_base_path}")
         return
 
+    # Derive output directory from results_base_path if not provided
+    if args.output_dir is None:
+        results_path = Path(args.results_base_path)
+        results_base_name = results_path.name or results_path.stem
+        output_dir = Path("plots") / results_base_name / "averaged_performance"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        args.output_dir = str(output_dir)
+        print(f"Output directory derived from input path: {args.output_dir}")
+    else:
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Get dataset type (default to None if not specified)
+    dataset_type = args.dataset_type
+
+    # Set up cache file path in input directory
+    cache_file = os.path.join(args.results_base_path, "collected_all_results_cache.csv")
+
     print("Collecting results...")
-    results_df = collect_all_results(args.results_base_path)
+    results_df = collect_all_results(args.results_base_path, cache_file=cache_file)
 
     if results_df.empty:
         print("No results found!")
@@ -1194,16 +1991,41 @@ def main():
     # Print summary statistics
     print_summary_statistics(results_df, args.metric)
 
-    # Create output directory
-    os.makedirs(args.output_dir, exist_ok=True)
+    # Calculate global color scale for consistent coloring across plots
+    non_random_for_scale = results_df[results_df["strategy"] != "random"]
+    if not non_random_for_scale.empty:
+        valid_metric_values = non_random_for_scale[args.metric].dropna()
+        if not valid_metric_values.empty:
+            global_vmin = float(valid_metric_values.min())
+            global_vmax = float(valid_metric_values.max())
+            print(
+                f"\nGlobal color scale for {args.metric}: [{global_vmin:.4f}, {global_vmax:.4f}]"
+            )
+        else:
+            global_vmin = None
+            global_vmax = None
+            print(f"Warning: No valid values found for {args.metric}, using auto scale")
+    else:
+        global_vmin = None
+        global_vmax = None
+        print("Warning: No non-random data found, using auto scale")
+
+    # Create subdirectory for aggregation method
+    aggregation_output_dir = os.path.join(args.output_dir, args.aggregation_method)
+    os.makedirs(aggregation_output_dir, exist_ok=True)
 
     # 1. Embedding performance heatmap
     print("\nCreating embedding performance heatmap...")
     fig, ax = create_embedding_performance_heatmap(
         results_df,
         metric=args.metric,
+        aggregation_method=args.aggregation_method,
+        vmin=global_vmin,
+        vmax=global_vmax,
+        dataset_type=dataset_type,
         save_path=os.path.join(
-            args.output_dir, f"embedding_performance_heatmap_{args.metric}.png"
+            aggregation_output_dir,
+            f"embedding_performance_heatmap_{args.metric}.pdf",
         ),
     )
     if fig:
@@ -1214,8 +2036,13 @@ def main():
     fig, ax = create_model_performance_heatmap(
         results_df,
         metric=args.metric,
+        aggregation_method=args.aggregation_method,
+        vmin=global_vmin,
+        vmax=global_vmax,
+        dataset_type=dataset_type,
         save_path=os.path.join(
-            args.output_dir, f"model_performance_heatmap_{args.metric}.png"
+            aggregation_output_dir,
+            f"model_performance_heatmap_{args.metric}.pdf",
         ),
     )
     if fig:
@@ -1226,7 +2053,12 @@ def main():
     fig, ax = create_embedding_summary_plot(
         results_df,
         metric=args.metric,
-        save_path=os.path.join(args.output_dir, f"embedding_summary_{args.metric}.png"),
+        aggregation_method=args.aggregation_method,
+        dataset_type=dataset_type,
+        save_path=os.path.join(
+            aggregation_output_dir,
+            f"embedding_summary_{args.metric}.pdf",
+        ),
     )
     if fig:
         plt.close(fig)
@@ -1236,7 +2068,12 @@ def main():
     fig, ax = create_model_summary_plot(
         results_df,
         metric=args.metric,
-        save_path=os.path.join(args.output_dir, f"model_summary_{args.metric}.png"),
+        aggregation_method=args.aggregation_method,
+        dataset_type=dataset_type,
+        save_path=os.path.join(
+            aggregation_output_dir,
+            f"model_summary_{args.metric}.pdf",
+        ),
     )
     if fig:
         plt.close(fig)
@@ -1246,10 +2083,15 @@ def main():
     fig, ax = create_embedding_model_heatmap(
         results_df,
         metric=args.metric,
+        aggregation_method=args.aggregation_method,
         compare_to_baseline=args.compare_to_baseline,
         baseline_aggregation=args.baseline_aggregation,
+        vmin=global_vmin,
+        vmax=global_vmax,
+        dataset_type=dataset_type,
         save_path=os.path.join(
-            args.output_dir, f"embedding_model_heatmap_{args.metric}.png"
+            aggregation_output_dir,
+            f"embedding_model_heatmap_{args.metric}.pdf",
         ),
     )
     if fig:
@@ -1260,16 +2102,40 @@ def main():
     fig, ax = create_embedding_model_heatmap_with_stats(
         results_df,
         metric=args.metric,
+        aggregation_method=args.aggregation_method,
         compare_to_baseline=args.compare_to_baseline,
         baseline_aggregation=args.baseline_aggregation,
+        vmin=global_vmin,
+        vmax=global_vmax,
+        dataset_type=dataset_type,
         save_path=os.path.join(
-            args.output_dir, f"embedding_model_heatmap_stats_{args.metric}.png"
+            aggregation_output_dir,
+            f"embedding_model_heatmap_stats_{args.metric}.pdf",
         ),
     )
     if fig:
         plt.close(fig)
 
-    # 7. Statistical tests
+    # 7. Combined figure with all 6 plots
+    print("\nCreating combined analysis figure with all 6 plots...")
+    fig, axes = create_combined_analysis_figure(
+        results_df,
+        metric=args.metric,
+        aggregation_method=args.aggregation_method,
+        compare_to_baseline=args.compare_to_baseline,
+        baseline_aggregation=args.baseline_aggregation,
+        vmin=global_vmin,
+        vmax=global_vmax,
+        dataset_type=dataset_type,
+        save_path=os.path.join(
+            aggregation_output_dir,
+            f"combined_analysis_figure_{args.metric}.pdf",
+        ),
+    )
+    if fig:
+        plt.close(fig)
+
+    # 8. Statistical tests
     print("Performing statistical tests...")
     test_results = perform_statistical_tests(results_df, args.metric)
 
@@ -1296,7 +2162,8 @@ def main():
 
     # Save results to CSV
     results_output_path = os.path.join(
-        args.output_dir, f"averaged_performance_results_{args.metric}.csv"
+        aggregation_output_dir,
+        f"averaged_performance_results_{args.metric}.csv",
     )
     results_df.to_csv(results_output_path, index=False)
     print(f"\nSaved detailed results to: {results_output_path}")
@@ -1306,7 +2173,8 @@ def main():
         results_df, metric=args.metric, include_random=False
     )
     dataset_summary_path = os.path.join(
-        args.output_dir, f"per_dataset_summary_{args.metric}.csv"
+        aggregation_output_dir,
+        f"per_dataset_summary_{args.metric}.csv",
     )
     if not dataset_summary_df.empty:
         dataset_summary_df.to_csv(dataset_summary_path, index=False)
@@ -1314,7 +2182,7 @@ def main():
     else:
         print("No data available to write per-dataset summary CSV")
 
-    print(f"\nAnalysis complete! All plots saved to: {args.output_dir}")
+    print(f"\nAnalysis complete! All plots saved to: {aggregation_output_dir}")
 
 
 if __name__ == "__main__":
