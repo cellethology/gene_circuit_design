@@ -1,13 +1,14 @@
 import logging
 from typing import List, Optional, Sequence
+
 import numpy as np
 from sklearn.cluster import KMeans
 
 from utils.sequence_utils import (
+    SequenceModificationMethod,
     flatten_one_hot_sequences,
     flatten_one_hot_sequences_with_pca,
     one_hot_encode_sequences,
-    SequenceModificationMethod,
 )
 
 logger = logging.getLogger(__name__)
