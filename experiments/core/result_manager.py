@@ -1,0 +1,136 @@
+"""
+Result saving utilities for active learning experiments.
+"""
+
+import logging
+from typing import Any, Dict, List
+
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+class ResultManager:
+    """
+    Handles saving experiment results to files.
+    """
+
+    def __init__(
+        self,
+        strategy: str,
+        seq_mod_method: str,
+        regression_model_name: str,
+        seed: int,
+        initial_sample_size: int,
+        batch_size: int,
+    ) -> None:
+        """
+        Initialize the result manager.
+
+        Args:
+            strategy: Selection strategy name
+            seq_mod_method: Sequence modification method
+            regression_model_name: Name of regression model
+            seed: Random seed
+            initial_sample_size: Initial training set size
+            batch_size: Batch size for each round
+        """
+        self.strategy = strategy
+        self.seq_mod_method = seq_mod_method
+        self.regression_model_name = regression_model_name
+        self.seed = seed
+        self.initial_sample_size = initial_sample_size
+        self.batch_size = batch_size
+
+    def save_results(
+        self,
+        output_path: str,
+        results: List[Dict[str, Any]],
+        custom_metrics: List[Dict[str, Any]],
+        selected_variants: List[Dict[str, Any]],
+    ) -> None:
+        """
+        Save all experiment results to CSV files.
+
+        Args:
+            output_path: Base path for output files
+            results: List of result dictionaries for each round
+            custom_metrics: List of custom metric dictionaries
+            selected_variants: List of selected variant dictionaries
+        """
+        # Save main results
+        if results:
+            results_df = pd.DataFrame(results)
+            results_df.to_csv(output_path, index=False)
+            logger.info(f"Results saved to {output_path}")
+
+        # Save custom metrics
+        if custom_metrics:
+            custom_metrics_path = output_path.replace(".csv", "_custom_metrics.csv")
+            custom_metrics_df = pd.DataFrame(custom_metrics)
+
+            # Add metadata columns
+            custom_metrics_df["strategy"] = self.strategy
+            custom_metrics_df["seq_mod_method"] = self.seq_mod_method
+            custom_metrics_df["regression_model"] = self.regression_model_name
+            custom_metrics_df["seed"] = self.seed
+            custom_metrics_df["round"] = range(1, len(custom_metrics) + 1)
+
+            # Calculate train_size for each round
+            train_sizes = []
+            for i in range(len(custom_metrics)):
+                if i == 0:
+                    train_size = self.initial_sample_size
+                else:
+                    train_size = self.initial_sample_size + (i * self.batch_size)
+                train_sizes.append(train_size)
+            custom_metrics_df["train_size"] = train_sizes
+
+            # Reorder columns
+            metadata_cols = [
+                "round",
+                "strategy",
+                "seed",
+                "train_size",
+                "regression_model",
+                "seq_mod_method",
+            ]
+            cols = metadata_cols + [
+                col for col in custom_metrics_df.columns if col not in metadata_cols
+            ]
+            custom_metrics_df = custom_metrics_df[cols]
+
+            custom_metrics_df.to_csv(custom_metrics_path, index=False)
+            logger.info(f"Custom metrics saved to {custom_metrics_path}")
+
+        # Save selected variants
+        if selected_variants:
+            selected_variants_path = output_path.replace(
+                ".csv", "_selected_variants.csv"
+            )
+            selected_variants_df = pd.DataFrame(selected_variants)
+
+            # Add metadata
+            selected_variants_df["regression_model"] = self.regression_model_name
+            selected_variants_df["seq_mod_method"] = self.seq_mod_method
+
+            # Reorder columns
+            metadata_cols = [
+                "round",
+                "strategy",
+                "seed",
+                "regression_model",
+                "seq_mod_method",
+                "variant_index",
+                "variant_id",
+                "expression",
+                "log_likelihood",
+                "sequence",
+            ]
+            cols = metadata_cols + [
+                col for col in selected_variants_df.columns if col not in metadata_cols
+            ]
+            selected_variants_df = selected_variants_df[cols]
+
+            selected_variants_df.to_csv(selected_variants_path, index=False)
+            logger.info(f"Selected variants saved to {selected_variants_path}")
