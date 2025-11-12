@@ -68,7 +68,7 @@ def run_single_experiment(
         batch_size=batch_size,
         test_size=test_size,
         random_seed=seed,
-        seq_mod_method=seq_mod_method.value,
+        seq_mod_method=seq_mod_method,
         no_test=no_test,
         normalize_input_output=normalize_input_output,
         use_pca=use_pca,
@@ -86,9 +86,9 @@ def run_single_experiment(
             train_size_for_round = initial_sample_size + (i * batch_size)
             metrics_with_metadata = {
                 "round": i,
-                "strategy": strategy.value,
-                "seq_mod_method": seq_mod_method.value,
-                "regression_model": regression_model.value,
+                "strategy": strategy,
+                "seq_mod_method": seq_mod_method,
+                "regression_model": regression_model,
                 "seed": seed,
                 "train_size": train_size_for_round,
                 **metrics,
@@ -101,7 +101,7 @@ def run_single_experiment(
 
     seed_output_path = (
         output_path
-        / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
+        / f"{strategy}_{seq_mod_method}_{regression_model}_seed_{seed}_results.csv"
     )
     experiment.save_results(str(seed_output_path))
 
@@ -114,9 +114,9 @@ def run_single_experiment(
     )
 
     return (
-        strategy.value,
-        seq_mod_method.value,
-        regression_model.value,
+        strategy,
+        seq_mod_method,
+        regression_model,
         seed,
         results,
         custom_metrics,
