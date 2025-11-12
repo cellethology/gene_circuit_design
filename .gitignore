@@ -99,7 +99,6 @@ setting.json
 
 # dir
 .claude/
-job_sub/
 data_new_deprecated/
 
 # logs
