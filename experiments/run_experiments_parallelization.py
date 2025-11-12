@@ -31,7 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 def run_single_experiment(
-    experiment_config: Dict[str, Any],
+    data_path: str,
+    pipeline_param: Dict[str, Any],
 ) -> Tuple[str, str, str, int, List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Run a single experiment with given configuration.
@@ -43,21 +44,20 @@ def run_single_experiment(
         Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
     """
     # Extract parameters from config
-    data_path = experiment_config["data_path"]
-    strategy = experiment_config["strategy"]
-    regression_model = experiment_config["regression_model"]
-    seq_mod_method = experiment_config["seq_mod_method"]
-    seed = experiment_config["seed"]
-    initial_sample_size = experiment_config["initial_sample_size"]
-    batch_size = experiment_config["batch_size"]
-    test_size = experiment_config["test_size"]
-    no_test = experiment_config["no_test"]
-    max_rounds = experiment_config["max_rounds"]
-    normalize_input_output = experiment_config["normalize_input_output"]
-    output_dir = experiment_config["output_dir"]
-    target_val_key = experiment_config["target_val_key"]
-    use_pca = experiment_config.get("use_pca", False)
-    pca_components = experiment_config.get("pca_components", 4096)
+    strategy = pipeline_param["strategy"]
+    regression_model = pipeline_param["regression_model"]
+    seq_mod_method = pipeline_param["seq_mod_method"]
+    seed = pipeline_param["seed"]
+    initial_sample_size = pipeline_param["initial_sample_size"]
+    batch_size = pipeline_param["batch_size"]
+    test_size = pipeline_param["test_size"]
+    no_test = pipeline_param["no_test"]
+    max_rounds = pipeline_param["max_rounds"]
+    normalize_input_output = pipeline_param["normalize_input_output"]
+    output_dir = pipeline_param["output_dir"]
+    target_val_key = pipeline_param["target_val_key"]
+    use_pca = pipeline_param.get("use_pca", False)
+    pca_components = pipeline_param.get("pca_components", 4096)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
