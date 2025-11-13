@@ -43,10 +43,23 @@ def run_single_experiment(
     Returns:
         Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
     """
-    # Extract parameters from config
+    from utils.config_loader import SelectionStrategy
+    from utils.model_loader import RegressionModelType
+    from utils.sequence_utils import SequenceModificationMethod
+
+    # Extract parameters from config and convert strings to enums if needed
     strategy = pipeline_param["strategy"]
+    if isinstance(strategy, str):
+        strategy = SelectionStrategy(strategy)
+
     regression_model = pipeline_param["regression_model"]
+    if isinstance(regression_model, str):
+        regression_model = RegressionModelType(regression_model)
+
     seq_mod_method = pipeline_param["seq_mod_method"]
+    if isinstance(seq_mod_method, str):
+        seq_mod_method = SequenceModificationMethod(seq_mod_method)
+
     seed = pipeline_param["seed"]
     initial_sample_size = pipeline_param["initial_sample_size"]
     batch_size = pipeline_param["batch_size"]
