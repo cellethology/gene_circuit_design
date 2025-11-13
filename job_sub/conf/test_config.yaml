@@ -1,7 +1,7 @@
 defaults:
   - override hydra/launcher: submitit_local
 
-data_paths: /storage2/wangzitongLab/lizelun/project/gene_circuit_design/data_new/166k/evo2/cis_grouped_safetensors/CIS_1-1-1-1.safetensors
+data_paths: /storage2/wangzitongLab/lizelun/project/gene_circuit_design/data_new/Rai_2024_166k/evo2/03_cis_grouped_safetensors/CIS_1-1-1-1.safetensors
 
 pipeline_params:
   # Fixed (non-swept)
