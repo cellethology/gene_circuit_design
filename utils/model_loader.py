@@ -8,6 +8,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor, RandomForestRegresso
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import BayesianRidge
 
 
 # NOTE: Can the Enum class be directly referring to the model
@@ -19,6 +20,7 @@ class RegressionModelType(str, Enum):
     RANDOM_FOREST = "random_forest"
     XGBOOST = "xg_boost"
     MLP = "mlp_regressor"
+    BAYESIAN_RIDGE = "bayesian_ridge"
 
 
 def return_model(model: str, random_state: int = 42):
@@ -37,3 +39,5 @@ def return_model(model: str, random_state: int = 42):
         return MLPRegressor(
             hidden_layer_sizes=(100, 50), random_state=random_state, max_iter=50
         )
+    elif model == RegressionModelType.BAYESIAN_RIDGE:
+        return BayesianRidge()

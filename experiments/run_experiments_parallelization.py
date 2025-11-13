@@ -11,7 +11,7 @@ import random
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,6 +20,13 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.cluster import KMeans
 from sklearn.metrics import r2_score, root_mean_squared_error
 from tqdm import tqdm
+
+# 新增：主动学习两种策略所需
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.linear_model import LinearRegression, BayesianRidge
+from sklearn.neural_network import MLPRegressor, MLPClassifier
+from sklearn.base import clone
+from math import erf as _erf
 
 from utils.config_loader import SelectionStrategy
 from utils.metrics import (
@@ -390,25 +397,26 @@ class ActiveLearningExperiment:
     def _train_model(self) -> None:   
         print("=== _train_model 方法开始 ===", flush=True, file=sys.stderr)
         X_train = self._encode_sequences(self.train_indices)
-        print(f"第1步完成 - X_train形状: {X_train.shape}", flush=True, file=sys.stderr)
+    
+        #print(f"第1步完成 - X_train形状: {X_train.shape}", flush=True, file=sys.stderr)
         y_train = self.all_expressions[self.train_indices]
-        print(f"y_train形状: {y_train.shape}", flush=True, file=sys.stderr)
-        print(f"y_train维度: {y_train.ndim}", flush=True, file=sys.stderr)
+        # print(f"y_train形状: {y_train.shape}", flush=True, file=sys.stderr)
+        # print(f"y_train维度: {y_train.ndim}", flush=True, file=sys.stderr)
         
-        print("=== 数据检查完成，提前返回 ===", flush=True, file=sys.stderr)
-        #return  # 关键：提前返回，不执行训练
+        # print("=== 数据检查完成 ===", flush=True, file=sys.stderr)
+        # #return  # 关键：提前返回，不执行训练
         
         logger.info(f"Training model with {len(self.train_indices)} samples")
-        X_train = self._encode_sequences(self.train_indices)
-        print("x_train的形状：", X_train.shape,flush=True, file=sys.stderr)
-        print("x_train的维度：", X_train.ndim,flush=True, file=sys.stderr)
-        y_train = self.all_expressions[self.train_indices]
-        print("y_train1的形状：", y_train.shape,flush=True, file=sys.stderr)
-        print("y_train1的维度：", y_train.ndim,flush=True, file=sys.stderr)
+        # X_train = self._encode_sequences(self.train_indices)
+        # print("x_train的形状：", X_train.shape,flush=True, file=sys.stderr)
+        # print("x_train的维度：", X_train.ndim,flush=True, file=sys.stderr)
+        # y_train = self.all_expressions[self.train_indices]
+        # print("y_train1的形状：", y_train.shape,flush=True, file=sys.stderr)
+        # print("y_train1的维度：", y_train.ndim,flush=True, file=sys.stderr)
         y_train = y_train.reshape(-1)
-        print("y_train的形状：", y_train.shape,flush=True, file=sys.stderr)
-        print("y_train的维度：", y_train.ndim,flush=True, file=sys.stderr)
-
+        # print("y_train的形状：", y_train.shape,flush=True, file=sys.stderr)
+        # print("y_train的维度：", y_train.ndim,flush=True, file=sys.stderr)
+        
         self.model.fit(X_train, y_train)
         
 
@@ -620,6 +628,133 @@ class ActiveLearningExperiment:
 
         return selected_indices
 
+#####
+    # ========= 工具函数 =========
+    @staticmethod
+    def _entropy(probas: np.ndarray) -> np.ndarray:
+        p = np.clip(probas, 1e-12, 1.0)
+        return -np.sum(p * np.log(p), axis=1)
+
+    @staticmethod
+    def _rf_regressor_std(rf: RandomForestRegressor, X: np.ndarray) -> np.ndarray:
+        per_tree = np.vstack([est.predict(X) for est in rf.estimators_])  # [n_trees, n_samples]
+        return np.std(per_tree, axis=0)
+
+    def _bootstrap_std(self, base_model, X_unlabeled: np.ndarray, n_models: int = 5) -> np.ndarray:
+        # 给 LinearRegression / MLPRegressor 等无原生不确定性的回归器用
+        if len(self.train_indices) < 5:
+            return np.zeros(X_unlabeled.shape[0], dtype=float)
+        X_l = self._encode_sequences(self.train_indices)
+        y_l = self.all_expressions[self.train_indices]
+        preds = []
+        n = len(self.train_indices)
+        for _ in range(n_models):
+            idx = np.random.randint(0, n, size=n)
+            m = clone(base_model)
+            m.fit(X_l[idx], y_l[idx])
+            preds.append(m.predict(X_unlabeled))
+        return np.std(np.vstack(preds), axis=0)
+
+    def _predict_mean_std_any_regressor(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        为回归模型统一给出 (mean, std):
+        - BayesianRidge: 直接 return_std=True
+        - RF Regressor:  mean=rf.predict, std=树间标准差
+        - Linear / MLP Regressor: mean=predict, std=bootstrap
+        
+        """
+        m = self.model
+        # BayesianRidge（含 pipeline 尾部为 BR 的情况）
+        try:
+            mean, std = m.predict(X, return_std=True)
+            return np.asarray(mean, float), np.asarray(std, float)
+        except TypeError:
+            pass  # 不是 BayesianRidge
+
+        # RF regression
+        if isinstance(m, RandomForestRegressor):
+            #“检查能力用 hasattr，检查类型用 isinstance” 是更 Pythonic 的做法：
+            mean = m.predict(X)
+            std = self._rf_regressor_std(m, X)
+            return np.asarray(mean, float), np.asarray(std, float)
+
+        # Linear/MLP regression
+        if isinstance(m, (LinearRegression, MLPRegressor)):
+            mean = np.asarray(m.predict(X), float)
+            n_models = int(getattr(self, "uncertainty_bootstrap_models", 5))
+            std = self._bootstrap_std(m, X, n_models=n_models)
+            return mean, std
+
+
+
+    def _select_next_batch_uncertainty(self) -> List[int]:
+        """
+        Select next batch using active learning (highest uncertainty).
+        
+        """
+        X_unlabeled = self._encode_sequences(self.unlabeled_indices)
+
+        # sort by std and select top
+        _, std = self._predict_mean_std_any_regressor(X_unlabeled)
+        scores = std
+        tag = "HIGH_UNCERTAINTY(STD)"
+
+        sorted_idx = np.argsort(scores)[::-1]
+        batch_size = min(self.batch_size, len(self.unlabeled_indices))
+        selected_local = sorted_idx[:batch_size]
+        selected_indices = [self.unlabeled_indices[i] for i in selected_local]
+
+        selected_scores = scores[selected_local]
+        logger.info(
+            f"{tag}: Selected {len(selected_indices)} sequences with uncertainties: "
+            f"[{', '.join(f'{s:.4f}' for s in selected_scores)}]"
+        )
+        # === 保存每轮 std 到 CSV ===
+        round_num = getattr(self, "current_round", None)
+        if round_num is not None:  # run_experiment 中会设置
+            df = pd.DataFrame({
+                "round": round_num,
+                "unlabeled_index": self.unlabeled_indices,
+                "std": scores
+            })
+            save_path = Path("results") / "uncertainty_log.csv"
+            save_path.parent.mkdir(exist_ok=True)
+            if not save_path.exists():
+                df.to_csv(save_path, index=False)
+            else:
+                df.to_csv(save_path, mode="a", header=False, index=False)
+            logger.info(f"Uncertainty scores for round {round_num} saved to {save_path}")
+            # 可选：暴露给外部
+        self.last_uncertainty_ = {self.unlabeled_indices[i]: float(scores[i]) for i in range(len(self.unlabeled_indices))}
+        return selected_indices
+    
+    def _select_next_batch_combined_std_exp(self,alpha:float) -> List[int]:
+        """
+        Select next batch using active learning (high uncertainty + high expression).
+        
+        """
+        X_unlabeled = self._encode_sequences(self.unlabeled_indices)
+
+        predictions, std = self._predict_mean_std_any_regressor(X_unlabeled)
+        normalized_stds = (std - std.min()) / (std.max() - std.min())
+        normalized_predictions = (predictions - predictions.min())/(predictions.max()-predictions.min())
+        scores = alpha * normalized_stds + (1 - alpha) * normalized_predictions
+        tag = "HIGH_STD_AND_EXPRESSION"
+
+        sorted_idx = np.argsort(scores)[::-1]
+        batch_size = min(self.batch_size, len(self.unlabeled_indices))
+        selected_local = sorted_idx[:batch_size]
+        selected_indices = [self.unlabeled_indices[i] for i in selected_local]
+
+        selected_scores = scores[selected_local]
+        logger.info(
+            f"{tag}: Selected {len(selected_indices)} sequences with std and expression: "
+            f"[{', '.join(f'{s:.4f}' for s in selected_scores)}]"
+        )
+        return selected_indices
+
+    #####
+
     def _select_next_batch(self) -> List[int]:
         """
         Select next batch of sequences based on the configured strategy.
@@ -643,6 +778,11 @@ class ActiveLearningExperiment:
         elif self.selection_strategy == SelectionStrategy.KMEANS_RANDOM:
             # After initial K-means selection, use random selection for subsequent batches
             return self._select_next_batch_random()
+        elif self.selection_strategy == SelectionStrategy.UNCERTAINTY:
+            return self._select_next_batch_uncertainty()
+        elif self.selection_strategy == SelectionStrategy.COMBINED_STD_EXP:
+            alpha = getattr(self, "alpha", 0.5)
+            return self._select_next_batch_combined_std_exp(alpha=alpha)
         else:
             raise ValueError(f"Unknown selection strategy: {self.selection_strategy}")
 
@@ -726,6 +866,7 @@ class ActiveLearningExperiment:
                 "normalized_predictions_predictions_values_cumulative": normalized_predictions_pred_cumulative,
                 "best_value_ground_truth_values_cumulative": best_value_true_cumulative,
                 "normalized_predictions_ground_truth_values_cumulative": normalized_predictions_true_cumulative,
+                "alpha": getattr(self, "alpha", None)
             }
         )
 
@@ -803,10 +944,13 @@ class ActiveLearningExperiment:
             round_results = {
                 "round": round_num + 1,
                 "strategy": self.selection_strategy.value,
-                "seq_mod_method": self.seq_mod_method,
+                "seq_mod_method": self.seq_mod_method.value,
                 "seed": self.random_seed,
+                "regression_model": self.model.__class__.__name__,
                 "train_size": len(self.train_indices),
                 "unlabeled_size": len(self.unlabeled_indices),
+                # include alpha for strategies that use it (e.g. COMBINED_STD_EXP); will be None otherwise
+                "alpha": getattr(self, "alpha", None),
                 **metrics,
             }
             self.results.append(round_results)
@@ -863,7 +1007,12 @@ class ActiveLearningExperiment:
 
         # Save custom metrics if available
         if self.custom_metrics:
-            custom_metrics_path = output_path.replace(".csv", "_custom_metrics.csv")
+            alpha = getattr(self, "alpha", None)
+            if alpha is not None:
+                alpha_str = f"_alpha_{alpha}"
+            else:
+                alpha_str = ""
+            custom_metrics_path = output_path.replace(".csv", f"{alpha_str}_custom_metrics.csv")
             custom_metrics_df = pd.DataFrame(self.custom_metrics)
 
             # Add metadata columns to match with main results
@@ -915,7 +1064,7 @@ class ActiveLearningExperiment:
 
             # Add regression model metadata for consistency
             selected_variants_df["regression_model"] = self.model.__class__.__name__
-            selected_variants_df["seq_mod_method"] = self.seq_mod_method
+            selected_variants_df["seq_mod_method"] = self.seq_mod_method.value
 
             # Reorder columns to put metadata first
             metadata_cols = [
@@ -1019,7 +1168,9 @@ def run_single_experiment(
         pca_components=pca_components,
         target_val_key=target_val_key,
     )
-
+    alpha = experiment_config.get("alpha", None)
+    if alpha is not None:
+        experiment.alpha = alpha
     # Run experiment
     results = experiment.run_experiment(max_rounds=max_rounds)
 
@@ -1035,6 +1186,8 @@ def run_single_experiment(
                 "regression_model": regression_model.value,
                 "seed": seed,
                 "train_size": train_size_for_round,
+                # propagate alpha into custom metrics as well (None for strategies without alpha)
+                "alpha": experiment_config.get("alpha", None),
                 **metrics,
             }
             custom_metrics.append(metrics_with_metadata)
@@ -1043,9 +1196,16 @@ def run_single_experiment(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    # include alpha in filename if provided
+    alpha = experiment_config.get("alpha", None)
+    if alpha is not None:
+        alpha_str = f"_alpha_{alpha}"
+    else:
+        alpha_str = ""
+
     seed_output_path = (
         output_path
-        / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
+        / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}{alpha_str}_seed_{seed}_results.csv"
     )
     experiment.save_results(str(seed_output_path))
 
@@ -1084,6 +1244,7 @@ def run_controlled_experiment(
     use_pca: bool = False,
     pca_components: int = 4096,
     target_val_key: str = None,
+    alpha_list: Optional[List[float]] = None
 ) -> Dict[str, List[Dict[str, Any]]]:
     """
     Run controlled experiments comparing different selection strategies with multiple seeds using parallel processing.
@@ -1104,6 +1265,16 @@ def run_controlled_experiment(
     Returns:
         Dictionary mapping strategy names to their results across all seeds
     """
+    # Normalize alpha_list into a list; this controls COMBINED_STD_EXP alphas
+    if alpha_list is None:
+        alpha_list_norm: List[Optional[float]] = [None]
+    else:
+        # allow both scalar and list-like
+        if isinstance(alpha_list, (list, tuple)):
+            alpha_list_norm = list(alpha_list)
+        else:
+            alpha_list_norm = [alpha_list]
+
     all_results = {}
     all_custom_metrics = {}  # Add storage for custom metrics
     output_path = Path(output_dir)
@@ -1181,29 +1352,37 @@ def run_controlled_experiment(
                 ] = []
 
     # Create experiment configurations for parallel processing
-    experiment_configs = []
+    experiment_configs = []  # add a new parameter alpha
     for strategy in strategies:
-        for seq_mod_method in seq_mod_methods:
-            for regression_model in regression_models:
-                for seed in seeds:
-                    config = {
-                        "data_path": data_path,
-                        "strategy": strategy,
-                        "seq_mod_method": seq_mod_method,
-                        "regression_model": regression_model,
-                        "seed": seed,
-                        "initial_sample_size": initial_sample_size,
-                        "batch_size": batch_size,
-                        "test_size": test_size,
-                        "no_test": no_test,
-                        "max_rounds": max_rounds,
-                        "normalize_input_output": normalize_input_output,
-                        "output_dir": output_dir,
-                        "use_pca": use_pca,
-                        "pca_components": pca_components,
-                        "target_val_key": target_val_key
-                    }
-                    experiment_configs.append(config)
+        # For COMBINED_STD_EXP, sweep over alpha_list_norm; for others, use [None]
+        if strategy == SelectionStrategy.COMBINED_STD_EXP:
+            alphas_for_strategy = alpha_list_norm
+        else:
+            alphas_for_strategy = [None]
+
+        for alpha_val in alphas_for_strategy:
+            for seq_mod_method in seq_mod_methods:
+                for regression_model in regression_models:
+                    for seed in seeds:
+                        config = {
+                            "data_path": data_path,
+                            "strategy": strategy,
+                            "seq_mod_method": seq_mod_method,
+                            "regression_model": regression_model,
+                            "seed": seed,
+                            "initial_sample_size": initial_sample_size,
+                            "batch_size": batch_size,
+                            "test_size": test_size,
+                            "no_test": no_test,
+                            "max_rounds": max_rounds,
+                            "normalize_input_output": normalize_input_output,
+                            "output_dir": output_dir,
+                            "use_pca": use_pca,
+                            "pca_components": pca_components,
+                            "target_val_key": target_val_key,
+                            "alpha": alpha_val,
+                        }
+                        experiment_configs.append(config)
 
     # Run experiments in parallel
     total_experiments = len(experiment_configs)
@@ -1259,6 +1438,7 @@ def run_controlled_experiment(
                 results = all_results[strategy][seq_mod_method][regression_model]
                 if results:  # Only save if there are results
                     strategy_df = pd.DataFrame(results)
+                    # NOTE: these combined files may aggregate multiple alpha values; do not append alpha here
                     strategy_output_path = (
                         output_path
                         / f"{strategy}_{seq_mod_method}_{regression_model}_all_seeds_results.csv"
@@ -1276,6 +1456,7 @@ def run_controlled_experiment(
                 ]
                 if custom_metrics:  # Only save if custom metrics exist
                     custom_metrics_df = pd.DataFrame(custom_metrics)
+                    # NOTE: combined custom metrics may span multiple alpha values; keep name generic
                     custom_metrics_output_path = (
                         output_path
                         / f"{strategy}_{seq_mod_method}_{regression_model}_all_seeds_custom_metrics.csv"
@@ -1366,22 +1547,17 @@ def create_combined_results_from_files(output_path: Path) -> None:
     # Combine results files
     all_results = []
     for file_path in results_files:
-        filename = file_path.stem
-        # Parse filename: strategy_seqmod_regressor_seed_X_results
-        # Handle complex regressor names like "KNN_regression" or "linear_regresion"
-        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)_results"
-        match = re.match(pattern, filename)
-
-        if not match:
-            logger.warning(f"Could not parse filename {filename}")
-            continue
-
-        strategy, seq_mod_method, regression_model, seed = match.groups()
-        seed = int(seed)
-
         try:
             df = pd.read_csv(file_path)
-            # Add metadata columns if missing
+
+            if all(col in df.columns for col in ["strategy", "seq_mod_method", "regression_model", "seed"]):
+                all_results.append(df)
+                continue
+
+            filename = file_path.stem
+            prefix, seed_str = filename.rsplit("_seed_", 1)
+            seed = int(seed_str.replace("_results", ""))
+            strategy, seq_mod_method, regression_model = prefix.split("_", 2)
             df["strategy"] = strategy
             df["seq_mod_method"] = seq_mod_method
             df["regression_model"] = regression_model
@@ -1390,6 +1566,30 @@ def create_combined_results_from_files(output_path: Path) -> None:
         except Exception as e:
             logger.warning(f"Could not read {file_path}: {e}")
             continue
+
+            # Parse filename: strategy_seqmod_regressor_seed_X_results
+            # Handle complex regressor names like "KNN_regression" or "linear_regresion"
+        #     pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)_results"
+        #     match = re.match(pattern, filename)
+
+        # if not match:
+        #     logger.warning(f"Could not parse filename {filename}")
+        #     continue
+
+        # strategy, seq_mod_method, regression_model, seed = match.groups()
+        # seed = int(seed)
+
+        # try:
+        #     df = pd.read_csv(file_path)
+        #     # Add metadata columns if missing
+        #     df["strategy"] = strategy
+        #     df["seq_mod_method"] = seq_mod_method
+        #     df["regression_model"] = regression_model
+        #     df["seed"] = seed
+        #     all_results.append(df)
+        # except Exception as e:
+        #     logger.warning(f"Could not read {file_path}: {e}")
+        #     continue
 
     if all_results:
         combined_df = pd.DataFrame(pd.concat(all_results, ignore_index=True))
@@ -1402,32 +1602,59 @@ def create_combined_results_from_files(output_path: Path) -> None:
     # Combine custom metrics files
     all_custom_metrics = []
     for file_path in custom_metrics_files:
-        filename = file_path.stem.replace("_custom_metrics", "")
-        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)"
-        match = re.match(pattern, filename)
-
-        if not match:
-            logger.warning(f"Could not parse custom metrics filename {filename}")
-            continue
-
-        strategy, seq_mod_method, regression_model, seed = match.groups()
-        seed = int(seed)
-
         try:
             df = pd.read_csv(file_path)
-            # Add metadata columns if missing
-            if "strategy" not in df.columns:
-                df["strategy"] = strategy
-            if "seq_mod_method" not in df.columns:
-                df["seq_mod_method"] = seq_mod_method
-            if "regression_model" not in df.columns:
-                df["regression_model"] = regression_model
-            if "seed" not in df.columns:
-                df["seed"] = seed
+            if all(col in df.columns for col in ["strategy", "seq_mod_method", "regression_model", "seed"]):
+                all_custom_metrics.append(df)
+                continue
+
+            filename = file_path.stem.replace("_custom_metrics", "")
+            try:
+                prefix, seed_str = filename.rsplit("_seed_", 1)
+                seed = int(seed_str)
+                strategy, seq_mod_method, regression_model = prefix.split("_", 2)
+            except Exception:
+                logger.warning(f"Could not parse custom metrics filename {filename}, skipping.")
+                continue
+
+            df["strategy"] = strategy
+            df["seq_mod_method"] = seq_mod_method
+            df["regression_model"] = regression_model
+            df["seed"] = seed
+
             all_custom_metrics.append(df)
+
+
         except Exception as e:
             logger.warning(f"Could not read {file_path}: {e}")
             continue
+
+
+        # pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)"
+        # match = re.match(pattern, filename)
+
+        # if not match:
+        #     logger.warning(f"Could not parse custom metrics filename {filename}")
+        #     continue
+
+        # strategy, seq_mod_method, regression_model, seed = match.groups()
+        # seed = int(seed)
+
+        # try:
+        #     df = pd.read_csv(file_path)
+        #     # Add metadata columns if missing
+        #     if "strategy" not in df.columns:
+        #         df["strategy"] = strategy
+        #     if "seq_mod_method" not in df.columns:
+        #         df["seq_mod_method"] = seq_mod_method
+        #     if "regression_model" not in df.columns:
+        #         df["regression_model"] = regression_model
+        #     if "seed" not in df.columns:
+        #         df["seed"] = seed
+        #     all_custom_metrics.append(df)
+        # except Exception as e:
+        #     logger.warning(f"Could not read {file_path}: {e}")
+        #     continue
 
     if all_custom_metrics:
         combined_custom_df = pd.DataFrame(
@@ -1695,11 +1922,14 @@ def main() -> None:
             SelectionStrategy.HIGH_EXPRESSION,
             SelectionStrategy.RANDOM,
             SelectionStrategy.LOG_LIKELIHOOD,
+            SelectionStrategy.UNCERTAINTY,
+            SelectionStrategy.BAYESIAN
         ],
         "regression_models": [
             RegressionModelType.KNN,
             RegressionModelType.LINEAR,
             RegressionModelType.RANDOM_FOREST,
+            RegressionModelType.BAYESIAN_RIDGE
         ],
         "seq_mod_methods": [SequenceModificationMethod.EMBEDDING],
         "seeds": [42, 123, 456, 789, 999],

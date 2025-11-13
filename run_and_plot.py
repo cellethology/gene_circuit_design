@@ -4,7 +4,6 @@ Combined script to run experiments and generate plots.
 
 This script runs experiments and automatically generates plots for the results.
 """
-
 import argparse
 import logging
 import subprocess
@@ -270,6 +269,7 @@ def find_all_result_dirs() -> List[str]:
 def main():
     """Main function."""
     # python3 run_and_plot.py --config configs/config.yaml --experiment "experiment_name"
+    start_time1 = time.time()
     parser = argparse.ArgumentParser(description="Run experiments and generate plots")
     parser.add_argument("--config", type=str, required=True, help="Path to config file")
     parser.add_argument("--experiment", type=str, help="Specific experiment to run")
@@ -339,6 +339,9 @@ def main():
             create_summary_report(result_dirs)
 
     logger.info("Pipeline completed successfully")
+    end_time1 = time.time()
+    time_cost = end_time1-start_time1
+    print("time_cost:",time_cost)
 
 
 if __name__ == "__main__":

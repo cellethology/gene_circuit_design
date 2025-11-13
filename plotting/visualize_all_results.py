@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import List, Tuple
 
 from utils.plotting import (
-    STATEGY_LABELS,
+    STRATEGY_LABELS,
     plot_active_learning_metrics,
     plot_regressor_comparison,
     plot_top10_ratio_metrics,
@@ -21,6 +21,7 @@ from utils.plotting import (
     q3,
     sem,
 )
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,6 +32,8 @@ STRATEGY_COLORS = {
     "highExpression": "#1f77b4",  # Blue
     "log_likelihood": "#ff7f0e",  # Orange
     "random": "#2ca02c",  # Green
+    "uncertainty": "#FFFF00",  # Yellow
+    "combined_std_exp": "#9467bd",  # Purple
 }
 
 
@@ -256,9 +259,10 @@ def visualize_folder(
                                         stats["train_size"],
                                         stats["median"],
                                         marker="o",
-                                        label=STATEGY_LABELS[strategy],
+                                        label=STRATEGY_LABELS[strategy],
                                         color=color,
                                     )
+
                                     ax.fill_between(
                                         stats["train_size"],
                                         stats["q1"],
@@ -272,7 +276,7 @@ def visualize_folder(
                                         stats["train_size"],
                                         stats["mean"],
                                         marker="o",
-                                        label=STATEGY_LABELS[strategy],
+                                        label=STRATEGY_LABELS[strategy],
                                         color=color,
                                     )
                                     # Add fill between mean ± sem
@@ -289,7 +293,7 @@ def visualize_folder(
                                         stats["train_size"],
                                         stats["mean"],
                                         marker="o",
-                                        label=STATEGY_LABELS[strategy],
+                                        label=STRATEGY_LABELS[strategy],
                                         color=color,
                                     )
                                     # Add fill between mean ± std

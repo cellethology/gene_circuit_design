@@ -7,14 +7,33 @@ from typing import List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import re
 
 FONT_SIZE = 14
 
-STATEGY_LABELS = {
+STRATEGY_LABELS = {
     "highExpression": "Top-K Selection",
     "random": "Random",
     "log_likelihood": "Zero Shot",
+    "uncertainty":"Uncertainty",
+    "combined_std_exp":"Combined_std_exp"
 }
+
+
+# Helper to infer alpha label from folder path
+def _get_alpha_label_from_path(results_folder_path: str) -> Optional[str]:
+    """
+    Try to infer an alpha label from the results folder path.
+
+    Looks for patterns like 'alpha_0.1' or 'alpha=0.1' in the folder name.
+    If not found, returns None.
+    """
+    path_str = str(results_folder_path)
+    match = re.search(r"alpha[_=]?([0-9.]+)", path_str)
+    if match:
+        return f"α = {match.group(1)}"
+    return None
+
 
 def q1(x):
     return x.quantile(0.25)
@@ -232,6 +251,10 @@ def plot_top10_ratio_metrics(
     if missing_columns:
         raise ValueError(f"Missing required columns in data: {missing_columns}")
 
+    alpha_label = _get_alpha_label_from_path(results_folder_path)
+    if not alpha_label and save_path:
+        alpha_label = _get_alpha_label_from_path(save_path)
+
     # Set up the plot
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -250,7 +273,7 @@ def plot_top10_ratio_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STRATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -268,6 +291,19 @@ def plot_top10_ratio_metrics(
         ax.set_ylabel(metric.replace("_", " ").title(), fontsize=FONT_SIZE)
         ax.legend()
         ax.grid(True, alpha=0.3)
+
+        # Add alpha annotation to each subplot (if we could infer it from the folder name)
+        if alpha_label:
+            ax.text(
+                0.02,
+                0.98,
+                alpha_label,
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                fontsize=FONT_SIZE - 2,
+                bbox=dict(facecolor="white", alpha=0.7, edgecolor="none"),
+            )
 
     # Adjust layout
     plt.tight_layout()
@@ -358,7 +394,7 @@ def plot_value_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STRATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(
@@ -482,7 +518,7 @@ def plot_custom_metrics(
             )
 
             # Plot mean line
-            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STATEGY_LABELS[strategy])
+            ax.plot(stats["train_size"], stats["mean"], marker="o", label=STRATEGY_LABELS[strategy])
 
             # Add fill between mean ± std
             ax.fill_between(

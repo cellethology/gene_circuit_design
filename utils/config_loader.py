@@ -26,6 +26,8 @@ class SelectionStrategy(str, Enum):
     KMEANS_RANDOM = (
         "kmeans_random"  # K-means initial selection + random for subsequent batches
     )
+    COMBINED_STD_EXP =("combined_std_exp")
+
 
 
 def load_experiment_config(
@@ -91,6 +93,7 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "UNCERTAINTY": SelectionStrategy.UNCERTAINTY,
             "KMEANS_HIGH_EXPRESSION": SelectionStrategy.KMEANS_HIGH_EXPRESSION,
             "KMEANS_RANDOM": SelectionStrategy.KMEANS_RANDOM,
+            "COMBINED_STD_EXP": SelectionStrategy.COMBINED_STD_EXP
         }
         config["strategies"] = [
             strategy_map[strategy] for strategy in config["strategies"]
@@ -115,7 +118,8 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             "KNN": RegressionModelType.KNN,
             "RANDOM_FOREST": RegressionModelType.RANDOM_FOREST,
             "XGBOOST": RegressionModelType.XGBOOST,
-            "MLP": RegressionModelType.MLP
+            "MLP": RegressionModelType.MLP,
+            "BAYESIAN_RIDGE":RegressionModelType.BAYESIAN_RIDGE
         }
         config["regression_models"] = [
             regression_model_map[model] for model in config["regression_models"]
@@ -127,6 +131,8 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
             RegressionModelType.KNN,
             RegressionModelType.RANDOM_FOREST,
             RegressionModelType.XGBOOST,
+            RegressionModelType.MLP,
+            RegressionModelType.BAYESIAN_RIDGE
         ]
 
     return config
@@ -197,6 +203,17 @@ def run_experiment_from_config(
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)
 
+    # Normalize optional alpha from config into alpha_list for run_controlled_experiment
+    alpha_cfg = config.pop("alpha", None)
+    if alpha_cfg is None:
+        alpha_list = None
+    elif isinstance(alpha_cfg, (list, tuple)):
+        alpha_list = list(alpha_cfg)
+    else:
+        alpha_list = [alpha_cfg]
+    # store for downstream call
+    config["alpha_list"] = alpha_list
+
     if dry_run:
         print(f"Would run experiment '{experiment_name}' with config:")
         for key, value in config.items():
@@ -235,6 +252,17 @@ def run_experiment_from_config_parallel(
 
     # Get the configuration
     config = get_experiment_config(experiment_name, config_file)
+
+    # Normalize optional alpha from config into alpha_list for run_controlled_experiment
+    alpha_cfg = config.pop("alpha", None)
+    if alpha_cfg is None:
+        alpha_list = None
+    elif isinstance(alpha_cfg, (list, tuple)):
+        alpha_list = list(alpha_cfg)
+    else:
+        alpha_list = [alpha_cfg]
+    # store for downstream call
+    config["alpha_list"] = alpha_list
 
     # Handle cores_per_process configuration
     if "cores_per_process" in config:
@@ -315,6 +343,7 @@ def create_custom_config(
         "max_rounds": kwargs.get("max_rounds", 20),
         "normalize_input_output": kwargs.get("normalize_input_output", False),
         "no_test": kwargs.get("no_test", True),
+        "alpha_list": kwargs.get("alpha_list",None)
     }
 
     # Add any additional parameters

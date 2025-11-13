@@ -10,14 +10,19 @@ import logging
 import random
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List,Tuple
 
 import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 from scipy.stats import pearsonr, spearmanr
+from sklearn.base import clone
 from sklearn.cluster import KMeans
 from sklearn.metrics import r2_score, root_mean_squared_error
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.linear_model import LinearRegression, BayesianRidge
+from sklearn.neural_network import MLPRegressor, MLPClassifier
+from math import erf as _erf
 from tqdm import tqdm
 
 from utils.config_loader import SelectionStrategy
@@ -66,8 +71,8 @@ class ActiveLearningExperiment:
     def __init__(
         self,
         data_path: str,
-        selection_strategy: SelectionStrategy = SelectionStrategy.HIGH_EXPRESSION,
-        regression_model: RegressionModelType = RegressionModelType.LINEAR,
+        selection_strategy: SelectionStrategy = SelectionStrategy.UNCERTAINTY,
+        regression_model: RegressionModelType = RegressionModelType.BAYESIAN_RIDGE,
         initial_sample_size: int = 8,
         batch_size: int = 8,
         test_size: int = 50,
@@ -532,6 +537,200 @@ class ActiveLearningExperiment:
 
         return selected_indices
 
+    #####
+    # ========= 工具函数 =========
+    @staticmethod
+    def _entropy(probas: np.ndarray) -> np.ndarray:
+        p = np.clip(probas, 1e-12, 1.0)
+        return -np.sum(p * np.log(p), axis=1)
+
+    @staticmethod
+    def _rf_regressor_std(rf: RandomForestRegressor, X: np.ndarray) -> np.ndarray:
+        per_tree = np.vstack([est.predict(X) for est in rf.estimators_])  # [n_trees, n_samples]
+        return np.std(per_tree, axis=0)
+
+    def _bootstrap_std(self, base_model, X_unlabeled: np.ndarray, n_models: int = 5) -> np.ndarray:
+        # 给 LinearRegression / MLPRegressor 等无原生不确定性的回归器用
+        if len(self.labeled_indices) < 5:
+            return np.zeros(X_unlabeled.shape[0], dtype=float)
+        X_l = self._encode_sequences(self.labeled_indices)
+        y_l = self.all_expressions[self.labeled_indices]
+        preds = []
+        n = len(self.labeled_indices)
+        for _ in range(n_models):
+            idx = np.random.randint(0, n, size=n)
+            m = clone(base_model)
+            m.fit(X_l[idx], y_l[idx])
+            preds.append(m.predict(X_unlabeled))
+        return np.std(np.vstack(preds), axis=0)
+
+    def _predict_mean_std_any_regressor(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        为回归模型统一给出 (mean, std):
+        - BayesianRidge: 直接 return_std=True
+        - RF Regressor:  mean=rf.predict, std=树间标准差
+        - Linear / MLP Regressor: mean=predict, std=bootstrap
+        - 其它回归: std=0
+        """
+        m = self.model
+        # BayesianRidge（含 pipeline 尾部为 BR 的情况）
+        try:
+            mean, std = m.predict(X, return_std=True)
+            return np.asarray(mean, float), np.asarray(std, float)
+        except TypeError:
+            pass  # 不是 BayesianRidge
+
+        # RF 回归
+        if isinstance(m, RandomForestRegressor):
+            mean = m.predict(X)
+            std = self._rf_regressor_std(m, X)
+            return np.asarray(mean, float), np.asarray(std, float)
+
+        # 线性/MLP 回归
+        if isinstance(m, (LinearRegression, MLPRegressor)):
+            mean = np.asarray(m.predict(X), float)
+            n_models = int(getattr(self, "uncertainty_bootstrap_models", 5))
+            std = self._bootstrap_std(m, X, n_models=n_models)
+            return mean, std
+
+        # 兜底（未知回归器）
+        mean = np.asarray(m.predict(X), float)
+        std = np.zeros_like(mean, dtype=float)
+        return mean, std
+
+    # —— 正态分布工具（PI/EI/UCB 用）——
+    @staticmethod
+    def _phi(z):
+        return (1.0 / np.sqrt(2.0 * np.pi)) * np.exp(-0.5 * z**2)
+    @staticmethod
+    def _Phi(z):
+        return 0.5 * (1.0 + _erf(z / np.sqrt(2.0)))
+
+    @staticmethod
+    def _acq_scores(mean, std, criterion, best_y, direction="max", xi=0.01, kappa=2.0):
+        eps = 1e-12
+        s = np.maximum(std, eps)
+        if direction == "max":
+            improv = mean - best_y - xi
+            z = improv / s
+            if criterion == "uncertainty": return s
+            if criterion == "pi":          return ActiveLearningExperiment._Phi(z)
+            if criterion == "ei":          return improv * ActiveLearningExperiment._Phi(z) + s * ActiveLearningExperiment._phi(z)
+            if criterion == "ucb":         return mean + kappa * s
+            raise ValueError(f"Unknown criterion: {criterion}")
+        else:
+            improv = best_y - mean - xi
+            z = improv / s
+            if criterion == "uncertainty": return s
+            if criterion == "pi":          return ActiveLearningExperiment._Phi(z)
+            if criterion == "ei":          return improv * ActiveLearningExperiment._Phi(z) + s * ActiveLearningExperiment._phi(z)
+            if criterion == "ucb":         return (-mean) + kappa * s  # 最小化的“越大越好”分数
+            raise ValueError(f"Unknown criterion: {criterion}")
+
+    # ========= 入口 1：不确定性最高 =========
+    def _select_next_batch_uncertainty(self) -> List[int]:
+        """
+        Select next batch using active learning (highest uncertainty).
+        与 Zelun 的风格一致：返回 List[int]，并记录日志。
+        """
+        X_unlabeled = self._encode_sequences(self.unlabeled_indices)
+
+        # 分类：用熵；回归：用 std
+        m = self.model
+        if isinstance(m, (RandomForestClassifier, MLPClassifier)) or hasattr(m, "predict_proba"):
+            try:
+                probas = m.predict_proba(X_unlabeled)
+                scores = self._entropy(probas)
+                tag = "HIGH_UNCERTAINTY(CLASS)"
+            except Exception:
+                # 若分类模型不支持 probas，退化到0
+                scores = np.zeros(len(self.unlabeled_indices), dtype=float)
+                tag = "HIGH_UNCERTAINTY(CLASS-NOPROB)"
+        else:
+            _, std = self._predict_mean_std_any_regressor(X_unlabeled)
+            scores = std
+            tag = "HIGH_UNCERTAINTY(REG)"
+
+        sorted_idx = np.argsort(scores)[::-1]
+        batch_size = min(self.batch_size, len(self.unlabeled_indices))
+        selected_local = sorted_idx[:batch_size]
+        selected_indices = [self.unlabeled_indices[i] for i in selected_local]
+
+        selected_scores = scores[selected_local]
+        logger.info(
+            f"{tag}: Selected {len(selected_indices)} sequences with uncertainties: "
+            f"[{', '.join(f'{s:.4f}' for s in selected_scores)}]"
+        )
+
+        # 可选：暴露给外部
+        self.last_uncertainty_ = {self.unlabeled_indices[i]: float(scores[i]) for i in range(len(self.unlabeled_indices))}
+        return selected_indices
+
+    # ========= 入口 2：Bayesian 获取函数（适用于回归；分类自动回退到熵） =========
+    def _select_next_batch_bayesian(self) -> List[int]:
+        """
+        Select next batch using Bayesian acquisition (uncertainty / PI / EI / UCB).
+        通过 self.acq_criterion / self.acq_direction / self.acq_xi / self.acq_kappa 控制策略。
+        """
+        criterion = getattr(self, "acq_criterion", "uncertainty")  # 'uncertainty' | 'pi' | 'ei' | 'ucb'
+        direction = getattr(self, "acq_direction", "max")          # 'max' or 'min'
+        xi       = float(getattr(self, "acq_xi", 0.01))
+        kappa    = float(getattr(self, "acq_kappa", 2.0))
+
+        X_unlabeled = self._encode_sequences(self.unlabeled_indices)
+
+        # 分类模型：Bayesian 获取函数不适用，自动回退为熵不确定性
+        m = self.model
+        if isinstance(m, (RandomForestClassifier, MLPClassifier)) or hasattr(m, "predict_proba"):
+            try:
+                probas = m.predict_proba(X_unlabeled)
+                scores = self._entropy(probas)
+                tag = "BAYES_FALLBACK_ENTROPY"  # 保持日志风格
+            except Exception:
+                scores = np.zeros(len(self.unlabeled_indices), dtype=float)
+                tag = "BAYES_FALLBACK_ZERO"
+        else:
+            # 回归：统一拿 mean/std，任何回归器都可跑 PI/EI/UCB（高斯近似）
+            mean, std = self._predict_mean_std_any_regressor(X_unlabeled)
+
+            # best_y（仅 PI/EI 用；无标注时回退到 uncertainty）
+            if len(self.labeled_indices) > 0:
+                y_l = self.all_expressions[self.labeled_indices]
+                best_y = np.max(y_l) if direction == "max" else np.min(y_l)
+            else:
+                best_y = float(np.mean(mean))
+                if criterion in ("pi", "ei"):
+                    criterion = "uncertainty"
+
+            scores = self._acq_scores(mean, std, criterion, best_y, direction, xi, kappa)
+            tag = f"BAYES_{criterion.upper()}"
+
+            # 可选：对外暴露
+            self.last_pred_mean_ = {self.unlabeled_indices[i]: float(mean[i]) for i in range(len(self.unlabeled_indices))}
+            self.last_std_       = {self.unlabeled_indices[i]: float(std[i])  for i in range(len(self.unlabeled_indices))}
+            self.last_best_y_    = float(best_y)
+
+        # 统一选 Top-K
+        sorted_idx = np.argsort(scores)[::-1]
+        batch_size = min(self.batch_size, len(self.unlabeled_indices))
+        selected_local = sorted_idx[:batch_size]
+        selected_indices = [self.unlabeled_indices[i] for i in selected_local]
+
+        selected_scores = scores[selected_local]
+        logger.info(
+            f"{tag}: Selected {len(selected_indices)} sequences with scores: "
+            f"[{', '.join(f'{s:.4f}' for s in selected_scores)}]"
+        )
+
+        self.last_scores_    = {self.unlabeled_indices[i]: float(scores[i]) for i in range(len(self.unlabeled_indices))}
+        self.last_criterion_ = criterion
+        self.last_direction_ = direction
+        self.last_acq_params_ = {"xi": float(xi), "kappa": float(kappa)}
+        return selected_indices
+
+    #####
+
+
     def _select_next_batch(self) -> List[int]:
         """
         Select next batch of sequences based on the configured strategy.
@@ -555,6 +754,10 @@ class ActiveLearningExperiment:
         elif self.selection_strategy == SelectionStrategy.KMEANS_RANDOM:
             # After initial K-means selection, use random selection for subsequent batches
             return self._select_next_batch_random()
+        elif self.selection_strategy == SelectionStrategy.UNCERTAINTY:
+            return self._select_next_batch_uncertainty()
+        elif self.selection_strategy == SelectionStrategy.BAYESIAN:
+            return self._select_next_batch_bayesian()
         else:
             raise ValueError(f"Unknown selection strategy: {self.selection_strategy}")
 
@@ -1328,11 +1531,14 @@ def main() -> None:
             SelectionStrategy.HIGH_EXPRESSION,
             SelectionStrategy.RANDOM,
             SelectionStrategy.LOG_LIKELIHOOD,
+            SelectionStrategy.BAYESIAN,
+            SelectionStrategy.UNCERTAINTY
         ],
         "regression_models": [
             RegressionModelType.KNN,
             RegressionModelType.LINEAR,
             RegressionModelType.RANDOM_FOREST,
+            RegressionModelType.BAYESIAN_RIDGE
         ],
         "seq_mod_methods": [SequenceModificationMethod.EMBEDDING],
         "seeds": [42, 123, 456, 789, 999],
