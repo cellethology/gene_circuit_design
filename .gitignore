@@ -63,11 +63,11 @@ htmlcov/
 # Model files and data
 *.h5
 *.pkl
-*.yaml
 *.model
 *.pth
 *.7z
 *.safetensors
+multirun/*
 data/*
 data_new/*
 !data/scripts/*
