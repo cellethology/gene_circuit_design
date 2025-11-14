@@ -1,0 +1,4 @@
+# conf/model/kn_regressor.yaml
+_target_: sklearn.neighbors.KNeighborsRegressor
+n_neighbors: 5
+n_jobs: -1

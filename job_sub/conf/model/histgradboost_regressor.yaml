@@ -1,0 +1,3 @@
+# conf/model/histgradboost_regressor.yaml
+_target_: sklearn.ensemble.HistGradientBoostingRegressor
+random_state: ${al_settings.seed}
