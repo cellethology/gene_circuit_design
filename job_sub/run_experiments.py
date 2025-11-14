@@ -18,6 +18,7 @@ from experiments.run_experiments_parallelization import run_single_experiment
 
 LIST_OF_DATA_PATHS: List[str] = [
     "CIS_1-1-1-1.safetensors",
+    "CIS_1-1-1-1.safetensors",
 ]
 
 _SCRIPT_PATH = Path(__file__).resolve()
@@ -52,4 +53,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if os.environ.get(_HYDRA_CHILD_ENV) == "1" or "-m" in sys.argv[1:]:
+        run_experiments()
+    else:
+        main()
