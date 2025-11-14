@@ -102,6 +102,7 @@ setting.json
 data_new_deprecated/
 
 # logs
+logs
 multirun
 logs_experiments
 log_test/*
