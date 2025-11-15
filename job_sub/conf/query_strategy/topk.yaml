@@ -1,0 +1,2 @@
+_target_: experiments.core.query_strategies.TopKPredictions
+k: ${al_settings.topk_k}
