@@ -31,24 +31,24 @@ class Dataset:
 
     Attributes:
         sequences: List of sequence strings or identifiers
-        expressions: Array of expression values
+        sequence_labels: Array of target label values (e.g., expression)
         log_likelihoods: Array of log likelihood values (may contain NaN)
         embeddings: Pre-computed embeddings (None if not available)
         variant_ids: Variant IDs if available (None otherwise)
     """
 
     sequences: List[str]
-    expressions: np.ndarray
+    sequence_labels: np.ndarray
     log_likelihoods: np.ndarray
     embeddings: Optional[np.ndarray]
     variant_ids: Optional[np.ndarray]
 
     def __post_init__(self) -> None:
         """Validate dataset after initialization."""
-        if len(self.sequences) != len(self.expressions):
+        if len(self.sequences) != len(self.sequence_labels):
             raise ValueError(
                 f"Sequences ({len(self.sequences)}) and expressions "
-                f"({len(self.expressions)}) must have the same length"
+                f"({len(self.sequence_labels)}) must have the same length"
             )
         if len(self.sequences) != len(self.log_likelihoods):
             raise ValueError(
@@ -169,11 +169,11 @@ class DataLoader:
 
         # Handle expression data
         if self.target_val_key and self.target_val_key in tensors:
-            expressions = tensors[self.target_val_key].float().numpy()
+            sequence_labels = tensors[self.target_val_key].float().numpy()
         elif "expressions" in tensors:
-            expressions = tensors["expressions"].float().numpy()
+            sequence_labels = tensors["expressions"].float().numpy()
         elif "expression" in tensors:
-            expressions = tensors["expression"].float().numpy()
+            sequence_labels = tensors["expression"].float().numpy()
         else:
             raise ValueError(
                 f"No expression data found. Available keys: {list(tensors.keys())}"
@@ -185,7 +185,7 @@ class DataLoader:
         elif "log_likelihood" in tensors:
             log_likelihoods = tensors["log_likelihood"].float().numpy()
         else:
-            log_likelihoods = np.full(len(expressions), np.nan)
+            log_likelihoods = np.full(len(sequence_labels), np.nan)
             logger.warning(
                 "No log likelihood data found. LOG_LIKELIHOOD strategy will be skipped."
             )
@@ -196,12 +196,12 @@ class DataLoader:
         )
 
         # Generate dummy sequences for embeddings
-        num_sequences = len(expressions)
+        num_sequences = len(sequence_labels)
         sequences = [f"embedding_{i}" for i in range(num_sequences)]
 
         return Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=embeddings,
             variant_ids=variant_ids,
@@ -218,7 +218,7 @@ class DataLoader:
             Dataset object
         """
         embeddings = tensors["pca_components"].float().numpy()
-        expressions = tensors["expression"].float().numpy()
+        sequence_labels = tensors["expression"].float().numpy()
         log_likelihoods = tensors["log_likelihood"].float().numpy()
 
         # Handle variant IDs
@@ -227,11 +227,11 @@ class DataLoader:
             sequences = [f"variant_{int(vid)}" for vid in variant_ids]
         else:
             variant_ids = None
-            sequences = [f"pca_seq_{i}" for i in range(len(expressions))]
+            sequences = [f"pca_seq_{i}" for i in range(len(sequence_labels))]
 
         return Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=embeddings,
             variant_ids=variant_ids,
@@ -251,7 +251,7 @@ class DataLoader:
         if "Log_Likelihood" in df.columns:
             # Combined dataset with log likelihood
             sequences = df["Sequence"].tolist()
-            expressions = df["Expression"].values
+            sequence_labels = df["Expression"].values
             log_likelihoods = df["Log_Likelihood"].values
             logger.info(
                 f"Loaded combined dataset with {len(sequences)} sequences "
@@ -259,7 +259,7 @@ class DataLoader:
             )
         else:
             # Original expression-only dataset
-            sequences, expressions = load_sequence_data(
+            sequences, sequence_labels = load_sequence_data(
                 self.data_path, seq_mod_method=self.seq_mod_method
             )
             log_likelihoods = np.full(len(sequences), np.nan)
@@ -269,21 +269,23 @@ class DataLoader:
 
         return Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=None,  # Will be computed via one-hot encoding
             variant_ids=None,
         )
 
     def _normalize_data(self) -> None:
-        """Normalize expressions and embeddings in-place."""
+        """Normalize labels and embeddings in-place."""
         if self.dataset is None:
             raise ValueError("Dataset must be loaded before normalization")
 
         # Normalize expressions
-        mean_expr = self.dataset.expressions.mean(axis=0, keepdims=True)
-        std_expr = self.dataset.expressions.std(axis=0, keepdims=True) + 1e-30
-        self.dataset.expressions = (self.dataset.expressions - mean_expr) / std_expr
+        mean_expr = self.dataset.sequence_labels.mean(axis=0, keepdims=True)
+        std_expr = self.dataset.sequence_labels.std(axis=0, keepdims=True) + 1e-30
+        self.dataset.sequence_labels = (
+            (self.dataset.sequence_labels - mean_expr) / std_expr
+        )
 
         # Normalize embeddings if available
         if self.dataset.embeddings is not None:
@@ -292,7 +294,7 @@ class DataLoader:
             self.dataset.embeddings = (self.dataset.embeddings - mean_emb) / std_emb
 
         logger.info(
-            f"Normalized data - Expression mean: {mean_expr.mean():.4f}, "
+            f"Normalized data - Label mean: {mean_expr.mean():.4f}, "
             f"std: {std_expr.mean():.4f}"
         )
 
@@ -404,11 +406,11 @@ class DataLoader:
             random_seed=random_seed,
         )
 
-        selected_expressions = dataset.expressions[selected_indices]
+        selected_labels = dataset.sequence_labels[selected_indices]
         logger.info(
             f"KMEANS_CLUSTERING: Selected {len(selected_indices)} sequences "
-            f"from {initial_sample_size} clusters with actual expressions: "
-            f"[{', '.join(f'{expr:.1f}' for expr in selected_expressions)}]"
+            f"from {initial_sample_size} clusters with actual labels: "
+            f"[{', '.join(f'{expr:.1f}' for expr in selected_labels)}]"
         )
 
         return selected_indices

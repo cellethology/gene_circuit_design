@@ -21,34 +21,34 @@ class TestDataset:
     def test_dataset_creation(self):
         """Test creating a valid dataset."""
         sequences = ["ATGC", "CGTA"]
-        expressions = np.array([1.0, 2.0])
+        sequence_labels = np.array([1.0, 2.0])
         log_likelihoods = np.array([-0.5, -0.3])
         embeddings = np.array([[1, 2], [3, 4]])
         variant_ids = np.array([1, 2])
 
         dataset = Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=embeddings,
             variant_ids=variant_ids,
         )
 
         assert len(dataset.sequences) == 2
-        assert dataset.expressions.shape == (2,)
+        assert dataset.sequence_labels.shape == (2,)
         assert dataset.embeddings.shape == (2, 2)
         assert dataset.variant_ids is not None
 
     def test_dataset_validation_length_mismatch(self):
         """Test dataset validation catches length mismatches."""
         sequences = ["ATGC", "CGTA"]
-        expressions = np.array([1.0, 2.0, 3.0])  # Wrong length
+        sequence_labels = np.array([1.0, 2.0, 3.0])  # Wrong length
         log_likelihoods = np.array([-0.5, -0.3])
 
         with pytest.raises(ValueError, match="must have the same length"):
             Dataset(
                 sequences=sequences,
-                expressions=expressions,
+                sequence_labels=sequence_labels,
                 log_likelihoods=log_likelihoods,
                 embeddings=None,
                 variant_ids=None,
@@ -79,7 +79,7 @@ class TestDataLoader:
         dataset = loader.load()
 
         assert len(dataset.sequences) == 3
-        assert len(dataset.expressions) == 3
+        assert len(dataset.sequence_labels) == 3
         assert dataset.embeddings is None
         assert np.all(np.isnan(dataset.log_likelihoods))
 
@@ -113,13 +113,13 @@ class TestDataLoader:
 
         # Create test data
         embeddings = torch.randn(5, 10)
-        expressions = torch.randn(5)
+        sequence_labels = torch.randn(5)
         log_likelihoods = torch.randn(5)
 
         save_file(
             {
                 "embeddings": embeddings,
-                "expressions": expressions,
+                "expressions": sequence_labels,
                 "log_likelihoods": log_likelihoods,
             },
             str(safetensors_path),
@@ -134,7 +134,7 @@ class TestDataLoader:
 
         assert len(dataset.sequences) == 5
         assert dataset.embeddings.shape == (5, 10)
-        assert dataset.expressions.shape == (5,)
+        assert dataset.sequence_labels.shape == (5,)
         assert dataset.log_likelihoods.shape == (5,)
 
     def test_load_safetensors_pca_format(self, tmp_path):
@@ -143,14 +143,14 @@ class TestDataLoader:
 
         # Create test data
         pca_components = torch.randn(5, 10)
-        expressions = torch.randn(5)
+        sequence_labels = torch.randn(5)
         log_likelihoods = torch.randn(5)
         variant_ids = torch.tensor([1, 2, 3, 4, 5])
 
         save_file(
             {
                 "pca_components": pca_components,
-                "expression": expressions,
+                "expression": sequence_labels,
                 "log_likelihood": log_likelihoods,
                 "variant_ids": variant_ids,
             },
@@ -174,12 +174,12 @@ class TestDataLoader:
         safetensors_path = tmp_path / "test_data.safetensors"
 
         embeddings = torch.randn(3, 5)
-        expressions = torch.randn(3)
+        sequence_labels = torch.randn(3)
 
         save_file(
             {
                 "embeddings": embeddings,
-                "expressions": expressions,
+                "expressions": sequence_labels,
             },
             str(safetensors_path),
         )
@@ -217,8 +217,8 @@ class TestDataLoader:
 
         dataset = loader.load()
 
-        assert len(dataset.expressions) == 3
-        np.testing.assert_array_almost_equal(dataset.expressions, custom_target.numpy())
+        assert len(dataset.sequence_labels) == 3
+        np.testing.assert_array_almost_equal(dataset.sequence_labels, custom_target.numpy())
 
     def test_load_safetensors_missing_expression(self, tmp_path):
         """Test error when expression data is missing."""
@@ -260,21 +260,21 @@ class TestDataLoader:
 
         dataset = loader.load()
 
-        # Check that expressions are normalized (mean ~0, std ~1)
-        assert abs(dataset.expressions.mean()) < 0.1
-        assert abs(dataset.expressions.std() - 1.0) < 0.1
+        # Check that sequence_labels are normalized (mean ~0, std ~1)
+        assert abs(dataset.sequence_labels.mean()) < 0.1
+        assert abs(dataset.sequence_labels.std() - 1.0) < 0.1
 
     def test_create_data_split_random(self):
         """Test creating data split with random initial selection."""
         # Create a simple dataset
         sequences = [f"seq_{i}" for i in range(20)]
-        expressions = np.random.randn(20)
+        sequence_labels = np.random.randn(20)
         log_likelihoods = np.random.randn(20)
         embeddings = np.random.randn(20, 10)
 
         dataset = Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=embeddings,
             variant_ids=None,
@@ -311,13 +311,13 @@ class TestDataLoader:
     def test_create_data_split_no_test(self):
         """Test creating data split without test set."""
         sequences = [f"seq_{i}" for i in range(10)]
-        expressions = np.random.randn(10)
+        sequence_labels = np.random.randn(10)
         log_likelihoods = np.random.randn(10)
         embeddings = np.random.randn(10, 5)
 
         dataset = Dataset(
             sequences=sequences,
-            expressions=expressions,
+            sequence_labels=sequence_labels,
             log_likelihoods=log_likelihoods,
             embeddings=embeddings,
             variant_ids=None,
@@ -350,13 +350,13 @@ class TestDataLoader:
     # def test_create_data_split_kmeans(self):
     #     """Test creating data split with K-means initial selection."""
     #     sequences = [f"seq_{i}" for i in range(10)]
-    #     expressions = np.random.randn(10)
+    #     sequence_labels = np.random.randn(10)
     #     log_likelihoods = np.random.randn(10)
     #     embeddings = np.random.randn(10, 5)
 
     #     dataset = Dataset(
     #         sequences=sequences,
-    #         expressions=expressions,
+    #         sequence_labels=sequence_labels,
     #         log_likelihoods=log_likelihoods,
     #         embeddings=embeddings,
     #         variant_ids=None,
