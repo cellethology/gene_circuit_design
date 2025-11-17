@@ -37,8 +37,7 @@ class PredictorTrainer:
             y_train: Training targets
             train_indices: Indices of training samples (for logging)
         """
-        logger.info(f"Training model with {len(train_indices)} samples")
-        logger.info(f"Predictor type: {self.predictor.__class__.__name__}")
+        logger.info(f"Total training samples: {len(train_indices)}")
 
         self.predictor.fit(X_train, y_train)
 
@@ -47,7 +46,7 @@ class PredictorTrainer:
         train_rmse = root_mean_squared_error(y_train, train_pred)
         train_r2 = r2_score(y_train, train_pred)
 
-        logger.info(f"Training RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
+        logger.info(f"Train RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
 
     def evaluate(
         self,

@@ -28,12 +28,26 @@ _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
 @hydra.main(version_base=None, config_path="conf", config_name="test_config")
 def run_experiments(cfg):
     """Run a single experiment with the given configuration (Hydra entrypoint)."""
-    print(OmegaConf.to_yaml(cfg.pipeline_params))
-    run_single_experiment(data_path=cfg.data_paths, pipeline_param=cfg.pipeline_params)
+    print(OmegaConf.to_yaml(cfg.al_settings))
+    run_single_experiment(cfg)
+
+
+def _collect_user_overrides() -> List[str]:
+    """Keep any user overrides other than multirun flag or data_paths."""
+    overrides: List[str] = []
+    for arg in sys.argv[1:]:
+        if arg in ("-m", "--multirun"):
+            continue
+        if arg.startswith("data_paths="):
+            continue
+        overrides.append(arg)
+    return overrides
 
 
 def main():
     """Loop over datasets and launch Hydra multirun for each via subprocess."""
+    user_overrides = _collect_user_overrides()
+
     for data_path in LIST_OF_DATA_PATHS:
         print(f"\n{'=' * 80}")
         print(f"Processing dataset: {data_path}")
@@ -46,6 +60,7 @@ def main():
                 str(_SCRIPT_PATH),
                 "-m",
                 f"data_paths={data_path}",
+                *user_overrides,
             ],
             check=True,
             env=env,
@@ -53,7 +68,12 @@ def main():
 
 
 if __name__ == "__main__":
-    if os.environ.get(_HYDRA_CHILD_ENV) == "1" or "-m" in sys.argv[1:]:
+    if os.environ.get(_HYDRA_CHILD_ENV) == "1":
+        # Already inside Hydra child: run once
         run_experiments()
-    else:
+    elif any(flag in sys.argv[1:] for flag in ("-m", "--multirun")):
+        # User requested multirun: fan out over data paths via subprocess
         main()
+    else:
+        # Single run, no wrapper looping and no sweeps
+        run_experiments()

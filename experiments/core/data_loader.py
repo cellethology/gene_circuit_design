@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 
+from experiments.core.query_strategies import QueryStrategyBase
 from utils.config_loader import SelectionStrategy
 from utils.sequence_utils import (
     SequenceModificationMethod,
@@ -142,7 +143,6 @@ class DataLoader:
         Raises:
             ValueError: If safetensors format is invalid
         """
-        logger.info("Loading from safetensors file")
         tensors = load_file(self.data_path)
 
         # Handle different safetensors formats
@@ -284,8 +284,8 @@ class DataLoader:
         mean_expr = self.dataset.sequence_labels.mean(axis=0, keepdims=True)
         std_expr = self.dataset.sequence_labels.std(axis=0, keepdims=True) + 1e-30
         self.dataset.sequence_labels = (
-            (self.dataset.sequence_labels - mean_expr) / std_expr
-        )
+            self.dataset.sequence_labels - mean_expr
+        ) / std_expr
 
         # Normalize embeddings if available
         if self.dataset.embeddings is not None:
@@ -294,8 +294,8 @@ class DataLoader:
             self.dataset.embeddings = (self.dataset.embeddings - mean_emb) / std_emb
 
         logger.info(
-            f"Normalized data - Label mean: {mean_expr.mean():.4f}, "
-            f"std: {std_expr.mean():.4f}"
+            f"Normalized labels -> mean={mean_expr.mean():.4f}, "
+            f"std={std_expr.mean():.4f}"
         )
 
     def create_data_split(
@@ -304,7 +304,7 @@ class DataLoader:
         initial_sample_size: int,
         test_size: int,
         no_test: bool,
-        selection_strategy: SelectionStrategy,
+        query_strategy: QueryStrategyBase,
         random_seed: int,
         encode_sequences_fn,
     ) -> DataSplit:
@@ -316,7 +316,7 @@ class DataLoader:
             initial_sample_size: Size of initial training set
             test_size: Size of test set (ignored if no_test=True)
             no_test: Whether to skip test set
-            selection_strategy: Strategy for initial selection
+            query_strategy: Strategy for initial selection
             random_seed: Random seed for reproducibility
             encode_sequences_fn: Function to encode sequences for K-means
 
@@ -344,7 +344,7 @@ class DataLoader:
             remaining_indices = all_indices
 
         # Initial training set selection
-        if selection_strategy in [
+        if query_strategy in [
             SelectionStrategy.KMEANS_HIGH_EXPRESSION,
             SelectionStrategy.KMEANS_RANDOM,
         ]:

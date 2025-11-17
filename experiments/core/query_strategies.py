@@ -23,10 +23,8 @@ class QueryStrategyBase(ABC):
     the next batch of sequences based on its specific criteria.
     """
 
-    def __init__(
-        self,
-    ) -> None:
-        pass
+    def __init__(self, name: Optional[str] = None):
+        self.name = name or self.__class__.__name__
 
     @abstractmethod
     def select(self, experiment: Any, round_idx: int) -> List[int]:
@@ -41,7 +39,6 @@ class QueryStrategyBase(ABC):
     def _log_round(
         self,
         round_idx: int,
-        strategy_name: str,
         selected_indices: List[int],
         extra_info: Optional[str] = None,
     ) -> None:
@@ -50,14 +47,10 @@ class QueryStrategyBase(ABC):
 
         Args:
             round_idx: Round index
-            strategy_name: Name of the strategy for logging
             selected_indices: Indices that were selected
             extra_info: Extra information to include in the log message
         """
-        log_msg = (
-            f"Round {round_idx}: Selected {len(selected_indices)} sequences "
-            f"with strategy: {strategy_name}"
-        )
+        log_msg = f"Round {round_idx} - selected indices: {selected_indices}"
         if extra_info:
             log_msg += f" {extra_info}"
         logger.info(log_msg)
@@ -67,7 +60,7 @@ class Random(QueryStrategyBase):
     """Strategy that selects sequences randomly."""
 
     def __init__(self, seed: int) -> None:
-        super().__init__()
+        super().__init__("RANDOM")
         self.seed = seed
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
@@ -77,49 +70,39 @@ class Random(QueryStrategyBase):
         selected_indices = random.Random(self.seed).sample(
             experiment.data_split.unlabeled_indices, batch_size
         )
-        self._log_round(round_idx, "RANDOM", selected_indices)
+        self._log_round(round_idx, selected_indices)
         return selected_indices
 
 
-class TopKPredictions(QueryStrategyBase):
-    """Strategy that selects sequences with highest k predicted expression values."""
+class TopPredictions(QueryStrategyBase):
+    """Selects sequences with highest k predicted expression values."""
 
-    def __init__(self, k: int) -> None:
-        super().__init__()
-        self.k = k
+    def __init__(self) -> None:
+        super().__init__("TOP_K_PRED")
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
-        # Predict on all unlabeled sequences
-        X_unlabeled = experiment._encode_sequences(
-            experiment.data_split.unlabeled_indices
-        )
-        predictions = experiment.model.predict(X_unlabeled)
+        unlabeled = experiment.data_split.unlabeled_indices
+        if len(unlabeled) < experiment.batch_size:
+            return unlabeled
 
-        # Select indices with highest predicted values
-        sorted_indices = np.argsort(predictions)[::-1]  # Descending order
-        batch_size = min(
-            experiment.batch_size, len(experiment.data_split.unlabeled_indices)
-        )
-        selected_local_indices = sorted_indices[:batch_size]
+        preds = experiment.predictor.predict(experiment._encode_sequences(unlabeled))
+        k = experiment.batch_size
 
-        # Convert to global indices
-        selected_indices = [
-            experiment.data_split.unlabeled_indices[i] for i in selected_local_indices
-        ]
+        # get indices of top k predictions (descending)
+        top_k_local = np.argpartition(-preds, k - 1)[:k]
 
-        # Log selection info
-        selected_predictions = predictions[selected_local_indices]
-        extra_info = (
-            f"with predicted expressions: "
-            f"[{', '.join(f'{pred:.1f}' for pred in selected_predictions)}]"
-        )
-        self._log_round(round_idx, "HIGH_EXPRESSION", selected_indices, extra_info)
+        # map to original indices
+        selected_indices = [unlabeled[i] for i in top_k_local]
+        self._log_round(round_idx, selected_indices)
 
         return selected_indices
 
 
-class TopZeroShot(QueryStrategyBase):
-    """Strategy that selects sequences with highest zero-shot log likelihood values."""
+class TopLogLikelihood(QueryStrategyBase):
+    """Selects sequences with highest zero-shot log likelihood values."""
+
+    def __init__(self) -> None:
+        super().__init__("TOP_LOG_LIKELIHOOD")
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
         if np.all(np.isnan(experiment.dataset.log_likelihoods)):
@@ -155,10 +138,10 @@ class TopZeroShot(QueryStrategyBase):
         selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
         selected_values = experiment.dataset.sequence_labels[selected_indices]
         extra_info = (
-            f"with log likelihoods: "
+            f"Log likelihoods: "
             f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "
-            f"and actual labels: [{', '.join(f'{expr:.1f}' for expr in selected_values)}]"
+            f"True values: [{', '.join(f'{expr:.1f}' for expr in selected_values)}]"
         )
-        self._log_round(round_idx, "LOG_LIKELIHOOD", selected_indices, extra_info)
+        self._log_round(round_idx, selected_indices, extra_info)
 
         return selected_indices
