@@ -48,7 +48,7 @@ def encode_sequences(
 
 
 def select_initial_batch_kmeans_from_features(
-    X_all: np.ndarray, initial_sample_size: int, random_seed: int
+    X_all: np.ndarray, initial_sample_size: int, seed: int
 ) -> List[int]:
     """
     Select initial indices using K-means on provided feature matrix.
@@ -56,12 +56,12 @@ def select_initial_batch_kmeans_from_features(
     Args:
         X_all: Feature matrix for the full dataset.
         initial_sample_size: Number of clusters/initial selections.
-        random_seed: Random seed for KMeans reproducibility.
+        seed: Random seed for KMeans reproducibility.
 
     Returns:
         List of selected global indices.
     """
-    kmeans = KMeans(n_clusters=initial_sample_size, random_state=random_seed, n_init=10)
+    kmeans = KMeans(n_clusters=initial_sample_size, random_state=seed)
     cluster_labels = kmeans.fit_predict(X_all)
     cluster_centers = kmeans.cluster_centers_
 

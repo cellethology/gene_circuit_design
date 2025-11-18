@@ -28,7 +28,6 @@ class InitialSelectionStrategy(ABC):
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        random_seed: int,
         encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         """Return indices for the initial training pool."""
@@ -37,34 +36,34 @@ class InitialSelectionStrategy(ABC):
 class RandomInitialSelection(InitialSelectionStrategy):
     """Randomly sample the initial training points."""
 
-    def __init__(self) -> None:
+    def __init__(self, seed: int) -> None:
         super().__init__("RANDOM_INITIAL")
+        self.seed = seed
 
     def select(
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        random_seed: int,
         encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         total = len(dataset.sequences)
         if initial_sample_size >= total:
             return list(range(total))
-        rng = random.Random(random_seed)
+        rng = random.Random(self.seed)
         return rng.sample(range(total), initial_sample_size)
 
 
 class KMeansInitialSelection(InitialSelectionStrategy):
     """Select initial samples using K-means clustering on sequence features."""
 
-    def __init__(self) -> None:
+    def __init__(self, seed: int) -> None:
         super().__init__("KMEANS_INITIAL")
+        self.seed = seed
 
     def select(
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        random_seed: int,
         encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         if initial_sample_size >= len(dataset.sequences):
@@ -78,7 +77,7 @@ class KMeansInitialSelection(InitialSelectionStrategy):
         selected = select_initial_batch_kmeans_from_features(
             X_all=features,
             initial_sample_size=initial_sample_size,
-            random_seed=random_seed,
+            seed=self.seed,
         )
 
         labels = dataset.sequence_labels[selected]

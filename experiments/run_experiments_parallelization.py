@@ -233,8 +233,3 @@ def create_combined_results_from_files(output_path: Path) -> None:
         logger.info(
             f"Combined custom metrics from {len(custom_metrics_files)} files saved to {combined_custom_output_path}"
         )
-    initial_selection_strategy = (
-        instantiate(initial_selection_strategy_cfg)
-        if initial_selection_strategy_cfg
-        else None
-    )

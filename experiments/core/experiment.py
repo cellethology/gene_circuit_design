@@ -382,21 +382,8 @@ class ActiveLearningExperiment:
         selected_indices = self.initial_selection_strategy.select(
             dataset=self.dataset,
             initial_sample_size=initial_sample_size,
-            random_seed=random_seed,
             encode_sequences_fn=self._encode_sequences,
         )
-
-        if len(selected_indices) < initial_sample_size:
-            logger.warning(
-                "Initial selection strategy returned fewer samples than requested. "
-                "Filling the remainder with random choices."
-            )
-            remaining_needed = initial_sample_size - len(selected_indices)
-            available = [
-                idx for idx in range(total_samples) if idx not in set(selected_indices)
-            ]
-            extra = random.Random(random_seed).sample(available, remaining_needed)
-            selected_indices.extend(extra)
 
         unlabeled_indices = [
             idx for idx in range(total_samples) if idx not in set(selected_indices)
