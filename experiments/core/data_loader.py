@@ -2,11 +2,10 @@
 Data loading utilities for active learning experiments.
 
 This module handles loading data from various formats (safetensors, CSV)
-and preparing train/test/unlabeled splits.
+and normalizing/encoding them for downstream components.
 """
 
 import logging
-import random
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -14,8 +13,6 @@ import numpy as np
 import pandas as pd
 from safetensors.torch import load_file
 
-from experiments.core.query_strategies import QueryStrategyBase
-from utils.config_loader import SelectionStrategy
 from utils.sequence_utils import (
     SequenceModificationMethod,
     ensure_sequence_modification_method,
@@ -56,22 +53,6 @@ class Dataset:
                 f"Sequences ({len(self.sequences)}) and log_likelihoods "
                 f"({len(self.log_likelihoods)}) must have the same length"
             )
-
-
-@dataclass
-class DataSplit:
-    """
-    Container for train/test/unlabeled data splits.
-
-    Attributes:
-        train_indices: Indices for training set
-        test_indices: Indices for test set
-        unlabeled_indices: Indices for unlabeled pool
-    """
-
-    train_indices: List[int]
-    test_indices: List[int]
-    unlabeled_indices: List[int]
 
 
 class DataLoader:
@@ -297,120 +278,3 @@ class DataLoader:
             f"Normalized labels -> mean={mean_expr.mean():.4f}, "
             f"std={std_expr.mean():.4f}"
         )
-
-    def create_data_split(
-        self,
-        dataset: Dataset,
-        initial_sample_size: int,
-        test_size: int,
-        no_test: bool,
-        query_strategy: QueryStrategyBase,
-        random_seed: int,
-        encode_sequences_fn,
-    ) -> DataSplit:
-        """
-        Create train/test/unlabeled splits from dataset.
-
-        Args:
-            dataset: Loaded dataset
-            initial_sample_size: Size of initial training set
-            test_size: Size of test set (ignored if no_test=True)
-            no_test: Whether to skip test set
-            query_strategy: Strategy for initial selection
-            random_seed: Random seed for reproducibility
-            encode_sequences_fn: Function to encode sequences for K-means
-
-        Returns:
-            DataSplit object with train/test/unlabeled indices
-        """
-        total_samples = len(dataset.sequences)
-
-        # Adjust test size
-        if no_test:
-            test_size = 0
-            test_indices: List[int] = []
-        else:
-            test_indices = []
-
-        # Create indices for all samples
-        all_indices = list(range(total_samples))
-        random.Random(random_seed).shuffle(all_indices)
-
-        # Reserve test set
-        if test_size > 0:
-            test_indices = all_indices[:test_size]
-            remaining_indices = all_indices[test_size:]
-        else:
-            remaining_indices = all_indices
-
-        # Initial training set selection
-        if query_strategy in [
-            SelectionStrategy.KMEANS_HIGH_EXPRESSION,
-            SelectionStrategy.KMEANS_RANDOM,
-        ]:
-            # Use K-means clustering for initial selection
-            train_indices = self._select_initial_batch_kmeans(
-                dataset=dataset,
-                initial_sample_size=initial_sample_size,
-                random_seed=random_seed,
-                encode_sequences_fn=encode_sequences_fn,
-            )
-            unlabeled_indices = [
-                idx for idx in remaining_indices if idx not in train_indices
-            ]
-        else:
-            # Use random selection for initial training set
-            train_indices = remaining_indices[:initial_sample_size]
-            unlabeled_indices = remaining_indices[initial_sample_size:]
-
-        logger.info(
-            f"Data split - Train: {len(train_indices)}, "
-            f"Test: {len(test_indices)}, "
-            f"Unlabeled: {len(unlabeled_indices)}"
-        )
-
-        return DataSplit(
-            train_indices=train_indices,
-            test_indices=test_indices,
-            unlabeled_indices=unlabeled_indices,
-        )
-
-    def _select_initial_batch_kmeans(
-        self,
-        dataset: Dataset,
-        initial_sample_size: int,
-        random_seed: int,
-        encode_sequences_fn,
-    ) -> List[int]:
-        """
-        Select initial batch using K-means clustering.
-
-        Args:
-            dataset: Loaded dataset
-            initial_sample_size: Number of clusters/initial samples
-            random_seed: Random seed for K-means
-            encode_sequences_fn: Function to encode sequences
-
-        Returns:
-            List of selected indices
-        """
-        from experiments.util import select_initial_batch_kmeans_from_features
-
-        # Encode all sequences
-        all_indices = list(range(len(dataset.sequences)))
-        X_all = encode_sequences_fn(all_indices)
-
-        selected_indices = select_initial_batch_kmeans_from_features(
-            X_all=X_all,
-            initial_sample_size=initial_sample_size,
-            random_seed=random_seed,
-        )
-
-        selected_labels = dataset.sequence_labels[selected_indices]
-        logger.info(
-            f"KMEANS_CLUSTERING: Selected {len(selected_indices)} sequences "
-            f"from {initial_sample_size} clusters with actual labels: "
-            f"[{', '.join(f'{expr:.1f}' for expr in selected_labels)}]"
-        )
-
-        return selected_indices

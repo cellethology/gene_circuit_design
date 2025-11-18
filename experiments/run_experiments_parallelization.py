@@ -45,15 +45,13 @@ def run_single_experiment(
     """
 
     data_path = cfg.data_paths
-    predictor = cfg.predictor
-    query_strategy = cfg.query_strategy
+    predictor = instantiate(cfg.predictor)
+    query_strategy = instantiate(cfg.query_strategy)
+    initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
     al_settings = cfg.al_settings
 
     from utils.sequence_utils import SequenceModificationMethod
 
-    # Instantiate query strategy and predictor
-    query_strategy = instantiate(query_strategy)
-    predictor = instantiate(predictor)
     predictor_name = predictor.__class__.__name__
 
     # Instantiate sequence modification method
@@ -64,8 +62,6 @@ def run_single_experiment(
     seed = al_settings["seed"]
     initial_sample_size = al_settings["initial_sample_size"]
     batch_size = al_settings["batch_size"]
-    test_size = al_settings["test_size"]
-    no_test = al_settings["no_test"]
     max_rounds = al_settings["max_rounds"]
     normalize_input_output = al_settings["normalize_input_output"]
     output_dir = al_settings["output_dir"]
@@ -80,14 +76,13 @@ def run_single_experiment(
         predictor=predictor,
         initial_sample_size=initial_sample_size,
         batch_size=batch_size,
-        test_size=test_size,
         random_seed=seed,
         seq_mod_method=seq_mod_method,
-        no_test=no_test,
         normalize_input_output=normalize_input_output,
         use_pca=use_pca,
         pca_components=pca_components,
         target_val_key=target_val_key,
+        initial_selection_strategy=initial_selection_strategy,
     )
 
     # Run experiment
@@ -121,11 +116,14 @@ def run_single_experiment(
 
     # Log final performance
     final_performance = experiment.get_final_performance()
-    logger.info(
-        f"Seed {seed} final performance - "
-        f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-        f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
-    )
+    if final_performance:
+        logger.info(
+            f"Seed {seed} final metrics - "
+            f"Top-10 cumulative: {final_performance.get('top_10_ratio_intersected_indices_cumulative', 0):.4f}, "
+            f"Best value cumulative: {final_performance.get('best_value_ground_truth_values_cumulative', 0):.4f}"
+        )
+    else:
+        logger.info(f"Seed {seed} completed with no additional metrics recorded.")
 
     return (
         query_strategy,
@@ -235,3 +233,8 @@ def create_combined_results_from_files(output_path: Path) -> None:
         logger.info(
             f"Combined custom metrics from {len(custom_metrics_files)} files saved to {combined_custom_output_path}"
         )
+    initial_selection_strategy = (
+        instantiate(initial_selection_strategy_cfg)
+        if initial_selection_strategy_cfg
+        else None
+    )

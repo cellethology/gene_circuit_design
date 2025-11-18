@@ -7,8 +7,9 @@ This directory contains the refactored components that break down the monolithic
 ```
 experiments/core/
 ├── __init__.py              # Package exports
-├── data_loader.py           # Data loading and splitting
-├── model_trainer.py         # Model training and evaluation
+├── data_loader.py           # Data loading and normalization
+├── initial_selection_strategies.py  # Strategies for seeding the labeled pool
+├── predictor_trainer.py     # Model training utilities
 ├── metrics_calculator.py    # Custom metrics calculation
 ├── result_manager.py        # Result saving
 ├── variant_tracker.py       # Variant tracking
@@ -18,18 +19,16 @@ experiments/core/
 ## Components
 
 ### DataLoader (`data_loader.py`)
-- **Responsibility**: Load data from various formats (safetensors, CSV) and create train/test/unlabeled splits
+- **Responsibility**: Load data from various formats (safetensors, CSV) and normalize labels/embeddings for downstream components
 - **Key Classes**:
   - `Dataset`: Data container with sequences, expressions, log_likelihoods, embeddings, variant_ids
-  - `DataSplit`: Container for train/test/unlabeled indices
-  - `DataLoader`: Main class for loading and splitting data
+  - `DataLoader`: Main class for loading and normalization (no longer performs data splitting)
 
-### ModelTrainer (`model_trainer.py`)
-- **Responsibility**: Train models and evaluate performance
+### PredictorTrainer (`predictor_trainer.py`)
+- **Responsibility**: Train models and make predictions
 - **Key Methods**:
-  - `train()`: Train the model on training data
-  - `evaluate()`: Evaluate model on test set
-  - `predict()`: Make predictions
+  - `train()`: Fit the predictor on the current labeled pool
+  - `predict()`: Make predictions for candidate sequences
 
 ### MetricsCalculator (`metrics_calculator.py`)
 - **Responsibility**: Calculate and track custom metrics
@@ -49,32 +48,41 @@ experiments/core/
 - **Key Methods**:
   - `save_results()`: Save all results, custom metrics, and selected variants
 
+### InitialSelectionStrategies (`initial_selection_strategies.py`)
+- **Responsibility**: Provide pluggable strategies (random, k-means, etc.) for selecting the initial labeled set before the active learning loop begins.
+- **Key Strategies**:
+  - `RandomInitialSelection`: uniform sampling without replacement.
+  - `KMeansInitialSelection`: cluster embeddings/encoded sequences and pick centroid representatives.
+
 ### ActiveLearningExperiment (`experiment.py`)
 - **Responsibility**: Orchestrate the active learning loop using composed components
 - **Key Features**:
   - Uses composition instead of doing everything itself
-  - Maintains backward compatibility through properties
-  - Cleaner, more maintainable code
+  - Maintains backward compatibility through properties (e.g., `test_indices` now always returns an empty list)
+  - Active learning now runs purely on the labeled/unlabeled pools without reserving a held-out test split
 
 ## Usage
 
 The refactored `ActiveLearningExperiment` has the same interface as before:
 
 ```python
+from sklearn.linear_model import LinearRegression
+
 from experiments.core.experiment import ActiveLearningExperiment
-from utils.config_loader import SelectionStrategy
-from utils.model_loader import RegressionModelType
+from experiments.core.initial_selection_strategies import KMeansInitialSelection
+from experiments.core.query_strategies import Random
 from utils.sequence_utils import SequenceModificationMethod
 
-# Create experiment (same API as before)
+# Create experiment (new API uses concrete predictor and query strategy objects)
 experiment = ActiveLearningExperiment(
     data_path="data/sequences.safetensors",
-    selection_strategy=SelectionStrategy.HIGH_EXPRESSION,
-    regression_model=RegressionModelType.LINEAR,
+    query_strategy=Random(seed=42),
+    predictor=LinearRegression(),
     initial_sample_size=8,
     batch_size=8,
     random_seed=42,
     seq_mod_method=SequenceModificationMethod.EMBEDDING,
+    initial_selection_strategy=KMeansInitialSelection(),
 )
 
 # Run experiment
@@ -85,7 +93,7 @@ experiment.save_results("output/results.csv")
 
 # Access data (backward compatible)
 print(f"Training set size: {len(experiment.train_indices)}")
-print(f"Custom metrics: {experiment.custom_metrics}")
+print(f"Unlabeled pool size: {len(experiment.unlabeled_indices)}")
 ```
 
 ## Benefits
@@ -124,13 +132,13 @@ loader = DataLoader("data/sequences.safetensors")
 dataset = loader.load()
 assert len(dataset.sequences) > 0
 
-# Test ModelTrainer
-from experiments.core.model_trainer import ModelTrainer
+# Test PredictorTrainer
+from experiments.core.predictor_trainer import PredictorTrainer
 from sklearn.linear_model import LinearRegression
 
-trainer = ModelTrainer(LinearRegression())
+trainer = PredictorTrainer(LinearRegression())
 trainer.train(X_train, y_train, train_indices)
-metrics = trainer.evaluate(X_test, y_test)
+predictions = trainer.predict(X_test)
 
 # Test MetricsCalculator
 from experiments.core.metrics_calculator import MetricsCalculator

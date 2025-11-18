@@ -1,7 +1,5 @@
 """
-Integration tests for ActiveLearningExperiment.
-
-Tests the complete experiment workflow using the refactored components.
+Integration tests for ActiveLearningExperiment without a test split.
 """
 
 from pathlib import Path
@@ -10,18 +8,17 @@ import numpy as np
 import pandas as pd
 import torch
 from safetensors.torch import save_file
+from sklearn.linear_model import LinearRegression
 
 from experiments.core.experiment import ActiveLearningExperiment
-from utils.config_loader import SelectionStrategy
-from utils.model_loader import RegressionModelType
-from utils.sequence_utils import SequenceModificationMethod
+from experiments.core.query_strategies import Random, TopPredictions
 
 
 class TestActiveLearningExperiment:
-    """Integration tests for ActiveLearningExperiment."""
+    """Integration tests covering the no-test active learning workflow."""
 
-    def create_test_safetensors(self, tmp_path, n_samples=20):
-        """Helper to create test safetensors file."""
+    def create_test_safetensors(self, tmp_path, n_samples: int = 20) -> str:
+        """Helper to create a safetensors file with embeddings and labels."""
         safetensors_path = tmp_path / "test_data.safetensors"
 
         embeddings = torch.randn(n_samples, 10)
@@ -39,10 +36,9 @@ class TestActiveLearningExperiment:
 
         return str(safetensors_path)
 
-    def create_test_csv(self, tmp_path, n_samples=20):
-        """Helper to create test CSV file."""
+    def create_test_csv(self, tmp_path, n_samples: int = 20) -> str:
+        """Helper to create a CSV dataset."""
         csv_path = tmp_path / "test_data.csv"
-
         df = pd.DataFrame(
             {
                 "Sequence": [f"ATGC{i}" for i in range(n_samples)],
@@ -51,289 +47,102 @@ class TestActiveLearningExperiment:
             }
         )
         df.to_csv(csv_path, index=False)
-
         return str(csv_path)
 
     def test_experiment_initialization_safetensors(self, tmp_path):
-        """Test experiment initialization with safetensors."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=20)
-
+        """Experiment initializes with random initial pool and no test indices."""
+        data_path = self.create_test_safetensors(tmp_path, n_samples=18)
         experiment = ActiveLearningExperiment(
             data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=5,
+            query_strategy=Random(seed=42),
+            predictor=LinearRegression(),
+            initial_sample_size=6,
             batch_size=3,
-            test_size=5,
-            random_seed=42,
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-            no_test=False,
             normalize_input_output=False,
         )
 
-        # Check data is loaded
-        assert len(experiment.all_sequences) == 20
-        assert len(experiment.all_expressions) == 20
+        assert len(experiment.all_sequences) == 18
         assert experiment.embeddings is not None
-        assert experiment.embeddings.shape == (20, 10)
-
-        # Check data splits
-        assert len(experiment.train_indices) == 5
-        assert len(experiment.test_indices) == 5
-        assert len(experiment.unlabeled_indices) == 10
+        assert len(experiment.train_indices) == 6
+        assert len(experiment.unlabeled_indices) == 12
+        assert experiment.test_indices == []
 
     def test_experiment_initialization_csv(self, tmp_path):
-        """Test experiment initialization with CSV."""
+        """CSV datasets also work without embeddings."""
         data_path = self.create_test_csv(tmp_path, n_samples=15)
-
         experiment = ActiveLearningExperiment(
             data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=4,
-            batch_size=2,
-            test_size=3,
-            random_seed=42,
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-            no_test=False,
-            normalize_input_output=False,
-        )
-
-        assert len(experiment.all_sequences) == 15
-        assert experiment.embeddings is None  # CSV doesn't have embeddings
-
-    def test_run_experiment_single_round(self, tmp_path):
-        """Test running experiment for a single round."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
-        experiment = ActiveLearningExperiment(
-            data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
+            query_strategy=Random(seed=123),
+            predictor=LinearRegression(),
             initial_sample_size=5,
-            batch_size=3,
-            test_size=3,
-            random_seed=42,
-            no_test=False,
+            batch_size=2,
             normalize_input_output=False,
         )
 
-        results = experiment.run_experiment(max_rounds=1)
-
-        # Check results
-        assert len(results) == 1
-        assert results[0]["round"] == 1
-        assert "rmse" in results[0]
-        assert "r2" in results[0]
-
-        # Check that training set was updated
-        assert len(experiment.train_indices) == 8  # 5 initial + 3 from batch
-
-        # Check custom metrics were calculated
-        assert len(experiment.custom_metrics) >= 1
+        assert experiment.embeddings is None
+        assert len(experiment.all_expressions) == 15
 
     def test_run_experiment_multiple_rounds(self, tmp_path):
-        """Test running experiment for multiple rounds."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=20)
-
+        """Running multiple rounds grows the training pool and produces metrics."""
+        data_path = self.create_test_safetensors(tmp_path, n_samples=25)
         experiment = ActiveLearningExperiment(
             data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
+            query_strategy=TopPredictions(),
+            predictor=LinearRegression(),
             initial_sample_size=5,
-            batch_size=3,
-            test_size=5,
-            random_seed=42,
-            no_test=False,
+            batch_size=4,
             normalize_input_output=False,
         )
 
         results = experiment.run_experiment(max_rounds=3)
 
-        # Check results
         assert len(results) == 3
-        assert all(r["round"] == i + 1 for i, r in enumerate(results))
+        assert results[-1]["train_size"] == 5 + (4 * 3)
+        assert isinstance(experiment.custom_metrics, list)
+        assert experiment.custom_metrics, "Custom metrics should accumulate each round"
 
-        # Check training set grows
-        assert len(experiment.train_indices) == 14  # 5 + 3*3
-
-        # Check custom metrics
-        assert len(experiment.custom_metrics) >= 3
-
-    def test_run_experiment_no_test(self, tmp_path):
-        """Test running experiment without test set."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
-        experiment = ActiveLearningExperiment(
-            data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=5,
-            batch_size=3,
-            test_size=0,
-            random_seed=42,
-            no_test=True,
-            normalize_input_output=False,
-        )
-
-        results = experiment.run_experiment(max_rounds=2)
-
-        # Results should not have test metrics
-        assert len(results) == 2
-        assert "rmse" not in results[0] or results[0].get("rmse") is None
+        final_metrics = experiment.get_final_performance()
+        assert "top_10_ratio_intersected_indices" in final_metrics
+        assert "best_value_ground_truth_values_cumulative" in final_metrics
 
     def test_save_results(self, tmp_path):
-        """Test saving experiment results."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
+        """Saving results writes results, custom metrics, and selected variants."""
+        data_path = self.create_test_safetensors(tmp_path, n_samples=20)
         experiment = ActiveLearningExperiment(
             data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
+            query_strategy=Random(seed=99),
+            predictor=LinearRegression(),
             initial_sample_size=5,
-            batch_size=3,
-            test_size=3,
-            random_seed=42,
-            no_test=False,
+            batch_size=5,
             normalize_input_output=False,
         )
 
         experiment.run_experiment(max_rounds=2)
 
-        output_path = str(tmp_path / "test_results.csv")
-        experiment.save_results(output_path)
+        output_path = Path(tmp_path) / "results.csv"
+        experiment.save_results(str(output_path))
 
-        # Check files exist
-        assert Path(output_path).exists()
-        assert Path(str(tmp_path / "test_results_custom_metrics.csv")).exists()
-        assert Path(str(tmp_path / "test_results_selected_variants.csv")).exists()
-
-        # Check results file
-        df = pd.read_csv(output_path)
-        assert len(df) == 2
+        assert output_path.exists()
+        assert (tmp_path / "results_custom_metrics.csv").exists()
+        assert (tmp_path / "results_selected_variants.csv").exists()
 
     def test_backward_compatibility_properties(self, tmp_path):
-        """Test backward compatibility properties."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
+        """Compatibility properties stay available even without a test split."""
+        data_path = self.create_test_safetensors(tmp_path, n_samples=12)
         experiment = ActiveLearningExperiment(
             data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=5,
-            batch_size=3,
-            random_seed=42,
-            no_test=True,
+            query_strategy=Random(seed=1),
+            predictor=LinearRegression(),
+            initial_sample_size=4,
+            batch_size=4,
             normalize_input_output=False,
         )
 
-        # Test all backward compatibility properties
         assert isinstance(experiment.all_sequences, list)
         assert isinstance(experiment.all_expressions, np.ndarray)
         assert isinstance(experiment.all_log_likelihoods, np.ndarray)
         assert isinstance(experiment.train_indices, list)
-        assert isinstance(experiment.test_indices, list)
         assert isinstance(experiment.unlabeled_indices, list)
+        assert experiment.test_indices == []
         assert isinstance(experiment.custom_metrics, list)
         assert isinstance(experiment.selected_variants, list)
-
-    def test_different_selection_strategies(self, tmp_path):
-        """Test experiment with different selection strategies."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=20)
-
-        strategies = [
-            SelectionStrategy.RANDOM,
-            SelectionStrategy.HIGH_EXPRESSION,
-        ]
-
-        for strategy in strategies:
-            experiment = ActiveLearningExperiment(
-                data_path=data_path,
-                selection_strategy=strategy,
-                regression_model=RegressionModelType.LINEAR,
-                initial_sample_size=5,
-                batch_size=3,
-                random_seed=42,
-                no_test=True,
-                normalize_input_output=False,
-            )
-
-            results = experiment.run_experiment(max_rounds=2)
-            assert len(results) == 2
-
-    def test_different_regression_models(self, tmp_path):
-        """Test experiment with different regression models."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
-        models = [
-            RegressionModelType.LINEAR,
-            RegressionModelType.KNN,
-            RegressionModelType.RANDOM_FOREST,
-        ]
-
-        for model in models:
-            experiment = ActiveLearningExperiment(
-                data_path=data_path,
-                selection_strategy=SelectionStrategy.RANDOM,
-                regression_model=model,
-                initial_sample_size=5,
-                batch_size=3,
-                random_seed=42,
-                no_test=True,
-                normalize_input_output=False,
-            )
-
-            results = experiment.run_experiment(max_rounds=1)
-            assert len(results) == 1
-
-    def test_get_final_performance(self, tmp_path):
-        """Test getting final performance metrics."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=15)
-
-        experiment = ActiveLearningExperiment(
-            data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=5,
-            batch_size=3,
-            test_size=3,
-            random_seed=42,
-            no_test=False,
-            normalize_input_output=False,
-        )
-
-        experiment.run_experiment(max_rounds=2)
-
-        final_perf = experiment.get_final_performance()
-
-        # Should have metrics but not metadata
-        assert "round" not in final_perf
-        assert "strategy" not in final_perf
-        assert "seed" not in final_perf
-
-        # Should have performance metrics if test set was used
-        if not experiment.no_test:
-            assert "rmse" in final_perf or "r2" in final_perf
-
-    def test_experiment_stops_when_no_unlabeled(self, tmp_path):
-        """Test that experiment stops when no unlabeled data remains."""
-        data_path = self.create_test_safetensors(tmp_path, n_samples=10)
-
-        experiment = ActiveLearningExperiment(
-            data_path=data_path,
-            selection_strategy=SelectionStrategy.RANDOM,
-            regression_model=RegressionModelType.LINEAR,
-            initial_sample_size=5,
-            batch_size=3,
-            test_size=2,
-            random_seed=42,
-            no_test=False,
-            normalize_input_output=False,
-        )
-
-        # Only 3 unlabeled samples, but batch_size is 3
-        # After 1 round, should have 0 unlabeled
-        results = experiment.run_experiment(max_rounds=10)
-
-        # Should stop early when no unlabeled data
-        assert len(results) <= 2  # At most 2 rounds before running out

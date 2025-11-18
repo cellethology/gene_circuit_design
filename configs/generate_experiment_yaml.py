@@ -58,10 +58,8 @@ class ExperimentDefaults:
     seeds: tuple[int, ...] = tuple(range(1, 21))
     initial_sample_size: int = 8
     batch_size: int = 8
-    test_size: int = 30
     max_rounds: int = 20
     normalize_expression: bool = True
-    no_test: bool = True
     normalize_input_output: bool = True
 
     def as_mapping(self) -> Mapping[str, object]:
@@ -74,10 +72,8 @@ class ExperimentDefaults:
             "seeds": list(self.seeds),
             "initial_sample_size": self.initial_sample_size,
             "batch_size": self.batch_size,
-            "test_size": self.test_size,
             "max_rounds": self.max_rounds,
             "normalize_expression": self.normalize_expression,
-            "no_test": self.no_test,
             "normalize_input_output": self.normalize_input_output,
         }
 
@@ -241,14 +237,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--initial-sample-size", type=int, default=8, help="Initial sample size."
     )
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size.")
-    parser.add_argument("--test-size", type=int, default=30, help="Test size.")
     parser.add_argument("--max-rounds", type=int, default=20, help="Max rounds.")
-    parser.add_argument(
-        "--no-test",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="If set, include no_test: true (default: true). Use --no-test=false to disable.",
-    )
     parser.add_argument(
         "--normalize-expression",
         action=argparse.BooleanOptionalAction,
@@ -300,10 +289,8 @@ def main(argv: list[str] | None = None) -> int:
         seeds=_parse_comma_ints(args.seeds),
         initial_sample_size=args.initial_sample_size,
         batch_size=args.batch_size,
-        test_size=args.test_size,
         max_rounds=args.max_rounds,
         normalize_expression=args.normalize_expression,
-        no_test=args.no_test,
         normalize_input_output=args.normalize_input_output,
     )
 

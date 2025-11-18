@@ -1,7 +1,7 @@
 """
 Unit tests for DataLoader and related classes.
 
-Tests data loading from various formats, data splitting, and normalization.
+Tests data loading from various formats and normalization helpers.
 """
 
 import numpy as np
@@ -11,7 +11,6 @@ import torch
 from safetensors.torch import save_file
 
 from experiments.core.data_loader import DataLoader, Dataset
-from utils.config_loader import SelectionStrategy
 from utils.sequence_utils import SequenceModificationMethod
 
 
@@ -263,123 +262,3 @@ class TestDataLoader:
         # Check that sequence_labels are normalized (mean ~0, std ~1)
         assert abs(dataset.sequence_labels.mean()) < 0.1
         assert abs(dataset.sequence_labels.std() - 1.0) < 0.1
-
-    def test_create_data_split_random(self):
-        """Test creating data split with random initial selection."""
-        # Create a simple dataset
-        sequences = [f"seq_{i}" for i in range(20)]
-        sequence_labels = np.random.randn(20)
-        log_likelihoods = np.random.randn(20)
-        embeddings = np.random.randn(20, 10)
-
-        dataset = Dataset(
-            sequences=sequences,
-            sequence_labels=sequence_labels,
-            log_likelihoods=log_likelihoods,
-            embeddings=embeddings,
-            variant_ids=None,
-        )
-
-        loader = DataLoader(
-            data_path="dummy",  # Not used for splitting
-            normalize_input_output=False,
-        )
-
-        def encode_fn(indices):
-            return embeddings[indices]
-
-        data_split = loader.create_data_split(
-            dataset=dataset,
-            initial_sample_size=5,
-            test_size=3,
-            no_test=False,
-            selection_strategy=SelectionStrategy.RANDOM,
-            random_seed=42,
-            encode_sequences_fn=encode_fn,
-        )
-
-        assert len(data_split.train_indices) == 5
-        assert len(data_split.test_indices) == 3
-        assert len(data_split.unlabeled_indices) == 12
-        assert (
-            len(data_split.train_indices)
-            + len(data_split.test_indices)
-            + len(data_split.unlabeled_indices)
-            == 20
-        )
-
-    def test_create_data_split_no_test(self):
-        """Test creating data split without test set."""
-        sequences = [f"seq_{i}" for i in range(10)]
-        sequence_labels = np.random.randn(10)
-        log_likelihoods = np.random.randn(10)
-        embeddings = np.random.randn(10, 5)
-
-        dataset = Dataset(
-            sequences=sequences,
-            sequence_labels=sequence_labels,
-            log_likelihoods=log_likelihoods,
-            embeddings=embeddings,
-            variant_ids=None,
-        )
-
-        loader = DataLoader(
-            data_path="dummy",
-            normalize_input_output=False,
-        )
-
-        def encode_fn(indices):
-            return embeddings[indices]
-
-        data_split = loader.create_data_split(
-            dataset=dataset,
-            initial_sample_size=3,
-            test_size=0,
-            no_test=True,
-            selection_strategy=SelectionStrategy.RANDOM,
-            random_seed=42,
-            encode_sequences_fn=encode_fn,
-        )
-
-        assert len(data_split.test_indices) == 0
-        assert len(data_split.train_indices) == 3
-        assert len(data_split.unlabeled_indices) == 7
-
-    # TODO: ZELUN figure out why normalize_input_output=False is not working
-    # Unsure why this only fail on pre-commit hook, but works locally
-    # def test_create_data_split_kmeans(self):
-    #     """Test creating data split with K-means initial selection."""
-    #     sequences = [f"seq_{i}" for i in range(10)]
-    #     sequence_labels = np.random.randn(10)
-    #     log_likelihoods = np.random.randn(10)
-    #     embeddings = np.random.randn(10, 5)
-
-    #     dataset = Dataset(
-    #         sequences=sequences,
-    #         sequence_labels=sequence_labels,
-    #         log_likelihoods=log_likelihoods,
-    #         embeddings=embeddings,
-    #         variant_ids=None,
-    #     )
-    #     # TODO: ZELUN figure out why normalize_input_output=False is not working
-    #     loader = DataLoader(
-    #         data_path="dummy",
-    #         normalize_input_output=True,
-    #     )
-
-    #     def encode_fn(indices):
-    #         return embeddings[indices]
-
-    #     data_split = loader.create_data_split(
-    #         dataset=dataset,
-    #         initial_sample_size=3,
-    #         test_size=2,
-    #         no_test=False,
-    #         selection_strategy=SelectionStrategy.KMEANS_RANDOM,
-    #         random_seed=42,
-    #         encode_sequences_fn=encode_fn,
-    #     )
-
-    #     assert len(data_split.train_indices) == 3
-    #     assert len(data_split.test_indices) == 2
-    #     assert len(data_split.unlabeled_indices) == 5

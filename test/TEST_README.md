@@ -10,7 +10,7 @@ Tests for `DataLoader` and `Dataset` classes:
 - Loading from CSV files (with and without log likelihood)
 - Loading from safetensors files (embeddings and PCA formats)
 - Data normalization
-- Creating train/test/unlabeled splits (random and K-means)
+- Active learning-specific data splitting is now handled inside `ActiveLearningExperiment`, so the loader only covers loading/normalization
 - Error handling for missing data
 
 **Key Test Cases:**
@@ -18,8 +18,6 @@ Tests for `DataLoader` and `Dataset` classes:
 - `test_load_safetensors_embeddings_format` - Safetensors with embeddings
 - `test_load_safetensors_pca_format` - Safetensors with PCA components
 - `test_normalize_data` - Data normalization
-- `test_create_data_split_random` - Random data splitting
-- `test_create_data_split_kmeans` - K-means data splitting
 
 ### `test_model_trainer.py`
 Tests for `ModelTrainer` class:
@@ -77,16 +75,15 @@ Tests for `ResultManager` class:
 Integration tests for `ActiveLearningExperiment`:
 - Complete experiment workflows
 - Different data formats
-- Different selection strategies
-- Different regression models
-- Backward compatibility
+- Different query strategies and predictors
+- Backward compatibility in a no-test-split pipeline
 
 **Key Test Cases:**
 - `test_experiment_initialization_safetensors` - Safetensors initialization
+- `test_experiment_initialization_csv` - CSV initialization
 - `test_run_experiment_multiple_rounds` - Multi-round experiments
 - `test_backward_compatibility_properties` - Backward compatibility
-- `test_different_selection_strategies` - Different strategies
-- `test_different_regression_models` - Different models
+- `test_save_results` - Saving round information
 
 ## Running Tests
 

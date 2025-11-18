@@ -308,10 +308,8 @@ def create_custom_config(
         "seeds": seeds,
         "initial_sample_size": kwargs.get("initial_sample_size", 8),
         "batch_size": kwargs.get("batch_size", 8),
-        "test_size": kwargs.get("test_size", 30),
         "max_rounds": kwargs.get("max_rounds", 20),
         "normalize_input_output": kwargs.get("normalize_input_output", False),
-        "no_test": kwargs.get("no_test", True),
     }
 
     # Add any additional parameters
