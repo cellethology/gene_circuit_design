@@ -46,7 +46,7 @@ class RandomInitialSelection(InitialSelectionStrategy):
         initial_sample_size: int,
         encode_sequences_fn: EncodeFn,
     ) -> List[int]:
-        total = len(dataset.sequences)
+        total = len(dataset.sample_ids)
         if initial_sample_size >= total:
             return list(range(total))
         rng = random.Random(self.seed)
@@ -66,12 +66,13 @@ class KMeansInitialSelection(InitialSelectionStrategy):
         initial_sample_size: int,
         encode_sequences_fn: EncodeFn,
     ) -> List[int]:
-        if initial_sample_size >= len(dataset.sequences):
-            return list(range(len(dataset.sequences)))
+        total = len(dataset.sample_ids)
+        if initial_sample_size >= total:
+            return list(range(total))
 
         from experiments.util import select_initial_batch_kmeans_from_features
 
-        all_indices = list(range(len(dataset.sequences)))
+        all_indices = list(range(len(dataset.sample_ids)))
         features = encode_sequences_fn(all_indices)
 
         selected = select_initial_batch_kmeans_from_features(

@@ -5,9 +5,8 @@ defaults:
   - override hydra/launcher: submitit_local
 
 data_paths: "CIS_1-1-1-1.safetensors"
-
-embedding_path: embeddings.safetensors
-prediction_path: expressions.csv
+embedding_path: embeddings.npz
+metadata_path: expressions.csv
 
 al_settings:
   # Fixed (non-swept)
@@ -18,7 +17,6 @@ al_settings:
   normalize_targets: true
   output_dir: results/demo_experiment
   query_strategy: ${query_strategy}
-  seq_mod_method: embedding
   target_val_key: expressions
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}

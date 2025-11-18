@@ -19,7 +19,7 @@ class TestResultManager:
         manager = ResultManager(
             strategy="highExpression",
             seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -27,7 +27,7 @@ class TestResultManager:
 
         assert manager.strategy == "highExpression"
         assert manager.seq_mod_method == "embedding"
-        assert manager.regression_model_name == "LinearRegression"
+        assert manager.predictor_name == "LinearRegression"
         assert manager.seed == 42
 
     def test_save_results_basic(self, tmp_path):
@@ -35,7 +35,7 @@ class TestResultManager:
         manager = ResultManager(
             strategy="highExpression",
             seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -76,7 +76,7 @@ class TestResultManager:
         manager = ResultManager(
             strategy="highExpression",
             seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -120,7 +120,7 @@ class TestResultManager:
         assert len(df) == 2
         assert "strategy" in df.columns
         assert "seq_mod_method" in df.columns
-        assert "regression_model" in df.columns
+        assert "predictor" in df.columns
         assert "seed" in df.columns
         assert "round" in df.columns
         assert "train_size" in df.columns
@@ -134,7 +134,7 @@ class TestResultManager:
         manager = ResultManager(
             strategy="highExpression",
             seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -146,20 +146,16 @@ class TestResultManager:
                 "strategy": "highExpression",
                 "seed": 42,
                 "variant_index": 0,
-                "variant_id": "variant_0",
                 "expression": 1.0,
-                "log_likelihood": -0.5,
-                "sequence": "ATGC",
+                "sample_id": "sample_0",
             },
             {
                 "round": 1,
                 "strategy": "highExpression",
                 "seed": 42,
                 "variant_index": 5,
-                "variant_id": "variant_5",
                 "expression": 2.0,
-                "log_likelihood": -0.3,
-                "sequence": "CGTA",
+                "sample_id": "sample_5",
             },
         ]
 
@@ -175,7 +171,8 @@ class TestResultManager:
         assert "round" in df.columns
         assert "variant_index" in df.columns
         assert "expression" in df.columns
-        assert "regression_model" in df.columns
+        assert "sample_id" in df.columns
+        assert "predictor" in df.columns
         assert "seq_mod_method" in df.columns
 
     def test_save_all_outputs(self, tmp_path):
@@ -210,10 +207,8 @@ class TestResultManager:
                 "strategy": "highExpression",
                 "seed": 42,
                 "variant_index": 0,
-                "variant_id": "variant_0",
                 "expression": 1.0,
-                "log_likelihood": -0.5,
-                "sequence": "ATGC",
+                "sample_id": "sample_0",
             }
         ]
 

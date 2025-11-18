@@ -3,7 +3,7 @@ Variant tracking utilities for active learning experiments.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
@@ -17,24 +17,18 @@ class VariantTracker:
 
     def __init__(
         self,
+        sample_ids: List[str],
         all_expressions: np.ndarray,
-        all_log_likelihoods: np.ndarray,
-        all_sequences: List[str],
-        variant_ids: Optional[np.ndarray] = None,
     ) -> None:
         """
         Initialize the variant tracker.
 
         Args:
+            sample_ids: Identifiers for each sample in the dataset
             all_expressions: Array of all expression values
-            all_log_likelihoods: Array of all log likelihood values
-            all_sequences: List of all sequences
-            variant_ids: Optional array of variant IDs
         """
+        self.sample_ids = sample_ids
         self.all_expressions = all_expressions
-        self.all_log_likelihoods = all_log_likelihoods
-        self.all_sequences = all_sequences
-        self.variant_ids = variant_ids
         self.selected_variants: List[Dict[str, any]] = []
 
     def track_round(
@@ -60,31 +54,8 @@ class VariantTracker:
                 "seed": seed,
                 "variant_index": idx,
                 "expression": float(self.all_expressions[idx]),
-                "log_likelihood": (
-                    float(self.all_log_likelihoods[idx])
-                    if not np.isnan(self.all_log_likelihoods[idx])
-                    else None
-                ),
+                "sample_id": self.sample_ids[idx] if idx < len(self.sample_ids) else f"sample_{idx}",
             }
-
-            # Add variant ID if available
-            if self.variant_ids is not None:
-                variant_info["variant_id"] = (
-                    int(self.variant_ids[idx])
-                    if not np.isnan(self.variant_ids[idx])
-                    else None
-                )
-            else:
-                variant_info["variant_id"] = f"variant_{idx}"
-
-            # Add sequence (truncated for readability)
-            if idx < len(self.all_sequences):
-                sequence = str(self.all_sequences[idx])
-                variant_info["sequence"] = (
-                    sequence[:50] + "..." if len(sequence) > 50 else sequence
-                )
-            else:
-                variant_info["sequence"] = f"seq_{idx}"
 
             self.selected_variants.append(variant_info)
 

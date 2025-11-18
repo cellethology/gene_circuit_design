@@ -7,17 +7,15 @@ This directory contains comprehensive unit tests for the refactored active learn
 ### `test_data_loader.py`
 Tests for `DataLoader` and `Dataset` classes:
 - Dataset creation and validation
-- Loading from CSV files (with and without log likelihood)
-- Loading from safetensors files (embeddings and PCA formats)
-- Data normalization
-- Active learning-specific data splitting is now handled inside `ActiveLearningExperiment`, so the loader only covers loading/normalization
-- Error handling for missing data
+- Loading paired embeddings (safetensors) and metadata (CSV)
+- Generating placeholder sample IDs when sequences are absent
+- Error handling for missing columns or mismatched lengths
 
 **Key Test Cases:**
-- `test_load_csv_basic` - Basic CSV loading
-- `test_load_safetensors_embeddings_format` - Safetensors with embeddings
-- `test_load_safetensors_pca_format` - Safetensors with PCA components
-- `test_load_safetensors_missing_expression` - Safetensors validation
+- `test_load_paired_files` - Happy path for embeddings + CSV
+- `test_missing_sequence_column_generates_ids` - Fallback sample identifiers
+- `test_mismatched_lengths` - Embeddings/CSV alignment validation
+- `test_missing_target_column` - Required label column validation
 
 ### `test_predictor_trainer.py`
 Tests for `PredictorTrainer` class:
@@ -47,16 +45,14 @@ Tests for `MetricsCalculator` class:
 
 ### `test_variant_tracker.py`
 Tests for `VariantTracker` class:
-- Tracking variants across rounds
-- Handling variant IDs
-- Sequence truncation
-- NaN log likelihood handling
+- Tracking sample IDs and expressions across rounds
+- Handling missing identifiers gracefully
 
 **Key Test Cases:**
 - `test_track_round_basic` - Basic variant tracking
-- `test_track_round_with_variant_ids` - With variant IDs
+- `test_track_round_missing_ids` - Fallback sample IDs
 - `test_track_multiple_rounds` - Multi-round tracking
-- `test_track_round_long_sequence_truncation` - Sequence truncation
+- `test_get_all_variants_returns_copy` - Defensive copying
 
 ### `test_result_manager.py`
 Tests for `ResultManager` class:

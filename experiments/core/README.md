@@ -19,10 +19,10 @@ experiments/core/
 ## Components
 
 ### DataLoader (`data_loader.py`)
-- **Responsibility**: Load data from various formats (safetensors, CSV) and return raw, unnormalized datasets
+- **Responsibility**: Load embeddings from compressed `.npz` files alongside aligned metadata from CSV (labels plus optional sample identifiers)
 - **Key Classes**:
-  - `Dataset`: Data container with sequences, expressions, log_likelihoods, embeddings, variant_ids
-  - `DataLoader`: Main class for loading (no longer performs splitting or normalization)
+  - `Dataset`: Data container with sample IDs, expressions, and embeddings
+  - `DataLoader`: Main class for loading paired files (no longer performs splitting or normalization)
 
 ### PredictorTrainer (`predictor_trainer.py`)
 - **Responsibility**: Train models, apply per-round normalization, and make predictions
@@ -64,8 +64,6 @@ experiments/core/
 
 ## Usage
 
-The refactored `ActiveLearningExperiment` has the same interface as before:
-
 ```python
 from sklearn.linear_model import LinearRegression
 
@@ -74,16 +72,21 @@ from experiments.core.initial_selection_strategies import KMeansInitialSelection
 from experiments.core.query_strategies import Random
 from utils.sequence_utils import SequenceModificationMethod
 
-# Create experiment (new API uses concrete predictor and query strategy objects)
+# Create experiment with paired embeddings/metadata files
 experiment = ActiveLearningExperiment(
-    data_path="data/sequences.safetensors",
+    embeddings_path="data/embeddings.npz",
+    metadata_csv_path="data/metadata.csv",
+    initial_selection_strategy=KMeansInitialSelection(seed=42),
     query_strategy=Random(seed=42),
     predictor=LinearRegression(),
     initial_sample_size=8,
     batch_size=8,
     random_seed=42,
     seq_mod_method=SequenceModificationMethod.EMBEDDING,
-    initial_selection_strategy=KMeansInitialSelection(),
+    normalize_features=True,
+    normalize_targets=True,
+    sequence_column="Sequence",
+    target_val_key="Expression",
 )
 
 # Run experiment
@@ -129,9 +132,13 @@ Each component can be tested independently:
 # Test DataLoader
 from experiments.core.data_loader import DataLoader, Dataset
 
-loader = DataLoader("data/sequences.safetensors")
+loader = DataLoader(
+    embeddings_path="data/embeddings.npz",
+    metadata_csv_path="data/metadata.csv",
+    target_val_key="Expression",
+)
 dataset = loader.load()
-assert len(dataset.sequences) > 0
+assert len(dataset.sample_ids) > 0
 
 # Test PredictorTrainer
 from experiments.core.predictor_trainer import PredictorTrainer

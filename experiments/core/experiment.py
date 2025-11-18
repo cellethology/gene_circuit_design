@@ -21,11 +21,7 @@ from experiments.core.predictor_trainer import PredictorTrainer
 from experiments.core.query_strategies import QueryStrategyBase
 from experiments.core.result_manager import ResultManager
 from experiments.core.variant_tracker import VariantTracker
-from experiments.util import encode_sequences as util_encode_sequences
-from utils.sequence_utils import (
-    SequenceModificationMethod,
-    ensure_sequence_modification_method,
-)
+from experiments.util import encode_sequences
 
 logger = logging.getLogger(__name__)
 
@@ -40,46 +36,43 @@ class ActiveLearningExperiment:
 
     def __init__(
         self,
-        data_path: str,
+        embeddings_path: str,
+        metadata_path: str,
         initial_selection_strategy: InitialSelectionStrategy,
         query_strategy: QueryStrategyBase,
         predictor: RegressorMixin,
         initial_sample_size: int = 8,
         batch_size: int = 8,
         random_seed: int = 42,
-        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
         normalize_features: bool = True,
         normalize_targets: bool = True,
-        use_pca: bool = False,
-        pca_components: int = 4096,
-        target_val_key: str = None,
+        target_val_key: Optional[str] = None,
     ) -> None:
         """
         Initialize the active learning experiment.
 
         Args:
-            data_path: Path to CSV or safetensors file with sequence and expression data
-            query_strategy: Strategy for selecting next sequences
+            embeddings_path: Path to NPZ file containing embeddings (and optional IDs)
+            metadata_csv_path: CSV file with labels aligned to embeddings
+            query_strategy: Strategy for selecting next samples
             predictor: Regression model to fit during the loop
-            initial_sample_size: Number of sequences to start with
-            batch_size: Number of sequences to select in each round\
+            initial_sample_size: Number of samples to start with
+            batch_size: Number of samples to select in each round\
             random_seed: Random seed for reproducibility
-            seq_mod_method: Sequence modification method for encoding
             normalize_features: Whether to re-normalize features each round
             normalize_targets: Whether to re-normalize targets each round
-            use_pca: Whether to use PCA for dimensionality reduction
-            pca_components: Number of PCA components if use_pca=True
-            target_val_key: Optional key for target values in safetensors files
+            target_val_key: Column name in the metadata CSV containing target values
         """
         # Store configuration
-        self.data_path = data_path
+        if target_val_key is None:
+            raise ValueError("target_val_key must be provided for metadata loading.")
+
+        self.embeddings_path = embeddings_path
+        self.metadata_path = metadata_path
         self.query_strategy = query_strategy
         self.initial_sample_size = initial_sample_size
         self.batch_size = batch_size
         self.random_seed = random_seed
-        self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
-        self.use_pca = use_pca
-        self.pca_components = pca_components
         self.target_val_key = target_val_key
         self.predictor_name = predictor.__class__.__name__
         self.initial_selection_strategy = initial_selection_strategy
@@ -92,8 +85,8 @@ class ActiveLearningExperiment:
 
         # Initialize components
         self.data_loader = DataLoader(
-            data_path=data_path,
-            seq_mod_method=self.seq_mod_method,
+            embeddings_path=embeddings_path,
+            metadata_path=metadata_path,
             target_val_key=target_val_key,
         )
 
@@ -115,20 +108,17 @@ class ActiveLearningExperiment:
         )
 
         # Initialize metrics calculator
-        self.metrics_calculator = MetricsCalculator(self.dataset.sequence_labels)
+        self.metrics_calculator = MetricsCalculator(self.dataset.labels)
 
         # Initialize variant tracker
         self.variant_tracker = VariantTracker(
-            all_expressions=self.dataset.sequence_labels,
-            all_log_likelihoods=self.dataset.log_likelihoods,
-            all_sequences=self.dataset.sequences,
-            variant_ids=self.dataset.variant_ids,
+            sample_ids=self.dataset.sample_ids,
+            all_expressions=self.dataset.labels,
         )
 
         # Initialize result manager
         self.result_manager = ResultManager(
             strategy=self.query_strategy.name,
-            seq_mod_method=self.seq_mod_method.value,
             predictor_name=self.predictor_name,
             seed=self.random_seed,
             initial_sample_size=initial_sample_size,
@@ -155,13 +145,9 @@ class ActiveLearningExperiment:
         Returns:
             Encoded sequences as numpy array
         """
-        return util_encode_sequences(
+        return encode_sequences(
             indices=indices,
-            all_sequences=self.dataset.sequences,
             embeddings=self.dataset.embeddings,
-            seq_mod_method=self.seq_mod_method,
-            use_pca=self.use_pca,
-            pca_components=self.pca_components,
         )
 
     def _select_next_batch(self, round_idx: int) -> List[int]:
@@ -190,7 +176,7 @@ class ActiveLearningExperiment:
 
             # Train model
             X_train = self._encode_sequences(self._train_indices)
-            y_train = self.dataset.sequence_labels[self._train_indices]
+            y_train = self.dataset.labels[self._train_indices]
             self.predictor_trainer.train(
                 X_train=X_train,
                 y_train=y_train,
@@ -227,7 +213,6 @@ class ActiveLearningExperiment:
                     {
                         "round": round_num + 1,
                         "strategy": self.query_strategy.name,
-                        "seq_mod_method": self.seq_mod_method.value,
                         "seed": self.random_seed,
                         "train_size": len(self._train_indices),
                         "unlabeled_size": len(self._unlabeled_indices),
@@ -244,7 +229,6 @@ class ActiveLearningExperiment:
                     {
                         "round": round_num + 1,
                         "strategy": self.query_strategy.name,
-                        "seq_mod_method": self.seq_mod_method.value,
                         "seed": self.random_seed,
                         "train_size": len(self._train_indices),
                         "unlabeled_size": len(self._unlabeled_indices),
@@ -282,7 +266,6 @@ class ActiveLearningExperiment:
                 {
                     "round": round_num + 1,
                     "strategy": self.query_strategy.name,
-                    "seq_mod_method": self.seq_mod_method.value,
                     "seed": self.random_seed,
                     "train_size": len(self._train_indices),
                     "unlabeled_size": len(self._unlabeled_indices),
@@ -326,20 +309,15 @@ class ActiveLearningExperiment:
     @property
     def all_sequences(self) -> List[str]:
         """Get all sequences (for backward compatibility)."""
-        return self.dataset.sequences
+        return self.dataset.sample_ids
 
     @property
     def all_expressions(self) -> np.ndarray:
         """Get all expressions (for backward compatibility)."""
-        return self.dataset.sequence_labels
+        return self.dataset.labels
 
     @property
-    def all_log_likelihoods(self) -> np.ndarray:
-        """Get all log likelihoods (for backward compatibility)."""
-        return self.dataset.log_likelihoods
-
-    @property
-    def embeddings(self) -> Optional[np.ndarray]:
+    def embeddings(self) -> np.ndarray:
         """Get embeddings (for backward compatibility)."""
         return self.dataset.embeddings
 
@@ -366,7 +344,7 @@ class ActiveLearningExperiment:
     @property
     def variant_ids(self) -> Optional[np.ndarray]:
         """Get variant IDs (for backward compatibility)."""
-        return self.dataset.variant_ids
+        return None
 
     def _initialize_training_set(
         self, initial_sample_size: int
@@ -377,7 +355,7 @@ class ActiveLearningExperiment:
         Returns:
             Tuple of (train_indices, unlabeled_indices)
         """
-        total_samples = len(self.dataset.sequences)
+        total_samples = len(self.dataset.sample_ids)
         if initial_sample_size >= total_samples:
             logger.warning(
                 "initial_sample_size >= total samples. Using all samples for training."
@@ -391,8 +369,9 @@ class ActiveLearningExperiment:
             encode_sequences_fn=self._encode_sequences,
         )
 
+        selected_set = set(selected_indices)
         unlabeled_indices = [
-            idx for idx in range(total_samples) if idx not in set(selected_indices)
+            idx for idx in range(total_samples) if idx not in selected_set
         ]
 
         logger.info(

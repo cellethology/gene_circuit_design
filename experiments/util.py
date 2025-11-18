@@ -1,50 +1,18 @@
 import logging
-from typing import List, Optional, Sequence
+from typing import List
 
 import numpy as np
 from sklearn.cluster import KMeans
-
-from utils.sequence_utils import (
-    SequenceModificationMethod,
-    flatten_one_hot_sequences,
-    flatten_one_hot_sequences_with_pca,
-    one_hot_encode_sequences,
-)
 
 logger = logging.getLogger(__name__)
 
 
 def encode_sequences(
     indices: List[int],
-    all_sequences: Sequence[str],
-    embeddings: Optional[np.ndarray],
-    seq_mod_method: SequenceModificationMethod,
-    use_pca: bool = False,
-    pca_components: int = 4096,
+    embeddings: np.ndarray,
 ) -> np.ndarray:
-    """
-    Encode sequences at given indices using pre-computed embeddings or one-hot encoding.
-
-    Args:
-        indices: Indices of sequences to encode.
-        all_sequences: Collection of raw sequences (strings) aligned to indices.
-        embeddings: Precomputed embedding matrix aligned to indices, or None.
-        seq_mod_method: Strategy for sequence processing/encoding.
-        use_pca: Whether to reduce one-hot features with PCA.
-        pca_components: Number of PCA components if PCA is used.
-
-    Returns:
-        Feature matrix for the selected indices.
-    """
-    if embeddings is not None:
-        return embeddings[indices]
-
-    sequences = [all_sequences[i] for i in indices]
-    encoded = one_hot_encode_sequences(sequences, seq_mod_method)
-    if use_pca:
-        logger.info(f"PCA enabled with {pca_components} components")
-        return flatten_one_hot_sequences_with_pca(encoded, n_components=pca_components)
-    return flatten_one_hot_sequences(encoded)
+    """Encode sequences via pretrained embeddings."""
+    return embeddings[indices]
 
 
 def select_initial_batch_kmeans_from_features(

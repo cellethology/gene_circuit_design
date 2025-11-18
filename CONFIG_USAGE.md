@@ -46,14 +46,16 @@ Edit `configs/experiment_configs.yaml` to add/modify experiments.
 ```yaml
 experiments:
   my_new_experiment:
-    data_path: "/path/to/data.csv"
+    embeddings_path: "/path/to/embeddings.npz"
+    metadata_csv_path: "/path/to/metadata.csv"
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
     seq_mod_methods: ["EMBEDDING"]
     seeds: [42, 123, 456]
     initial_sample_size: 8
     batch_size: 8
     max_rounds: 20
-    normalize_expression: false
+    normalize_features: true
+    normalize_targets: true
     output_dir: "results_my_experiment"
 ```
 > **Note:** The pipeline no longer creates a dedicated test split. Any legacy `test_size`/`no_test`

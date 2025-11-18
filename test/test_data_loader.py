@@ -1,241 +1,125 @@
 """
-Unit tests for DataLoader and related classes.
+Unit tests for DataLoader and Dataset classes.
 
-Tests data loading from various formats.
+Embeddings are stored in a compressed NPZ file with ids and embeddings arrays.
 """
 
 import numpy as np
 import pandas as pd
 import pytest
-import torch
-from safetensors.torch import save_file
 
 from experiments.core.data_loader import DataLoader, Dataset
-from utils.sequence_utils import SequenceModificationMethod
 
 
 class TestDataset:
-    """Test cases for Dataset dataclass."""
+    """Dataset dataclass validation."""
 
     def test_dataset_creation(self):
-        """Test creating a valid dataset."""
-        sequences = ["ATGC", "CGTA"]
-        sequence_labels = np.array([1.0, 2.0])
-        log_likelihoods = np.array([-0.5, -0.3])
-        embeddings = np.array([[1, 2], [3, 4]])
-        variant_ids = np.array([1, 2])
+        sample_ids = ["sample_0", "sample_1"]
+        labels = np.array([1.0, 2.0])
+        embeddings = np.random.randn(2, 3)
 
-        dataset = Dataset(
-            sequences=sequences,
-            sequence_labels=sequence_labels,
-            log_likelihoods=log_likelihoods,
+        ds = Dataset(
+            sample_ids=sample_ids,
+            sequence_labels=labels,
             embeddings=embeddings,
-            variant_ids=variant_ids,
         )
 
-        assert len(dataset.sequences) == 2
-        assert dataset.sequence_labels.shape == (2,)
-        assert dataset.embeddings.shape == (2, 2)
-        assert dataset.variant_ids is not None
+        assert len(ds.sample_ids) == 2
+        assert ds.embeddings.shape == (2, 3)
 
-    def test_dataset_validation_length_mismatch(self):
-        """Test dataset validation catches length mismatches."""
-        sequences = ["ATGC", "CGTA"]
-        sequence_labels = np.array([1.0, 2.0, 3.0])  # Wrong length
-        log_likelihoods = np.array([-0.5, -0.3])
+    def test_length_mismatch_raises(self):
+        sample_ids = ["sample_0", "sample_1"]
+        labels = np.array([1.0])
+        embeddings = np.random.randn(2, 3)
 
-        with pytest.raises(ValueError, match="must have the same length"):
+        with pytest.raises(ValueError):
             Dataset(
-                sequences=sequences,
-                sequence_labels=sequence_labels,
-                log_likelihoods=log_likelihoods,
-                embeddings=None,
-                variant_ids=None,
+                sample_ids=sample_ids,
+                sequence_labels=labels,
+                embeddings=embeddings,
             )
 
 
 class TestDataLoader:
-    """Test cases for DataLoader class."""
+    """Test loading paired embeddings/metadata files."""
 
-    def test_load_csv_basic(self, tmp_path):
-        """Test loading basic CSV file."""
-        # Create test CSV
-        csv_path = tmp_path / "test_data.csv"
-        df = pd.DataFrame(
-            {
-                "Sequence": ["ATGC", "CGTA", "AAAA"],
-                "Expression": [1.0, 2.0, 3.0],
-            }
-        )
-        df.to_csv(csv_path, index=False)
+    def _create_embeddings_file(self, tmp_path, n_samples=4, dim=3):
+        embeddings = np.random.randn(n_samples, dim).astype(np.float32)
+        ids = np.array([f"id_{i}" for i in range(n_samples)])
+        path = tmp_path / "embeddings.npz"
+        np.savez_compressed(path, embeddings=embeddings, ids=ids)
+        return str(path), embeddings
+
+    def _create_metadata_csv(
+        self, tmp_path, n_samples=4, target_col="Expression", include_sequences=True
+    ):
+        sequences = [f"ATGC{i}" for i in range(n_samples)]
+        expressions = np.linspace(0.0, 1.0, n_samples)
+        data = {target_col: expressions}
+        if include_sequences:
+            data["Sequence"] = sequences
+
+        path = tmp_path / "metadata.csv"
+        pd.DataFrame(data).to_csv(path, index=False)
+        return str(path), data
+
+    def test_load_paired_files(self, tmp_path):
+        emb_path, embeddings = self._create_embeddings_file(tmp_path, n_samples=5, dim=6)
+        csv_path, data = self._create_metadata_csv(tmp_path, n_samples=5)
 
         loader = DataLoader(
-            data_path=str(csv_path),
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-            normalize_input_output=False,
+            embeddings_path=emb_path,
+            metadata_csv_path=csv_path,
+            target_val_key="Expression",
+            sequence_column="Sequence",
         )
 
         dataset = loader.load()
 
-        assert len(dataset.sequences) == 3
-        assert len(dataset.sequence_labels) == 3
-        assert dataset.embeddings is None
-        assert np.all(np.isnan(dataset.log_likelihoods))
+        assert dataset.embeddings.shape == embeddings.shape
+        assert dataset.sequence_labels.shape[0] == embeddings.shape[0]
+        assert dataset.sample_ids == data["Sequence"]
+        assert np.allclose(dataset.sequence_labels, data["Expression"])
 
-    def test_load_csv_with_log_likelihood(self, tmp_path):
-        """Test loading CSV with log likelihood."""
-        csv_path = tmp_path / "test_data.csv"
-        df = pd.DataFrame(
-            {
-                "Sequence": ["ATGC", "CGTA"],
-                "Expression": [1.0, 2.0],
-                "Log_Likelihood": [-0.5, -0.3],
-            }
+    def test_missing_sequence_column_generates_ids(self, tmp_path):
+        emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=3)
+        csv_path, _ = self._create_metadata_csv(
+            tmp_path, n_samples=3, include_sequences=False
         )
-        df.to_csv(csv_path, index=False)
 
         loader = DataLoader(
-            data_path=str(csv_path),
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-            normalize_input_output=False,
+            embeddings_path=emb_path,
+            metadata_csv_path=str(csv_path),
+            target_val_key="Expression",
         )
 
         dataset = loader.load()
+        assert dataset.sample_ids == ["id_0", "id_1", "id_2"]
 
-        assert len(dataset.sequences) == 2
-        assert not np.all(np.isnan(dataset.log_likelihoods))
-        assert dataset.log_likelihoods[0] == -0.5
-
-    def test_load_safetensors_embeddings_format(self, tmp_path):
-        """Test loading safetensors with embeddings format."""
-        safetensors_path = tmp_path / "test_data.safetensors"
-
-        # Create test data
-        embeddings = torch.randn(5, 10)
-        sequence_labels = torch.randn(5)
-        log_likelihoods = torch.randn(5)
-
-        save_file(
-            {
-                "embeddings": embeddings,
-                "expressions": sequence_labels,
-                "log_likelihoods": log_likelihoods,
-            },
-            str(safetensors_path),
-        )
+    def test_missing_target_column(self, tmp_path):
+        emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=3)
+        csv_path = tmp_path / "metadata.csv"
+        pd.DataFrame({"Sequence": ["A", "B", "C"]}).to_csv(csv_path, index=False)
 
         loader = DataLoader(
-            data_path=str(safetensors_path),
-            normalize_input_output=False,
+            embeddings_path=emb_path,
+            metadata_csv_path=str(csv_path),
+            target_val_key="Expression",
         )
 
-        dataset = loader.load()
+        with pytest.raises(ValueError, match="Column 'Expression'"):
+            loader.load()
 
-        assert len(dataset.sequences) == 5
-        assert dataset.embeddings.shape == (5, 10)
-        assert dataset.sequence_labels.shape == (5,)
-        assert dataset.log_likelihoods.shape == (5,)
-
-    def test_load_safetensors_pca_format(self, tmp_path):
-        """Test loading safetensors with PCA format."""
-        safetensors_path = tmp_path / "test_data.safetensors"
-
-        # Create test data
-        pca_components = torch.randn(5, 10)
-        sequence_labels = torch.randn(5)
-        log_likelihoods = torch.randn(5)
-        variant_ids = torch.tensor([1, 2, 3, 4, 5])
-
-        save_file(
-            {
-                "pca_components": pca_components,
-                "expression": sequence_labels,
-                "log_likelihood": log_likelihoods,
-                "variant_ids": variant_ids,
-            },
-            str(safetensors_path),
-        )
+    def test_mismatched_lengths(self, tmp_path):
+        emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=4)
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=3)
 
         loader = DataLoader(
-            data_path=str(safetensors_path),
-            normalize_input_output=False,
+            embeddings_path=emb_path,
+            metadata_csv_path=csv_path,
+            target_val_key="Expression",
         )
 
-        dataset = loader.load()
-
-        assert len(dataset.sequences) == 5
-        assert dataset.embeddings.shape == (5, 10)
-        assert dataset.variant_ids is not None
-        assert len(dataset.variant_ids) == 5
-
-    def test_load_safetensors_missing_log_likelihood(self, tmp_path):
-        """Test loading safetensors without log likelihood."""
-        safetensors_path = tmp_path / "test_data.safetensors"
-
-        embeddings = torch.randn(3, 5)
-        sequence_labels = torch.randn(3)
-
-        save_file(
-            {
-                "embeddings": embeddings,
-                "expressions": sequence_labels,
-            },
-            str(safetensors_path),
-        )
-
-        loader = DataLoader(
-            data_path=str(safetensors_path),
-            normalize_input_output=False,
-        )
-
-        dataset = loader.load()
-
-        assert len(dataset.sequences) == 3
-        assert np.all(np.isnan(dataset.log_likelihoods))
-
-    def test_load_safetensors_custom_target_key(self, tmp_path):
-        """Test loading safetensors with custom target value key."""
-        safetensors_path = tmp_path / "test_data.safetensors"
-
-        embeddings = torch.randn(3, 5)
-        custom_target = torch.randn(3)
-
-        save_file(
-            {
-                "embeddings": embeddings,
-                "custom_target": custom_target,
-            },
-            str(safetensors_path),
-        )
-
-        loader = DataLoader(
-            data_path=str(safetensors_path),
-            target_val_key="custom_target",
-            normalize_input_output=False,
-        )
-
-        dataset = loader.load()
-
-        assert len(dataset.sequence_labels) == 3
-        np.testing.assert_array_almost_equal(dataset.sequence_labels, custom_target.numpy())
-
-    def test_load_safetensors_missing_expression(self, tmp_path):
-        """Test error when expression data is missing."""
-        safetensors_path = tmp_path / "test_data.safetensors"
-
-        embeddings = torch.randn(3, 5)
-
-        save_file(
-            {
-                "embeddings": embeddings,
-            },
-            str(safetensors_path),
-        )
-
-        loader = DataLoader(
-            data_path=str(safetensors_path),
-            normalize_input_output=False,
-        )
-
-        with pytest.raises(ValueError, match="No expression data found"):
+        with pytest.raises(ValueError, match="must match"):
             loader.load()

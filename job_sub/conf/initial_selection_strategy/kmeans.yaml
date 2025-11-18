@@ -1,1 +1,2 @@
 _target_: experiments.core.initial_selection_strategies.KMeansInitialSelection
+seed: ${al_settings.seed}
