@@ -2,6 +2,7 @@
 """
 Combine existing individual results files and generate regressor comparison plots.
 """
+
 import sys
 from pathlib import Path
 

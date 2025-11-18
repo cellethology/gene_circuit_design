@@ -35,4 +35,5 @@ jobs:
 
       - name: Run pre-commit hooks
         run: |
-          uv run pre-commit run --all-files
+          uv run pre-commit run --all-files --verbose
+        continue-on-error: false
