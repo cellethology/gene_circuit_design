@@ -49,6 +49,10 @@ jobs:
         run: |
           uv sync --python 3.9 --frozen
 
+      - name: Install pre-commit hooks
+        run: |
+          uv run pre-commit install-hooks
+
       - name: Run pre-commit hooks
         run: |
           uv run pre-commit run --all-files --verbose
