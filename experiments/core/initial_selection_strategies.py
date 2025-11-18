@@ -81,7 +81,7 @@ class KMeansInitialSelection(InitialSelectionStrategy):
             seed=self.seed,
         )
 
-        labels = dataset.sequence_labels[selected]
+        labels = dataset.labels[selected]
         logger.info(
             "KMEANS_INITIAL: selected %d sequences. Labels: [%s]",
             len(selected),
