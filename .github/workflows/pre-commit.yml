@@ -2,9 +2,18 @@ name: Pre-commit Checks
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - '**'
+    # if config folder changed this also needs to be changed
+    paths-ignore:
+        - 'configs/*.yaml'
+        - '*.md'
   pull_request:
-    branches: [main, develop]
+    branches:
+      - '**'
+    paths-ignore:
+        - 'configs/*.yaml'
+        - '*.md'
 
 jobs:
   pre-commit:
@@ -25,15 +34,21 @@ jobs:
         with:
           version: "latest"
 
+      - name: Cache uv + pre-commit
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            ~/.cache/uv
+            ~/.cache/pre-commit
+          key: ${{ runner.os }}-uv-precommit-${{ hashFiles('pyproject.toml', 'uv.lock', '.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-precommit-
+
       - name: Install dependencies
         run: |
-          uv sync --python 3.9
-
-      - name: Set up pre-commit
-        run: |
-          uv run pre-commit install
+          uv sync --python 3.9 --frozen
 
       - name: Run pre-commit hooks
         run: |
           uv run pre-commit run --all-files --verbose
-        continue-on-error: false
