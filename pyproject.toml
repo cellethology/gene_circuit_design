@@ -40,7 +40,6 @@ dependencies = [
     "seaborn>=0.13.2",
     "skorch>=1.0.0",
     "submitit>=1.5.3",
-    "torch>=2.5.1",
     "tqdm>=4.67.1",
     "umap-learn",
     "upsetplot>=0.9.0",
