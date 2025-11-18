@@ -63,7 +63,8 @@ def run_single_experiment(
     initial_sample_size = al_settings["initial_sample_size"]
     batch_size = al_settings["batch_size"]
     max_rounds = al_settings["max_rounds"]
-    normalize_input_output = al_settings["normalize_input_output"]
+    normalize_features = al_settings["normalize_features"]
+    normalize_targets = al_settings["normalize_targets"]
     output_dir = al_settings["output_dir"]
     target_val_key = al_settings["target_val_key"]
     use_pca = al_settings.get("use_pca", False)
@@ -78,7 +79,8 @@ def run_single_experiment(
         batch_size=batch_size,
         random_seed=seed,
         seq_mod_method=seq_mod_method,
-        normalize_input_output=normalize_input_output,
+        normalize_features=normalize_features,
+        normalize_targets=normalize_targets,
         use_pca=use_pca,
         pca_components=pca_components,
         target_val_key=target_val_key,

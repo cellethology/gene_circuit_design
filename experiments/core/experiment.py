@@ -48,7 +48,8 @@ class ActiveLearningExperiment:
         batch_size: int = 8,
         random_seed: int = 42,
         seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
-        normalize_input_output: bool = True,
+        normalize_features: bool = True,
+        normalize_targets: bool = True,
         use_pca: bool = False,
         pca_components: int = 4096,
         target_val_key: str = None,
@@ -64,7 +65,8 @@ class ActiveLearningExperiment:
             batch_size: Number of sequences to select in each round\
             random_seed: Random seed for reproducibility
             seq_mod_method: Sequence modification method for encoding
-            normalize_input_output: Whether to normalize expressions and embeddings
+            normalize_features: Whether to re-normalize features each round
+            normalize_targets: Whether to re-normalize targets each round
             use_pca: Whether to use PCA for dimensionality reduction
             pca_components: Number of PCA components if use_pca=True
             target_val_key: Optional key for target values in safetensors files
@@ -76,12 +78,13 @@ class ActiveLearningExperiment:
         self.batch_size = batch_size
         self.random_seed = random_seed
         self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
-        self.normalize_input_output = normalize_input_output
         self.use_pca = use_pca
         self.pca_components = pca_components
         self.target_val_key = target_val_key
         self.predictor_name = predictor.__class__.__name__
         self.initial_selection_strategy = initial_selection_strategy
+        self.normalize_features = normalize_features
+        self.normalize_targets = normalize_targets
 
         # Set random seeds for reproducibility
         random.seed(random_seed)
@@ -91,7 +94,6 @@ class ActiveLearningExperiment:
         self.data_loader = DataLoader(
             data_path=data_path,
             seq_mod_method=self.seq_mod_method,
-            normalize_input_output=normalize_input_output,
             target_val_key=target_val_key,
         )
 
@@ -102,11 +104,15 @@ class ActiveLearningExperiment:
         (
             self._train_indices,
             self._unlabeled_indices,
-        ) = self._initialize_training_set(initial_sample_size, random_seed)
+        ) = self._initialize_training_set(initial_sample_size)
 
         # Initialize model and trainer
         self.predictor = predictor
-        self.predictor_trainer = PredictorTrainer(self.predictor)
+        self.predictor_trainer = PredictorTrainer(
+            self.predictor,
+            normalize_features=self.normalize_features,
+            normalize_targets=self.normalize_targets,
+        )
 
         # Initialize metrics calculator
         self.metrics_calculator = MetricsCalculator(self.dataset.sequence_labels)
@@ -124,7 +130,7 @@ class ActiveLearningExperiment:
             strategy=self.query_strategy.name,
             seq_mod_method=self.seq_mod_method.value,
             predictor_name=self.predictor_name,
-            seed=random_seed,
+            seed=self.random_seed,
             initial_sample_size=initial_sample_size,
             batch_size=batch_size,
         )
@@ -133,7 +139,7 @@ class ActiveLearningExperiment:
         self.results: List[Dict[str, Any]] = []
 
         logger.info(
-            f"Start experiment with {self.query_strategy.name}, {self.predictor_name}, seed={random_seed}"
+            f"Start experiment with {self.query_strategy.name}, {self.predictor_name}, seed={self.random_seed}"
         )
         logger.info(
             f"Query strategy random state={getattr(self.query_strategy, 'random_state', None)}, Predictor random state={getattr(self.predictor, 'random_state', None)}"
@@ -177,9 +183,7 @@ class ActiveLearningExperiment:
         Returns:
             List of results for each round
         """
-        logger.info(
-            f"Starting {self.query_strategy.name} learning experiment with {max_rounds} max rounds"
-        )
+        logger.info(f"Starting active learning run with {max_rounds} max rounds")
 
         for round_num in range(max_rounds):
             logger.info(f"\n--- Round {round_num + 1} ---")
@@ -192,6 +196,9 @@ class ActiveLearningExperiment:
                 y_train=y_train,
                 train_indices=self._train_indices,
             )
+            trained_model = self.predictor_trainer.get_model()
+            if trained_model is not None:
+                self.predictor = trained_model
 
             metrics: Dict[str, Any] = {}
 
@@ -283,7 +290,6 @@ class ActiveLearningExperiment:
                 }
             )
 
-        logger.info("Experiment completed!")
         return self.results
 
     def save_results(self, output_path: str) -> None:
@@ -363,7 +369,7 @@ class ActiveLearningExperiment:
         return self.dataset.variant_ids
 
     def _initialize_training_set(
-        self, initial_sample_size: int, random_seed: int
+        self, initial_sample_size: int
     ) -> Tuple[List[int], List[int]]:
         """
         Sample the initial training pool using the configured strategy.

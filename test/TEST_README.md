@@ -17,20 +17,20 @@ Tests for `DataLoader` and `Dataset` classes:
 - `test_load_csv_basic` - Basic CSV loading
 - `test_load_safetensors_embeddings_format` - Safetensors with embeddings
 - `test_load_safetensors_pca_format` - Safetensors with PCA components
-- `test_normalize_data` - Data normalization
+- `test_load_safetensors_missing_expression` - Safetensors validation
 
-### `test_model_trainer.py`
-Tests for `ModelTrainer` class:
+### `test_predictor_trainer.py`
+Tests for `PredictorTrainer` class:
 - Model training with different model types
 - Model evaluation on test sets
 - Prediction functionality
-- Complete train-evaluate workflows
+- Feature/target normalization
 
 **Key Test Cases:**
 - `test_train_basic` - Basic training
 - `test_evaluate_with_test_set` - Evaluation with metrics
-- `test_evaluate_perfect_predictions` - Perfect prediction scenario
-- `test_train_evaluate_workflow` - Complete workflow
+- `test_train_with_normalization` - Ensures per-round scaling works
+- `test_evaluate_with_normalization` - Evaluation after normalization
 
 ### `test_metrics_calculator.py`
 Tests for `MetricsCalculator` class:

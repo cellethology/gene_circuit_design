@@ -1,5 +1,5 @@
 defaults:
-  - predictor: rf_regressor
+  - predictor: ridge_regressor
   - query_strategy: topk
   - initial_selection_strategy: random
   - override hydra/launcher: submitit_local
@@ -14,8 +14,8 @@ al_settings:
   initial_sample_size: 8
   batch_size: 8
   max_rounds: 2
-  normalize_expression: true
-  normalize_input_output: true
+  normalize_features: true
+  normalize_targets: true
   output_dir: results/demo_experiment
   query_strategy: ${query_strategy}
   seq_mod_method: embedding

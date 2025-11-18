@@ -59,8 +59,8 @@ class ExperimentDefaults:
     initial_sample_size: int = 8
     batch_size: int = 8
     max_rounds: int = 20
-    normalize_expression: bool = True
-    normalize_input_output: bool = True
+    normalize_features: bool = True
+    normalize_targets: bool = True
 
     def as_mapping(self) -> Mapping[str, object]:
         """Return a plain mapping that can be merged into each experiment entry."""
@@ -73,8 +73,8 @@ class ExperimentDefaults:
             "initial_sample_size": self.initial_sample_size,
             "batch_size": self.batch_size,
             "max_rounds": self.max_rounds,
-            "normalize_expression": self.normalize_expression,
-            "normalize_input_output": self.normalize_input_output,
+            "normalize_features": self.normalize_features,
+            "normalize_targets": self.normalize_targets,
         }
 
 
@@ -239,7 +239,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size.")
     parser.add_argument("--max-rounds", type=int, default=20, help="Max rounds.")
     parser.add_argument(
-        "--normalize-expression",
+        "--normalize-features",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="normalize_expression flag (default: true).",

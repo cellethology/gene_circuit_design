@@ -7,7 +7,7 @@ This directory contains the refactored components that break down the monolithic
 ```
 experiments/core/
 ├── __init__.py              # Package exports
-├── data_loader.py           # Data loading and normalization
+├── data_loader.py           # Data loading utilities
 ├── initial_selection_strategies.py  # Strategies for seeding the labeled pool
 ├── predictor_trainer.py     # Model training utilities
 ├── metrics_calculator.py    # Custom metrics calculation
@@ -19,15 +19,16 @@ experiments/core/
 ## Components
 
 ### DataLoader (`data_loader.py`)
-- **Responsibility**: Load data from various formats (safetensors, CSV) and normalize labels/embeddings for downstream components
+- **Responsibility**: Load data from various formats (safetensors, CSV) and return raw, unnormalized datasets
 - **Key Classes**:
   - `Dataset`: Data container with sequences, expressions, log_likelihoods, embeddings, variant_ids
-  - `DataLoader`: Main class for loading and normalization (no longer performs data splitting)
+  - `DataLoader`: Main class for loading (no longer performs splitting or normalization)
 
 ### PredictorTrainer (`predictor_trainer.py`)
-- **Responsibility**: Train models and make predictions
+- **Responsibility**: Train models, apply per-round normalization, and make predictions
 - **Key Methods**:
   - `train()`: Fit the predictor on the current labeled pool
+  - `evaluate()`: Evaluate on held-out data (if provided) using inverse-transformed predictions
   - `predict()`: Make predictions for candidate sequences
 
 ### MetricsCalculator (`metrics_calculator.py`)
@@ -136,7 +137,9 @@ assert len(dataset.sequences) > 0
 from experiments.core.predictor_trainer import PredictorTrainer
 from sklearn.linear_model import LinearRegression
 
-trainer = PredictorTrainer(LinearRegression())
+trainer = PredictorTrainer(
+    LinearRegression(), normalize_features=True, normalize_targets=True
+)
 trainer.train(X_train, y_train, train_indices)
 predictions = trainer.predict(X_test)
 

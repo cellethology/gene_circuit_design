@@ -2,7 +2,7 @@
 Data loading utilities for active learning experiments.
 
 This module handles loading data from various formats (safetensors, CSV)
-and normalizing/encoding them for downstream components.
+and preparing them for downstream components.
 """
 
 import logging
@@ -68,7 +68,6 @@ class DataLoader:
         self,
         data_path: str,
         seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
-        normalize_input_output: bool = True,
         target_val_key: Optional[str] = None,
     ) -> None:
         """
@@ -77,12 +76,10 @@ class DataLoader:
         Args:
             data_path: Path to data file (safetensors or CSV)
             seq_mod_method: Sequence modification method for CSV files
-            normalize_input_output: Whether to normalize expressions and embeddings
             target_val_key: Optional key for target values in safetensors files
         """
         self.data_path = data_path
         self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
-        self.normalize_input_output = normalize_input_output
         self.target_val_key = target_val_key
         self.dataset: Optional[Dataset] = None
 
@@ -103,9 +100,6 @@ class DataLoader:
             self.dataset = self._load_safetensors()
         else:
             self.dataset = self._load_csv()
-
-        if self.normalize_input_output:
-            self._normalize_data()
 
         logger.info(
             f"Loaded dataset with {len(self.dataset.sequences)} sequences. "
@@ -153,8 +147,6 @@ class DataLoader:
             sequence_labels = tensors[self.target_val_key].float().numpy()
         elif "expressions" in tensors:
             sequence_labels = tensors["expressions"].float().numpy()
-        elif "expression" in tensors:
-            sequence_labels = tensors["expression"].float().numpy()
         else:
             raise ValueError(
                 f"No expression data found. Available keys: {list(tensors.keys())}"
@@ -163,8 +155,6 @@ class DataLoader:
         # Handle log likelihood
         if "log_likelihoods" in tensors:
             log_likelihoods = tensors["log_likelihoods"].float().numpy()
-        elif "log_likelihood" in tensors:
-            log_likelihoods = tensors["log_likelihood"].float().numpy()
         else:
             log_likelihoods = np.full(len(sequence_labels), np.nan)
             logger.warning(
@@ -254,27 +244,4 @@ class DataLoader:
             log_likelihoods=log_likelihoods,
             embeddings=None,  # Will be computed via one-hot encoding
             variant_ids=None,
-        )
-
-    def _normalize_data(self) -> None:
-        """Normalize labels and embeddings in-place."""
-        if self.dataset is None:
-            raise ValueError("Dataset must be loaded before normalization")
-
-        # Normalize expressions
-        mean_expr = self.dataset.sequence_labels.mean(axis=0, keepdims=True)
-        std_expr = self.dataset.sequence_labels.std(axis=0, keepdims=True) + 1e-30
-        self.dataset.sequence_labels = (
-            self.dataset.sequence_labels - mean_expr
-        ) / std_expr
-
-        # Normalize embeddings if available
-        if self.dataset.embeddings is not None:
-            mean_emb = self.dataset.embeddings.mean(axis=0, keepdims=True)
-            std_emb = self.dataset.embeddings.std(axis=0, keepdims=True) + 1e-30
-            self.dataset.embeddings = (self.dataset.embeddings - mean_emb) / std_emb
-
-        logger.info(
-            f"Normalized labels -> mean={mean_expr.mean():.4f}, "
-            f"std={std_expr.mean():.4f}"
         )

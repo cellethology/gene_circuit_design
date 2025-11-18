@@ -1,7 +1,7 @@
 """
 Unit tests for DataLoader and related classes.
 
-Tests data loading from various formats and normalization helpers.
+Tests data loading from various formats.
 """
 
 import numpy as np
@@ -239,26 +239,3 @@ class TestDataLoader:
 
         with pytest.raises(ValueError, match="No expression data found"):
             loader.load()
-
-    def test_normalize_data(self, tmp_path):
-        """Test data normalization."""
-        csv_path = tmp_path / "test_data.csv"
-        df = pd.DataFrame(
-            {
-                "Sequence": ["ATGC", "CGTA", "AAAA"],
-                "Expression": [1.0, 2.0, 3.0],
-            }
-        )
-        df.to_csv(csv_path, index=False)
-
-        loader = DataLoader(
-            data_path=str(csv_path),
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-            normalize_input_output=True,
-        )
-
-        dataset = loader.load()
-
-        # Check that sequence_labels are normalized (mean ~0, std ~1)
-        assert abs(dataset.sequence_labels.mean()) < 0.1
-        assert abs(dataset.sequence_labels.std() - 1.0) < 0.1
