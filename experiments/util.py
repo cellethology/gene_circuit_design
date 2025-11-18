@@ -7,14 +7,6 @@ from sklearn.cluster import KMeans
 logger = logging.getLogger(__name__)
 
 
-def encode_sequences(
-    indices: List[int],
-    embeddings: np.ndarray,
-) -> np.ndarray:
-    """Encode sequences via pretrained embeddings."""
-    return embeddings[indices]
-
-
 def select_initial_batch_kmeans_from_features(
     X_all: np.ndarray, initial_sample_size: int, seed: int
 ) -> List[int]:

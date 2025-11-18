@@ -82,7 +82,9 @@ class TopPredictions(QueryStrategyBase):
         if len(unlabeled) < experiment.batch_size:
             return unlabeled
 
-        preds = experiment.predictor.predict(experiment._encode_sequences(unlabeled))
+        preds = experiment.predictor.predict(
+            experiment.dataset.embeddings[unlabeled, :]
+        )
         k = experiment.batch_size
 
         # get indices of top k predictions (descending)
@@ -96,7 +98,7 @@ class TopPredictions(QueryStrategyBase):
 
 
 class TopLogLikelihood(QueryStrategyBase):
-    """Selects sequences with highest zero-shot log likelihood values."""
+    """Selects samples with highest zero-shot log likelihood values."""
 
     def __init__(self) -> None:
         super().__init__("TOP_LOG_LIKELIHOOD")

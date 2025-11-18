@@ -5,16 +5,11 @@ Initial selection strategies for choosing the seed batch.
 import logging
 import random
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional
-
-import numpy as np
+from typing import List, Optional
 
 from experiments.core.data_loader import Dataset
 
 logger = logging.getLogger(__name__)
-
-
-EncodeFn = Callable[[List[int]], np.ndarray]
 
 
 class InitialSelectionStrategy(ABC):
@@ -28,7 +23,6 @@ class InitialSelectionStrategy(ABC):
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         """Return indices for the initial training pool."""
 
@@ -44,7 +38,6 @@ class RandomInitialSelection(InitialSelectionStrategy):
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         total = len(dataset.sample_ids)
         if initial_sample_size >= total:
@@ -64,7 +57,6 @@ class KMeansInitialSelection(InitialSelectionStrategy):
         self,
         dataset: Dataset,
         initial_sample_size: int,
-        encode_sequences_fn: EncodeFn,
     ) -> List[int]:
         total = len(dataset.sample_ids)
         if initial_sample_size >= total:
@@ -73,10 +65,10 @@ class KMeansInitialSelection(InitialSelectionStrategy):
         from experiments.util import select_initial_batch_kmeans_from_features
 
         all_indices = list(range(len(dataset.sample_ids)))
-        features = encode_sequences_fn(all_indices)
+        embeddings = dataset.embeddings[all_indices, :]
 
         selected = select_initial_batch_kmeans_from_features(
-            X_all=features,
+            X_all=embeddings,
             initial_sample_size=initial_sample_size,
             seed=self.seed,
         )

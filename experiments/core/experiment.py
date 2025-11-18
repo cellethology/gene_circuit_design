@@ -21,7 +21,6 @@ from experiments.core.predictor_trainer import PredictorTrainer
 from experiments.core.query_strategies import QueryStrategyBase
 from experiments.core.result_manager import ResultManager
 from experiments.core.variant_tracker import VariantTracker
-from experiments.util import encode_sequences
 
 logger = logging.getLogger(__name__)
 
@@ -135,27 +134,12 @@ class ActiveLearningExperiment:
             f"Query strategy random state={getattr(self.query_strategy, 'random_state', None)}, Predictor random state={getattr(self.predictor, 'random_state', None)}"
         )
 
-    def _encode_sequences(self, indices: List[int]) -> np.ndarray:
-        """
-        Encode sequences at given indices.
-
-        Args:
-            indices: List of sequence indices to encode
-
-        Returns:
-            Encoded sequences as numpy array
-        """
-        return encode_sequences(
-            indices=indices,
-            embeddings=self.dataset.embeddings,
-        )
-
     def _select_next_batch(self, round_idx: int) -> List[int]:
         """
-        Select next batch of sequences based on the configured strategy.
+        Select next batch of samples based on the configured strategy.
 
         Returns:
-            List of indices for next batch
+            List of indices for next batch of samples
         """
         return self.query_strategy.select(self, round_idx)
 
@@ -175,7 +159,7 @@ class ActiveLearningExperiment:
             logger.info(f"\n--- Round {round_num + 1} ---")
 
             # Train model
-            X_train = self._encode_sequences(self._train_indices)
+            X_train = self.dataset.embeddings[self._train_indices, :]
             y_train = self.dataset.labels[self._train_indices]
             self.predictor_trainer.train(
                 X_train=X_train,
@@ -190,7 +174,7 @@ class ActiveLearningExperiment:
 
             # First round: evaluate custom metrics on initial training set
             if round_num == 0:
-                X_train_encoded = self._encode_sequences(self._train_indices)
+                X_train_encoded = self.dataset.embeddings[self._train_indices, :]
                 predictions = self.predictor_trainer.predict(X_train_encoded)
                 round_metrics = self.metrics_calculator.calculate_round_metrics(
                     selected_indices=self._train_indices,
@@ -235,7 +219,7 @@ class ActiveLearningExperiment:
                         **metrics,
                     }
                 )
-                logger.info("No more sequences to select. Stopping.")
+                logger.info("No more samples to select. Stopping.")
                 break
 
             # Track selected variants
@@ -247,7 +231,7 @@ class ActiveLearningExperiment:
             )
 
             # Evaluate custom metrics
-            X_next_batch = self._encode_sequences(next_batch)
+            X_next_batch = self.dataset.embeddings[next_batch, :]
             predictions = self.predictor_trainer.predict(X_next_batch)
             round_metrics = self.metrics_calculator.calculate_round_metrics(
                 selected_indices=next_batch,
@@ -307,8 +291,8 @@ class ActiveLearningExperiment:
 
     # Expose properties for backward compatibility
     @property
-    def all_sequences(self) -> List[str]:
-        """Get all sequences (for backward compatibility)."""
+    def all_samples(self) -> List[str]:
+        """Get all samples (for backward compatibility)."""
         return self.dataset.sample_ids
 
     @property
@@ -366,7 +350,6 @@ class ActiveLearningExperiment:
         selected_indices = self.initial_selection_strategy.select(
             dataset=self.dataset,
             initial_sample_size=initial_sample_size,
-            encode_sequences_fn=self._encode_sequences,
         )
 
         selected_set = set(selected_indices)
@@ -377,7 +360,7 @@ class ActiveLearningExperiment:
         logger.info(
             f"Initialized training pool with {len(selected_indices)} samples via "
             f"{self.initial_selection_strategy.name}, leaving "
-            f"{len(unlabeled_indices)} unlabeled sequences."
+            f"{len(unlabeled_indices)} unlabeled samples."
         )
 
         return selected_indices, unlabeled_indices

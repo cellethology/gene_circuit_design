@@ -54,7 +54,7 @@ class VariantTracker:
                 "seed": seed,
                 "variant_index": idx,
                 "expression": float(self.all_expressions[idx]),
-                "sample_id": self.sample_ids[idx] if idx < len(self.sample_ids) else f"sample_{idx}",
+                "sample_id": self.sample_ids[idx],
             }
 
             self.selected_variants.append(variant_info)

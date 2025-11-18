@@ -2,6 +2,7 @@ defaults:
   - predictor: ridge_regressor
   - query_strategy: topk
   - initial_selection_strategy: random
+  - _self_
   - override hydra/launcher: submitit_local
 
 data_paths: "CIS_1-1-1-1.safetensors"
