@@ -12,19 +12,19 @@ from sklearn.metrics import r2_score, root_mean_squared_error
 logger = logging.getLogger(__name__)
 
 
-class ModelTrainer:
+class PredictorTrainer:
     """
     Handles model training and evaluation for active learning experiments.
     """
 
-    def __init__(self, model: Any) -> None:
+    def __init__(self, predictor: Any) -> None:
         """
-        Initialize the model trainer.
+        Initialize the predictor trainer.
 
         Args:
-            model: Scikit-learn compatible regression model
+            predictor: Scikit-learn compatible regression predictor
         """
-        self.model = model
+        self.predictor = predictor
 
     def train(
         self, X_train: np.ndarray, y_train: np.ndarray, train_indices: List[int]
@@ -37,17 +37,16 @@ class ModelTrainer:
             y_train: Training targets
             train_indices: Indices of training samples (for logging)
         """
-        logger.info(f"Training model with {len(train_indices)} samples")
-        logger.info(f"Model type: {self.model.__class__.__name__}")
+        logger.info(f"Total training samples: {len(train_indices)}")
 
-        self.model.fit(X_train, y_train)
+        self.predictor.fit(X_train, y_train)
 
         # Log training performance
-        train_pred = self.model.predict(X_train)
+        train_pred = self.predictor.predict(X_train)
         train_rmse = root_mean_squared_error(y_train, train_pred)
         train_r2 = r2_score(y_train, train_pred)
 
-        logger.info(f"Training RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
+        logger.info(f"Train RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
 
     def evaluate(
         self,
@@ -69,7 +68,7 @@ class ModelTrainer:
         if no_test:
             return {}
 
-        y_pred = self.model.predict(X_test)
+        y_pred = self.predictor.predict(X_test)
 
         # Calculate metrics
         rmse = root_mean_squared_error(y_test, y_pred)
@@ -105,4 +104,4 @@ class ModelTrainer:
         Returns:
             Predictions array
         """
-        return self.model.predict(X)
+        return self.predictor.predict(X)

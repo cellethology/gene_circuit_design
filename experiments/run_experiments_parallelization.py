@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
+from hydra.utils import instantiate
 
 from experiments.core.experiment import ActiveLearningExperiment
 
@@ -31,44 +32,57 @@ logger = logging.getLogger(__name__)
 
 
 def run_single_experiment(
-    experiment_config: Dict[str, Any],
+    cfg: Dict[str, Any],
 ) -> Tuple[str, str, str, int, List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Run a single experiment with given configuration.
 
     Args:
-        experiment_config: Dictionary containing all experiment parameters
+        cfg: Dictionary containing all experiment parameters
 
     Returns:
         Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
     """
-    # Extract parameters from config
-    data_path = experiment_config["data_path"]
-    strategy = experiment_config["strategy"]
-    regression_model = experiment_config["regression_model"]
-    seq_mod_method = experiment_config["seq_mod_method"]
-    seed = experiment_config["seed"]
-    initial_sample_size = experiment_config["initial_sample_size"]
-    batch_size = experiment_config["batch_size"]
-    test_size = experiment_config["test_size"]
-    no_test = experiment_config["no_test"]
-    max_rounds = experiment_config["max_rounds"]
-    normalize_input_output = experiment_config["normalize_input_output"]
-    output_dir = experiment_config["output_dir"]
-    target_val_key = experiment_config["target_val_key"]
-    use_pca = experiment_config.get("use_pca", False)
-    pca_components = experiment_config.get("pca_components", 4096)
+
+    data_path = cfg.data_paths
+    predictor = cfg.predictor
+    query_strategy = cfg.query_strategy
+    al_settings = cfg.al_settings
+
+    from utils.sequence_utils import SequenceModificationMethod
+
+    # Instantiate query strategy and predictor
+    query_strategy = instantiate(query_strategy)
+    predictor = instantiate(predictor)
+    predictor_name = predictor.__class__.__name__
+
+    # Instantiate sequence modification method
+    seq_mod_method = al_settings["seq_mod_method"]
+    if isinstance(seq_mod_method, str):
+        seq_mod_method = SequenceModificationMethod(seq_mod_method)
+
+    seed = al_settings["seed"]
+    initial_sample_size = al_settings["initial_sample_size"]
+    batch_size = al_settings["batch_size"]
+    test_size = al_settings["test_size"]
+    no_test = al_settings["no_test"]
+    max_rounds = al_settings["max_rounds"]
+    normalize_input_output = al_settings["normalize_input_output"]
+    output_dir = al_settings["output_dir"]
+    target_val_key = al_settings["target_val_key"]
+    use_pca = al_settings.get("use_pca", False)
+    pca_components = al_settings.get("pca_components", 4096)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
         data_path=data_path,
-        selection_strategy=strategy,
-        regression_model=regression_model,
+        query_strategy=query_strategy,
+        predictor=predictor,
         initial_sample_size=initial_sample_size,
         batch_size=batch_size,
         test_size=test_size,
         random_seed=seed,
-        seq_mod_method=seq_mod_method.value,
+        seq_mod_method=seq_mod_method,
         no_test=no_test,
         normalize_input_output=normalize_input_output,
         use_pca=use_pca,
@@ -86,9 +100,9 @@ def run_single_experiment(
             train_size_for_round = initial_sample_size + (i * batch_size)
             metrics_with_metadata = {
                 "round": i,
-                "strategy": strategy.value,
-                "seq_mod_method": seq_mod_method.value,
-                "regression_model": regression_model.value,
+                "strategy": query_strategy,
+                "seq_mod_method": seq_mod_method,
+                "predictor": predictor_name,
                 "seed": seed,
                 "train_size": train_size_for_round,
                 **metrics,
@@ -101,7 +115,7 @@ def run_single_experiment(
 
     seed_output_path = (
         output_path
-        / f"{strategy.value}_{seq_mod_method.value}_{regression_model.value}_seed_{seed}_results.csv"
+        / f"{query_strategy.name}_{seq_mod_method}_{predictor_name}_seed_{seed}_results.csv"
     )
     experiment.save_results(str(seed_output_path))
 
@@ -114,9 +128,9 @@ def run_single_experiment(
     )
 
     return (
-        strategy.value,
-        seq_mod_method.value,
-        regression_model.value,
+        query_strategy,
+        seq_mod_method,
+        predictor_name,
         seed,
         results,
         custom_metrics,
@@ -152,14 +166,14 @@ def create_combined_results_from_files(output_path: Path) -> None:
         filename = file_path.stem
         # Parse filename: strategy_seqmod_regressor_seed_X_results
         # Handle complex regressor names like "KNN_regression" or "linear_regresion"
-        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)_results"
+        pattern = r"([^_]+)_([^_]+)_([^_]+)_seed_(\d+)_results"
         match = re.match(pattern, filename)
 
         if not match:
             logger.warning(f"Could not parse filename {filename}")
             continue
 
-        strategy, seq_mod_method, regression_model, seed = match.groups()
+        strategy, seq_mod_method, predictor, seed = match.groups()
         seed = int(seed)
 
         try:
@@ -167,7 +181,7 @@ def create_combined_results_from_files(output_path: Path) -> None:
             # Add metadata columns if missing
             df["strategy"] = strategy
             df["seq_mod_method"] = seq_mod_method
-            df["regression_model"] = regression_model
+            df["predictor"] = predictor
             df["seed"] = seed
             all_results.append(df)
         except Exception as e:
@@ -186,14 +200,14 @@ def create_combined_results_from_files(output_path: Path) -> None:
     all_custom_metrics = []
     for file_path in custom_metrics_files:
         filename = file_path.stem.replace("_custom_metrics", "")
-        pattern = r"([^_]+)_([^_]+)_(.+?)_seed_(\d+)"
+        pattern = r"([^_]+)_([^_]+)_([^_]+)_seed_(\d+)"
         match = re.match(pattern, filename)
 
         if not match:
             logger.warning(f"Could not parse custom metrics filename {filename}")
             continue
 
-        strategy, seq_mod_method, regression_model, seed = match.groups()
+        strategy, seq_mod_method, predictor, seed = match.groups()
         seed = int(seed)
 
         try:
@@ -203,8 +217,8 @@ def create_combined_results_from_files(output_path: Path) -> None:
                 df["strategy"] = strategy
             if "seq_mod_method" not in df.columns:
                 df["seq_mod_method"] = seq_mod_method
-            if "regression_model" not in df.columns:
-                df["regression_model"] = regression_model
+            if "predictor" not in df.columns:
+                df["predictor"] = predictor
             if "seed" not in df.columns:
                 df["seed"] = seed
             all_custom_metrics.append(df)

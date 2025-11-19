@@ -63,11 +63,11 @@ htmlcov/
 # Model files and data
 *.h5
 *.pkl
-*.yaml
 *.model
 *.pth
 *.7z
 *.safetensors
+multirun/*
 data/*
 data_new/*
 !data/scripts/*
@@ -99,11 +99,12 @@ setting.json
 
 # dir
 .claude/
-job_sub/
 data_new_deprecated/
 
 # logs
-logs_experiments/*
+logs
+multirun
+logs_experiments
 log_test/*
 logs_test/*
 # job_sub/

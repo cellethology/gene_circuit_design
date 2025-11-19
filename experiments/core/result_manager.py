@@ -19,7 +19,7 @@ class ResultManager:
         self,
         strategy: str,
         seq_mod_method: str,
-        regression_model_name: str,
+        predictor_name: str,
         seed: int,
         initial_sample_size: int,
         batch_size: int,
@@ -30,14 +30,14 @@ class ResultManager:
         Args:
             strategy: Selection strategy name
             seq_mod_method: Sequence modification method
-            regression_model_name: Name of regression model
+            predictor_name: Name of predictor
             seed: Random seed
             initial_sample_size: Initial training set size
             batch_size: Batch size for each round
         """
         self.strategy = strategy
         self.seq_mod_method = seq_mod_method
-        self.regression_model_name = regression_model_name
+        self.predictor_name = predictor_name
         self.seed = seed
         self.initial_sample_size = initial_sample_size
         self.batch_size = batch_size
@@ -72,7 +72,7 @@ class ResultManager:
             # Add metadata columns
             custom_metrics_df["strategy"] = self.strategy
             custom_metrics_df["seq_mod_method"] = self.seq_mod_method
-            custom_metrics_df["regression_model"] = self.regression_model_name
+            custom_metrics_df["predictor"] = self.predictor_name
             custom_metrics_df["seed"] = self.seed
             custom_metrics_df["round"] = range(1, len(custom_metrics) + 1)
 
@@ -92,7 +92,7 @@ class ResultManager:
                 "strategy",
                 "seed",
                 "train_size",
-                "regression_model",
+                "predictor",
                 "seq_mod_method",
             ]
             cols = metadata_cols + [
@@ -111,7 +111,7 @@ class ResultManager:
             selected_variants_df = pd.DataFrame(selected_variants)
 
             # Add metadata
-            selected_variants_df["regression_model"] = self.regression_model_name
+            selected_variants_df["predictor"] = self.predictor_name
             selected_variants_df["seq_mod_method"] = self.seq_mod_method
 
             # Reorder columns
@@ -119,7 +119,7 @@ class ResultManager:
                 "round",
                 "strategy",
                 "seed",
-                "regression_model",
+                "predictor",
                 "seq_mod_method",
                 "variant_index",
                 "variant_id",

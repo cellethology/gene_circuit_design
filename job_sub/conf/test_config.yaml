@@ -1,0 +1,39 @@
+defaults:
+  - predictor: rf_regressor
+  - query_strategy: topk
+  - override hydra/launcher: submitit_local
+
+data_paths: "CIS_1-1-1-1.safetensors"
+
+embedding_path: embeddings.safetensors
+prediction_path: expressions.csv
+
+al_settings:
+  # Fixed (non-swept)
+  initial_sample_size: 8
+  batch_size: 8
+  test_size: 30
+  max_rounds: 2
+  normalize_expression: true
+  normalize_input_output: true
+  no_test: true
+  output_dir: results/demo_experiment
+  query_strategy: ${query_strategy}
+  seq_mod_method: embedding
+  target_val_key: expressions
+  predictor: ${predictor}
+  seed: 42
+
+hydra:
+  sweeper:
+    params:
+      query_strategy: topk, random
+      predictor: rf_regressor, mlp_regressor
+      al_settings.seed: 1, 2
+  # launcher:
+  #   timeout_min: 240
+  #   partition: wzt_20250411,intel-sc3
+  #   cpus_per_task: 8
+  #   mem_per_cpu: 8GB
+  #   qos: huge
+  #   submitit_folder: logs_experiments

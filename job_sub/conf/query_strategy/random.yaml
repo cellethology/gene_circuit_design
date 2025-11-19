@@ -1,0 +1,2 @@
+_target_: experiments.core.query_strategies.Random
+seed: ${al_settings.seed}

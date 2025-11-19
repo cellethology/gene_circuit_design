@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from utils.config_loader import SelectionStrategy
+from experiments.core.query_strategies import QueryStrategyBase
 from utils.metrics import (
     get_best_value_metric,
     normalized_to_best_val_metric,
@@ -35,7 +35,7 @@ class MetricsCalculator:
     def calculate_round_metrics(
         self,
         selected_indices: List[int],
-        selection_strategy: SelectionStrategy,
+        query_strategy: QueryStrategyBase,
         predictions: Optional[np.ndarray] = None,
     ) -> Dict[str, float]:
         """
@@ -62,7 +62,7 @@ class MetricsCalculator:
         )
 
         # Get prediction metrics
-        if selection_strategy == SelectionStrategy.LOG_LIKELIHOOD:
+        if query_strategy.name == "TopLogLikelihood":
             # For LOG_LIKELIHOOD, use true values to maintain model independence
             best_value_pred = best_value_true
             normalized_predictions_pred = normalized_predictions_true
