@@ -73,7 +73,7 @@ def main():
     for i, seq in enumerate(padded_sequences):
         if i % 5000 == 0:
             print(
-                f"Processing sequence {i}/{len(padded_sequences)} ({i/len(padded_sequences)*100:.1f}%)"
+                f"Processing sequence {i}/{len(padded_sequences)} ({i / len(padded_sequences) * 100:.1f}%)"
             )
         encoded_sequences.append(encode_sequence(seq))
 
@@ -120,7 +120,7 @@ def main():
             pca.partial_fit(batch)
 
         if i % 10 == 0:
-            print(f"Processed batch {i+1}/{n_batches}")
+            print(f"Processed batch {i + 1}/{n_batches}")
 
     # Transform the data
     X_pca = pca.transform(X_scaled)
@@ -146,7 +146,7 @@ def main():
 
     # Save PCA results
     print("Saving PCA results...")
-    pca_df = pd.DataFrame(X_pca, columns=[f"PC{i+1}" for i in range(X_pca.shape[1])])
+    pca_df = pd.DataFrame(X_pca, columns=[f"PC{i + 1}" for i in range(X_pca.shape[1])])
     pca_df["Variant_ID"] = df["Variant_ID"]
     pca_df["Expression"] = df["Expression"]
     pca_df["Log_Likelihood"] = df["Log_Likelihood"]

@@ -42,7 +42,7 @@ def run_all_experiments_from_config(
         raise FileNotFoundError(f"Config file not found: {config_file}")
 
     # Load YAML
-    with open(config_file, "r", encoding="utf-8") as f:
+    with open(config_file, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     # Extract experiment names under the top-level 'experiments' key
