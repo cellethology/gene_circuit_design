@@ -5,7 +5,6 @@ defaults:
   - _self_
   - override hydra/launcher: submitit_local
 
-data_paths: "CIS_1-1-1-1.safetensors"
 embedding_path: embeddings.npz
 metadata_path: expressions.csv
 
@@ -26,10 +25,10 @@ al_settings:
 hydra:
   sweeper:
     params:
-      query_strategy: topk, random
-      predictor: rf_regressor, mlp_regressor
-      initial_selection_strategy: random, kmeans
-      al_settings.seed: 1, 2
+      # query_strategy: topk, random
+      # predictor: rf_regressor, mlp_regressor
+      # initial_selection_strategy: random, kmeans
+      al_settings.seed: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
   # launcher:
   #   timeout_min: 240
   #   partition: wzt_20250411,intel-sc3

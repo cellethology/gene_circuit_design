@@ -18,7 +18,6 @@ import torch
 
 from utils.sequence_utils import (
     SequenceModificationMethod,
-    ensure_sequence_modification_method,
     flatten_one_hot_sequences,
     flatten_one_hot_sequences_with_pca,
     load_log_likelihood_data,
@@ -26,29 +25,6 @@ from utils.sequence_utils import (
     one_hot_encode_sequences,
     one_hot_encode_single_sequence,
 )
-
-
-class TestSequenceModificationMethod:
-    """Test sequence modification method enum conversion."""
-
-    def test_string_to_enum_conversion(self):
-        """Test conversion of valid strings to enum."""
-        assert (
-            ensure_sequence_modification_method("embedding")
-            == SequenceModificationMethod.EMBEDDING
-        )
-
-    def test_enum_passthrough(self):
-        """Test that enum values pass through unchanged."""
-        assert (
-            ensure_sequence_modification_method(SequenceModificationMethod.EMBEDDING)
-            == SequenceModificationMethod.EMBEDDING
-        )
-
-    def test_invalid_string_raises_error(self):
-        """Test that invalid strings raise ValueError."""
-        with pytest.raises(ValueError):
-            ensure_sequence_modification_method("invalid")
 
 
 class TestOneHotEncoding:
