@@ -3,8 +3,9 @@
 
 repos:
   # Ruff for linting and formatting
+  # Using official hook with version compatible with ruff 0.6.9
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.6.9
     hooks:
       - id: ruff
         args: [--fix]

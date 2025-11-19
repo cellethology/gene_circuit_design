@@ -1500,17 +1500,17 @@ def create_combined_analysis_figure(
                         )
                         if pd.notna(val):
                             if fmt == ".1f":
-                                annot_data.loc[
-                                    emb, reg
-                                ] = f"{val:.1f}\n(n={int(count)})"
+                                annot_data.loc[emb, reg] = (
+                                    f"{val:.1f}\n(n={int(count)})"
+                                )
                             elif fmt == ".3f":
-                                annot_data.loc[
-                                    emb, reg
-                                ] = f"{val:.3f}\n(n={int(count)})"
+                                annot_data.loc[emb, reg] = (
+                                    f"{val:.3f}\n(n={int(count)})"
+                                )
                             else:
-                                annot_data.loc[
-                                    emb, reg
-                                ] = f"{val:.2f}\n(n={int(count)})"
+                                annot_data.loc[emb, reg] = (
+                                    f"{val:.2f}\n(n={int(count)})"
+                                )
                         else:
                             annot_data.loc[emb, reg] = ""
                 sns.heatmap(

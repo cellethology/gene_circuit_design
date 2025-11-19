@@ -12,6 +12,36 @@ cd gene_circuit_design
 uv sync --python 3.9
 ```
 
+After installing dependencies, set up pre-commit hooks:
+
+```bash
+# Install pre-commit hooks
+pre-commit install
+```
+
+### What the Hooks Do
+
+The pre-commit configuration includes:
+
+- **Ruff**: Automatic code linting and formatting (replaces `black`, `isort`, `flake8`)
+
+- **File Checks**: Basic file quality checks
+
+- **Pytest**: Runs tests before committing
+
+### Manual Execution
+
+You can manually run pre-commit hooks on all files:
+
+```bash
+# Run hooks on all files
+pre-commit run --all-files
+
+# Run a specific hook
+pre-commit run ruff --all-files
+pre-commit run ruff-format --all-files
+```
+
 ## Data Directory
 Symlink can be made
 ```
@@ -23,7 +53,7 @@ ls -l "data_new" # verify link
 The structure of the `data_new` directory should look something like this
 ```bash
 ./data_new
-├── 166k    
+├── 166k
 ├── 1M
 ├── alcantar_2025
 ├── Angenent-Mari_2020
@@ -165,6 +195,3 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 - Use `--max-workers` for parallel processing
 - Set `cores_per_process` in config for CPU-intensive models
 - Use filtered data files to reduce memory usage
-
-
-
