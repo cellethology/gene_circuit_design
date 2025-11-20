@@ -6,6 +6,11 @@ the ActiveLearningExperiment class into smaller, focused classes.
 """
 
 from experiments.core.data_loader import DataLoader, Dataset
+from experiments.core.initial_selection_strategies import (
+    InitialSelectionStrategy,
+    KMeansInitialSelection,
+    RandomInitialSelection,
+)
 from experiments.core.metrics_calculator import MetricsCalculator
 from experiments.core.predictor_trainer import PredictorTrainer
 from experiments.core.result_manager import ResultManager
@@ -16,6 +21,9 @@ __all__ = [
     "Dataset",
     "PredictorTrainer",
     "MetricsCalculator",
+    "InitialSelectionStrategy",
+    "RandomInitialSelection",
+    "KMeansInitialSelection",
     "ResultManager",
     "VariantTracker",
 ]

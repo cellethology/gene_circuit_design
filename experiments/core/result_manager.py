@@ -18,7 +18,6 @@ class ResultManager:
     def __init__(
         self,
         strategy: str,
-        seq_mod_method: str,
         predictor_name: str,
         seed: int,
         initial_sample_size: int,
@@ -29,14 +28,12 @@ class ResultManager:
 
         Args:
             strategy: Selection strategy name
-            seq_mod_method: Sequence modification method
             predictor_name: Name of predictor
             seed: Random seed
             initial_sample_size: Initial training set size
             batch_size: Batch size for each round
         """
         self.strategy = strategy
-        self.seq_mod_method = seq_mod_method
         self.predictor_name = predictor_name
         self.seed = seed
         self.initial_sample_size = initial_sample_size
@@ -71,7 +68,6 @@ class ResultManager:
 
             # Add metadata columns
             custom_metrics_df["strategy"] = self.strategy
-            custom_metrics_df["seq_mod_method"] = self.seq_mod_method
             custom_metrics_df["predictor"] = self.predictor_name
             custom_metrics_df["seed"] = self.seed
             custom_metrics_df["round"] = range(1, len(custom_metrics) + 1)
@@ -93,7 +89,6 @@ class ResultManager:
                 "seed",
                 "train_size",
                 "predictor",
-                "seq_mod_method",
             ]
             cols = metadata_cols + [
                 col for col in custom_metrics_df.columns if col not in metadata_cols
@@ -112,7 +107,6 @@ class ResultManager:
 
             # Add metadata
             selected_variants_df["predictor"] = self.predictor_name
-            selected_variants_df["seq_mod_method"] = self.seq_mod_method
 
             # Reorder columns
             metadata_cols = [
@@ -120,12 +114,9 @@ class ResultManager:
                 "strategy",
                 "seed",
                 "predictor",
-                "seq_mod_method",
                 "variant_index",
-                "variant_id",
+                "sample_id",
                 "expression",
-                "log_likelihood",
-                "sequence",
             ]
             cols = metadata_cols + [
                 col for col in selected_variants_df.columns if col not in metadata_cols

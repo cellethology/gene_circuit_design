@@ -21,7 +21,6 @@ experiments:
       - /path/to/data_a.csv
       - /path/to/data_b.csv
     strategies: [HIGH_EXPRESSION, RANDOM]
-    seq_mod_methods: [EMBEDDING]
     target_val_key: expressions
     regression_models: [LINEAR, RANDOM_FOREST]
     seeds: [1, 2]

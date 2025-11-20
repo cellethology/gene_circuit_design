@@ -46,7 +46,6 @@ class ExperimentDefaults:
     """Holds default fields to stamp into each experiment block."""
 
     strategies: tuple[str, ...] = ("KMEANS_RANDOM", "KMEANS_HIGH_EXPRESSION")
-    seq_mod_methods: tuple[str, ...] = ("EMBEDDING",)
     target_val_key: str = "expressions"
     regression_models: tuple[str, ...] = (
         "LINEAR",
@@ -58,27 +57,22 @@ class ExperimentDefaults:
     seeds: tuple[int, ...] = tuple(range(1, 21))
     initial_sample_size: int = 8
     batch_size: int = 8
-    test_size: int = 30
     max_rounds: int = 20
-    normalize_expression: bool = True
-    no_test: bool = True
-    normalize_input_output: bool = True
+    normalize_features: bool = True
+    normalize_targets: bool = True
 
     def as_mapping(self) -> Mapping[str, object]:
         """Return a plain mapping that can be merged into each experiment entry."""
         return {
             "strategies": list(self.strategies),
-            "seq_mod_methods": list(self.seq_mod_methods),
             "target_val_key": self.target_val_key,
             "regression_models": list(self.regression_models),
             "seeds": list(self.seeds),
             "initial_sample_size": self.initial_sample_size,
             "batch_size": self.batch_size,
-            "test_size": self.test_size,
             "max_rounds": self.max_rounds,
-            "normalize_expression": self.normalize_expression,
-            "no_test": self.no_test,
-            "normalize_input_output": self.normalize_input_output,
+            "normalize_features": self.normalize_features,
+            "normalize_targets": self.normalize_targets,
         }
 
 
@@ -220,12 +214,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Comma-separated strategies.",
     )
     parser.add_argument(
-        "--seq-mod-methods",
-        type=str,
-        default="EMBEDDING",
-        help="Comma-separated sequence modification methods.",
-    )
-    parser.add_argument(
         "--regression-models",
         type=str,
         default="LINEAR,RANDOM_FOREST,MLP",
@@ -241,16 +229,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--initial-sample-size", type=int, default=8, help="Initial sample size."
     )
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size.")
-    parser.add_argument("--test-size", type=int, default=30, help="Test size.")
     parser.add_argument("--max-rounds", type=int, default=20, help="Max rounds.")
     parser.add_argument(
-        "--no-test",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="If set, include no_test: true (default: true). Use --no-test=false to disable.",
-    )
-    parser.add_argument(
-        "--normalize-expression",
+        "--normalize-features",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="normalize_expression flag (default: true).",
@@ -294,17 +275,14 @@ def main(argv: list[str] | None = None) -> int:
 
     defaults = ExperimentDefaults(
         strategies=_parse_comma_strs(args.strategies),
-        seq_mod_methods=_parse_comma_strs(args.seq_mod_methods),
         target_val_key="expressions",
         regression_models=_parse_comma_strs(args.regression_models),
         seeds=_parse_comma_ints(args.seeds),
         initial_sample_size=args.initial_sample_size,
         batch_size=args.batch_size,
-        test_size=args.test_size,
         max_rounds=args.max_rounds,
-        normalize_expression=args.normalize_expression,
-        no_test=args.no_test,
-        normalize_input_output=args.normalize_input_output,
+        normalize_features=args.normalize_features,
+        normalize_targets=args.normalize_targets,
     )
 
     doc = build_yaml_structure(

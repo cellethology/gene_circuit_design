@@ -44,50 +44,54 @@ def run_single_experiment(
         Tuple of (strategy, seq_mod_method, regression_model, seed, results, custom_metrics)
     """
 
-    data_path = cfg.data_paths
-    predictor = cfg.predictor
-    query_strategy = cfg.query_strategy
+    predictor = instantiate(cfg.predictor)
+    query_strategy = instantiate(cfg.query_strategy)
+    initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
     al_settings = cfg.al_settings
 
-    from utils.sequence_utils import SequenceModificationMethod
-
-    # Instantiate query strategy and predictor
-    query_strategy = instantiate(query_strategy)
-    predictor = instantiate(predictor)
     predictor_name = predictor.__class__.__name__
 
-    # Instantiate sequence modification method
-    seq_mod_method = al_settings["seq_mod_method"]
-    if isinstance(seq_mod_method, str):
-        seq_mod_method = SequenceModificationMethod(seq_mod_method)
+    embeddings_path = getattr(cfg, "embedding_path", cfg.data_paths)
+    metadata_path = getattr(
+        cfg,
+        "metadata_path",
+        getattr(cfg, "prediction_path", None),
+    )
+    if metadata_path is None:
+        raise ValueError(
+            "metadata_path or prediction_path must be provided in the config."
+        )
 
     seed = al_settings["seed"]
     initial_sample_size = al_settings["initial_sample_size"]
     batch_size = al_settings["batch_size"]
-    test_size = al_settings["test_size"]
-    no_test = al_settings["no_test"]
     max_rounds = al_settings["max_rounds"]
-    normalize_input_output = al_settings["normalize_input_output"]
+    normalize_features = al_settings.get("normalize_features")
+    normalize_targets = al_settings.get("normalize_targets")
+    if normalize_features is None or normalize_targets is None:
+        legacy_norm = al_settings.get("normalize_input_output", False)
+        normalize_features = (
+            legacy_norm if normalize_features is None else normalize_features
+        )
+        normalize_targets = (
+            legacy_norm if normalize_targets is None else normalize_targets
+        )
     output_dir = al_settings["output_dir"]
     target_val_key = al_settings["target_val_key"]
-    use_pca = al_settings.get("use_pca", False)
-    pca_components = al_settings.get("pca_components", 4096)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
-        data_path=data_path,
+        embeddings_path=embeddings_path,
+        metadata_path=metadata_path,
         query_strategy=query_strategy,
         predictor=predictor,
         initial_sample_size=initial_sample_size,
         batch_size=batch_size,
-        test_size=test_size,
         random_seed=seed,
-        seq_mod_method=seq_mod_method,
-        no_test=no_test,
-        normalize_input_output=normalize_input_output,
-        use_pca=use_pca,
-        pca_components=pca_components,
+        normalize_features=normalize_features,
+        normalize_targets=normalize_targets,
         target_val_key=target_val_key,
+        initial_selection_strategy=initial_selection_strategy,
     )
 
     # Run experiment
@@ -101,7 +105,6 @@ def run_single_experiment(
             metrics_with_metadata = {
                 "round": i,
                 "strategy": query_strategy,
-                "seq_mod_method": seq_mod_method,
                 "predictor": predictor_name,
                 "seed": seed,
                 "train_size": train_size_for_round,
@@ -114,22 +117,23 @@ def run_single_experiment(
     output_path.mkdir(parents=True, exist_ok=True)
 
     seed_output_path = (
-        output_path
-        / f"{query_strategy.name}_{seq_mod_method}_{predictor_name}_seed_{seed}_results.csv"
+        output_path / f"{query_strategy.name}_{predictor_name}_seed_{seed}_results.csv"
     )
     experiment.save_results(str(seed_output_path))
 
     # Log final performance
     final_performance = experiment.get_final_performance()
-    logger.info(
-        f"Seed {seed} final performance - "
-        f"Pearson: {final_performance.get('pearson_correlation', 0):.4f}, "
-        f"Spearman: {final_performance.get('spearman_correlation', 0):.4f}"
-    )
+    if final_performance:
+        logger.info(
+            f"Seed {seed} final metrics - "
+            f"Top-10 cumulative: {final_performance.get('top_10_ratio_intersected_indices_cumulative', 0):.4f}, "
+            f"Best value cumulative: {final_performance.get('best_value_ground_truth_values_cumulative', 0):.4f}"
+        )
+    else:
+        logger.info(f"Seed {seed} completed with no additional metrics recorded.")
 
     return (
         query_strategy,
-        seq_mod_method,
         predictor_name,
         seed,
         results,
@@ -173,14 +177,13 @@ def create_combined_results_from_files(output_path: Path) -> None:
             logger.warning(f"Could not parse filename {filename}")
             continue
 
-        strategy, seq_mod_method, predictor, seed = match.groups()
+        strategy, predictor, seed = match.groups()
         seed = int(seed)
 
         try:
             df = pd.read_csv(file_path)
             # Add metadata columns if missing
             df["strategy"] = strategy
-            df["seq_mod_method"] = seq_mod_method
             df["predictor"] = predictor
             df["seed"] = seed
             all_results.append(df)
@@ -207,7 +210,7 @@ def create_combined_results_from_files(output_path: Path) -> None:
             logger.warning(f"Could not parse custom metrics filename {filename}")
             continue
 
-        strategy, seq_mod_method, predictor, seed = match.groups()
+        strategy, predictor, seed = match.groups()
         seed = int(seed)
 
         try:
@@ -215,8 +218,6 @@ def create_combined_results_from_files(output_path: Path) -> None:
             # Add metadata columns if missing
             if "strategy" not in df.columns:
                 df["strategy"] = strategy
-            if "seq_mod_method" not in df.columns:
-                df["seq_mod_method"] = seq_mod_method
             if "predictor" not in df.columns:
                 df["predictor"] = predictor
             if "seed" not in df.columns:

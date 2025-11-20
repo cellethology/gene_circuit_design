@@ -16,9 +16,9 @@ from omegaconf import OmegaConf
 
 from experiments.run_experiments_parallelization import run_single_experiment
 
-LIST_OF_DATA_PATHS: List[str] = [
-    "CIS_1-1-1-1.safetensors",
-    "CIS_1-1-1-1.safetensors",
+LIST_OF_EMBEDDING_PATHS: List[str] = [
+    "embeddings.npz",
+    "embeddings.npz",
 ]
 
 _SCRIPT_PATH = Path(__file__).resolve()
@@ -33,12 +33,12 @@ def run_experiments(cfg):
 
 
 def _collect_user_overrides() -> List[str]:
-    """Keep any user overrides other than multirun flag or data_paths."""
+    """Keep any user overrides other than multirun flag or embedding_paths."""
     overrides: List[str] = []
     for arg in sys.argv[1:]:
         if arg in ("-m", "--multirun"):
             continue
-        if arg.startswith("data_paths="):
+        if arg.startswith("embedding_path="):
             continue
         overrides.append(arg)
     return overrides
@@ -48,9 +48,9 @@ def main():
     """Loop over datasets and launch Hydra multirun for each via subprocess."""
     user_overrides = _collect_user_overrides()
 
-    for data_path in LIST_OF_DATA_PATHS:
+    for embedding_path in LIST_OF_EMBEDDING_PATHS:
         print(f"\n{'=' * 80}")
-        print(f"Processing dataset: {data_path}")
+        print(f"Processing dataset: {embedding_path}")
         print(f"{'=' * 80}\n")
         env = os.environ.copy()
         env[_HYDRA_CHILD_ENV] = "1"
@@ -59,7 +59,7 @@ def main():
                 sys.executable,
                 str(_SCRIPT_PATH),
                 "-m",
-                f"data_paths={data_path}",
+                f"embedding_path={embedding_path}",
                 *user_overrides,
             ],
             check=True,
