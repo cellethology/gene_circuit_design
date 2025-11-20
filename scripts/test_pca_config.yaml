@@ -2,7 +2,6 @@ experiments:
   test_pca_experiment:
     data_path: "data/166k_data/166k_rice/post_embeddings/part_data_with_sequence.csv"
     strategies: ["HIGH_EXPRESSION", "RANDOM", "LOG_LIKELIHOOD"]
-    seq_mod_methods: ["PAD"]
     regression_models: ["LINEAR"]
     seeds: [42]
     initial_sample_size: 5000

@@ -5,11 +5,10 @@ import argparse
 from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
-from typing import Dict, Iterable, List, Sequence, Tuple
-
+from typing import Iterable, Sequence
 
 # You can customize/extend these aliases without touching the code below.
-MODEL_ALIASES_DEFAULT: Dict[str, Sequence[str]] = {
+MODEL_ALIASES_DEFAULT: dict[str, Sequence[str]] = {
     "LINEAR": ("linear_regression", "linear"),
     "KNN": ("knn", "k_nn"),
     "RANDOM_FOREST": ("random_forest", "randomforest", "rf"),
@@ -23,10 +22,9 @@ class Config:
 
     output_dir: Path
     strategies: Sequence[str]
-    seq_mod_methods: Sequence[str]
     regression_models: Sequence[str]
     seeds: Sequence[int]
-    model_aliases: Dict[str, Sequence[str]]
+    model_aliases: dict[str, Sequence[str]]
 
 
 # ---------- naming helpers --------------------------------------------------
@@ -78,10 +76,10 @@ def path_exists_loose(base: Path, stems: Sequence[str]) -> bool:
 
 def expected_items(
     cfg: Config,
-) -> Iterable[Tuple[Tuple[str, str, str, int], Sequence[str]]]:
+) -> Iterable[tuple[tuple[str, str, str, int], Sequence[str]]]:
     """Yield ((strategy, method, model, seed), stems_for_aliases)."""
     for strategy, method, model, seed in product(
-        cfg.strategies, cfg.seq_mod_methods, cfg.regression_models, cfg.seeds
+        cfg.strategies, cfg.regression_models, cfg.seeds
     ):
         aliases = cfg.model_aliases.get(model, (model.lower(),))
         stems = build_stems_for_model(strategy, method, model, seed, aliases)
@@ -90,12 +88,12 @@ def expected_items(
 
 def find_missing(
     cfg: Config,
-) -> List[Tuple[str, Tuple[str, str, str, int]]]:
+) -> list[tuple[str, tuple[str, str, str, int]]]:
     """Return list of (representative_stem, factors) that are missing.
 
     The representative stem is the first alias for that model, for reporting.
     """
-    missing: List[Tuple[str, Tuple[str, str, str, int]]] = []
+    missing: list[tuple[str, tuple[str, str, str, int]]] = []
     for factors, stems in expected_items(cfg):
         if not path_exists_loose(cfg.output_dir, stems):
             # Use the first stem for a clean, canonical report.
@@ -108,11 +106,11 @@ def find_missing(
 
 
 def write_missing_csv(
-    output_dir: Path, missing: Sequence[Tuple[str, Tuple[str, str, str, int]]]
+    output_dir: Path, missing: Sequence[tuple[str, tuple[str, str, str, int]]]
 ) -> Path:
     """Write a CSV with missing entries; returns the CSV path."""
     csv_path = output_dir / "_missing_results.csv"
-    lines = ["name,strategy,seq_mod_method,regression_model,seed"]
+    lines = ["name,strategy,regression_model,seed"]
     for name, (strategy, method, model, seed) in missing:
         lines.append(f"{name},{strategy},{method},{model},{seed}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -136,12 +134,6 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=["HIGH_EXPRESSION", "RANDOM"],
         help="Strategies, e.g., HIGH_EXPRESSION RANDOM.",
-    )
-    parser.add_argument(
-        "--seq_mod_methods",
-        nargs="+",
-        default=["EMBEDDING"],
-        help="Sequence modification methods, e.g., EMBEDDING.",
     )
     parser.add_argument(
         "--regression_models",
@@ -172,9 +164,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def parse_alias_overrides(items: Sequence[str]) -> Dict[str, Sequence[str]]:
+def parse_alias_overrides(items: Sequence[str]) -> dict[str, Sequence[str]]:
     """Parse --alias KEY:a,b,c items into a dict."""
-    overrides: Dict[str, Sequence[str]] = {}
+    overrides: dict[str, Sequence[str]] = {}
     for itm in items:
         if ":" not in itm:
             continue
@@ -195,18 +187,12 @@ def main() -> None:
     cfg = Config(
         output_dir=args.output_dir,
         strategies=args.strategies,
-        seq_mod_methods=args.seq_mod_methods,
         regression_models=args.regression_models,
         seeds=args.seeds,
         model_aliases=aliases,
     )
 
-    total = (
-        len(cfg.strategies)
-        * len(cfg.seq_mod_methods)
-        * len(cfg.regression_models)
-        * len(cfg.seeds)
-    )
+    total = len(cfg.strategies) * len(cfg.regression_models) * len(cfg.seeds)
     missing = find_missing(cfg)
 
     print(f"Output directory: {cfg.output_dir}")

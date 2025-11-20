@@ -3,6 +3,7 @@ Unit tests for VariantTracker class.
 """
 
 import numpy as np
+import pytest
 
 from experiments.core.variant_tracker import VariantTracker
 
@@ -42,14 +43,13 @@ class TestVariantTracker:
             all_expressions=np.array([1.0]),
         )
 
-        tracker.track_round(
-            round_num=0,
-            selected_indices=[5],
-            strategy="random",
-            seed=42,
-        )
-
-        assert tracker.selected_variants[0]["sample_id"] == "sample_5"
+        with pytest.raises(IndexError):
+            tracker.track_round(
+                round_num=0,
+                selected_indices=[5],
+                strategy="random",
+                seed=42,
+            )
 
     def test_track_multiple_rounds(self):
         tracker = VariantTracker(

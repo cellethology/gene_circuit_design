@@ -42,7 +42,7 @@ def run_all_experiments_from_config(
         raise FileNotFoundError(f"Config file not found: {config_file}")
 
     # Load YAML
-    with open(config_file, "r", encoding="utf-8") as f:
+    with open(config_file, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
     # Extract experiment names under the top-level 'experiments' key
@@ -133,7 +133,6 @@ def run_slurm_experiments(
                 "normalize_input_output",
                 "strategies",
                 "regression_models",
-                "seq_mod_methods",
                 "seeds",
             ]
 
@@ -160,25 +159,23 @@ def run_slurm_experiments(
             # Generate parameter combinations
             for strategy in config["strategies"]:
                 for regression_model in config["regression_models"]:
-                    for seq_mod_method in config["seq_mod_methods"]:
-                        for seed in config["seeds"]:
-                            all_experiment_params.append(
-                                {
-                                    "strategy": strategy,
-                                    "regression_model": regression_model,
-                                    "target_val_key": target_val_key,
-                                    "seq_mod_method": seq_mod_method,
-                                    "seed": seed,
-                                    "data_path": data_path,
-                                    "initial_sample_size": initial_sample_size,
-                                    "batch_size": batch_size,
-                                    "test_size": test_size,
-                                    "no_test": no_test,
-                                    "max_rounds": max_rounds,
-                                    "output_dir": output_dir,
-                                    "normalize_input_output": normalize_input_output,
-                                }
-                            )
+                    for seed in config["seeds"]:
+                        all_experiment_params.append(
+                            {
+                                "strategy": strategy,
+                                "regression_model": regression_model,
+                                "target_val_key": target_val_key,
+                                "seed": seed,
+                                "data_path": data_path,
+                                "initial_sample_size": initial_sample_size,
+                                "batch_size": batch_size,
+                                "test_size": test_size,
+                                "no_test": no_test,
+                                "max_rounds": max_rounds,
+                                "output_dir": output_dir,
+                                "normalize_input_output": normalize_input_output,
+                            }
+                        )
         except Exception as e:
             logger.error(f"Error processing experiment {experiment_name}: {str(e)}")
             raise

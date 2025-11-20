@@ -46,7 +46,6 @@ class ExperimentDefaults:
     """Holds default fields to stamp into each experiment block."""
 
     strategies: tuple[str, ...] = ("KMEANS_RANDOM", "KMEANS_HIGH_EXPRESSION")
-    seq_mod_methods: tuple[str, ...] = ("EMBEDDING",)
     target_val_key: str = "expressions"
     regression_models: tuple[str, ...] = (
         "LINEAR",
@@ -66,7 +65,6 @@ class ExperimentDefaults:
         """Return a plain mapping that can be merged into each experiment entry."""
         return {
             "strategies": list(self.strategies),
-            "seq_mod_methods": list(self.seq_mod_methods),
             "target_val_key": self.target_val_key,
             "regression_models": list(self.regression_models),
             "seeds": list(self.seeds),
@@ -216,12 +214,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Comma-separated strategies.",
     )
     parser.add_argument(
-        "--seq-mod-methods",
-        type=str,
-        default="EMBEDDING",
-        help="Comma-separated sequence modification methods.",
-    )
-    parser.add_argument(
         "--regression-models",
         type=str,
         default="LINEAR,RANDOM_FOREST,MLP",
@@ -283,15 +275,14 @@ def main(argv: list[str] | None = None) -> int:
 
     defaults = ExperimentDefaults(
         strategies=_parse_comma_strs(args.strategies),
-        seq_mod_methods=_parse_comma_strs(args.seq_mod_methods),
         target_val_key="expressions",
         regression_models=_parse_comma_strs(args.regression_models),
         seeds=_parse_comma_ints(args.seeds),
         initial_sample_size=args.initial_sample_size,
         batch_size=args.batch_size,
         max_rounds=args.max_rounds,
-        normalize_expression=args.normalize_expression,
-        normalize_input_output=args.normalize_input_output,
+        normalize_features=args.normalize_features,
+        normalize_targets=args.normalize_targets,
     )
 
     doc = build_yaml_structure(

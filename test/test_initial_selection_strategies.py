@@ -15,7 +15,7 @@ def _create_dataset(n_samples: int, embedding_dim: int = 4) -> Dataset:
     sample_ids = [f"sample_{i}" for i in range(n_samples)]
     labels = np.linspace(0, 1, n_samples)
     embeddings = np.random.randn(n_samples, embedding_dim)
-    return Dataset(sample_ids=sample_ids, sequence_labels=labels, embeddings=embeddings)
+    return Dataset(sample_ids=sample_ids, labels=labels, embeddings=embeddings)
 
 
 def test_random_initial_selection_basic():
@@ -25,7 +25,6 @@ def test_random_initial_selection_basic():
     indices = strategy.select(
         dataset=dataset,
         initial_sample_size=5,
-        encode_sequences_fn=lambda idxs: dataset.embeddings[idxs],
     )
 
     assert len(indices) == 5
@@ -39,7 +38,6 @@ def test_kmeans_initial_selection_returns_expected_count():
     indices = strategy.select(
         dataset=dataset,
         initial_sample_size=6,
-        encode_sequences_fn=lambda idxs: dataset.embeddings[idxs],
     )
 
     assert len(indices) == 6

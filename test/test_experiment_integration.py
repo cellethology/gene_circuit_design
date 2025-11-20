@@ -19,7 +19,7 @@ class TestActiveLearningExperiment:
     def create_dataset(self, tmp_path, n_samples: int = 20, dim: int = 10):
         """Create paired embeddings and metadata files."""
         embeddings = np.random.randn(n_samples, dim).astype(np.float32)
-        ids = np.array([f"id_{i}" for i in range(n_samples)])
+        ids = np.arange(n_samples, dtype=np.int32)
         emb_path = tmp_path / "embeddings.npz"
         np.savez_compressed(emb_path, embeddings=embeddings, ids=ids)
 
@@ -37,18 +37,16 @@ class TestActiveLearningExperiment:
     def _build_experiment(
         self,
         embeddings_path: str,
-        metadata_csv_path: str,
+        metadata_path: str,
         query_strategy,
         initial_sample_size: int,
         batch_size: int,
         initial_selection_strategy=None,
     ) -> ActiveLearningExperiment:
-        initial_strategy = (
-            initial_selection_strategy or RandomInitialSelection(seed=0)
-        )
+        initial_strategy = initial_selection_strategy or RandomInitialSelection(seed=0)
         return ActiveLearningExperiment(
             embeddings_path=embeddings_path,
-            metadata_csv_path=metadata_csv_path,
+            metadata_path=metadata_path,
             initial_selection_strategy=initial_strategy,
             query_strategy=query_strategy,
             predictor=LinearRegression(),
@@ -56,7 +54,6 @@ class TestActiveLearningExperiment:
             batch_size=batch_size,
             normalize_features=False,
             normalize_targets=False,
-            use_pca=False,
             target_val_key="Expression",
         )
 
@@ -65,25 +62,24 @@ class TestActiveLearningExperiment:
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=18)
         experiment = self._build_experiment(
             embeddings_path=emb_path,
-            metadata_csv_path=csv_path,
+            metadata_path=csv_path,
             query_strategy=Random(seed=42),
             initial_sample_size=6,
             batch_size=3,
             initial_selection_strategy=RandomInitialSelection(seed=42),
         )
 
-        assert len(experiment.all_sequences) == 18
+        assert len(experiment.all_samples) == 18
         assert experiment.embeddings is not None
         assert len(experiment.train_indices) == 6
         assert len(experiment.unlabeled_indices) == 12
-        assert experiment.test_indices == []
 
     def test_run_experiment_multiple_rounds(self, tmp_path):
         """Running multiple rounds grows the training pool and produces metrics."""
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=25)
         experiment = self._build_experiment(
             embeddings_path=emb_path,
-            metadata_csv_path=csv_path,
+            metadata_path=csv_path,
             query_strategy=TopPredictions(),
             initial_sample_size=5,
             batch_size=4,
@@ -106,7 +102,7 @@ class TestActiveLearningExperiment:
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=20)
         experiment = self._build_experiment(
             embeddings_path=emb_path,
-            metadata_csv_path=csv_path,
+            metadata_path=csv_path,
             query_strategy=Random(seed=99),
             initial_sample_size=5,
             batch_size=5,
@@ -127,17 +123,16 @@ class TestActiveLearningExperiment:
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=12)
         experiment = self._build_experiment(
             embeddings_path=emb_path,
-            metadata_csv_path=csv_path,
+            metadata_path=csv_path,
             query_strategy=Random(seed=1),
             initial_sample_size=4,
             batch_size=4,
             initial_selection_strategy=RandomInitialSelection(seed=1),
         )
 
-        assert isinstance(experiment.all_sequences, list)
+        assert isinstance(experiment.all_samples, list)
         assert isinstance(experiment.all_expressions, np.ndarray)
         assert isinstance(experiment.train_indices, list)
         assert isinstance(experiment.unlabeled_indices, list)
-        assert experiment.test_indices == []
         assert isinstance(experiment.custom_metrics, list)
         assert isinstance(experiment.selected_variants, list)

@@ -18,7 +18,6 @@ class TestResultManager:
         """Test ResultManager initialization."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
             predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
@@ -26,7 +25,6 @@ class TestResultManager:
         )
 
         assert manager.strategy == "highExpression"
-        assert manager.seq_mod_method == "embedding"
         assert manager.predictor_name == "LinearRegression"
         assert manager.seed == 42
 
@@ -34,7 +32,6 @@ class TestResultManager:
         """Test saving basic results."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
             predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
@@ -75,7 +72,6 @@ class TestResultManager:
         """Test saving custom metrics."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
             predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
@@ -119,7 +115,6 @@ class TestResultManager:
         df = pd.read_csv(custom_metrics_path)
         assert len(df) == 2
         assert "strategy" in df.columns
-        assert "seq_mod_method" in df.columns
         assert "predictor" in df.columns
         assert "seed" in df.columns
         assert "round" in df.columns
@@ -133,7 +128,6 @@ class TestResultManager:
         """Test saving selected variants."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
             predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
@@ -173,14 +167,12 @@ class TestResultManager:
         assert "expression" in df.columns
         assert "sample_id" in df.columns
         assert "predictor" in df.columns
-        assert "seq_mod_method" in df.columns
 
     def test_save_all_outputs(self, tmp_path):
         """Test saving all output types together."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -224,8 +216,7 @@ class TestResultManager:
         """Test saving when results are empty."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -242,8 +233,7 @@ class TestResultManager:
         """Test that metadata columns are ordered correctly."""
         manager = ResultManager(
             strategy="highExpression",
-            seq_mod_method="embedding",
-            regression_model_name="LinearRegression",
+            predictor_name="LinearRegression",
             seed=42,
             initial_sample_size=8,
             batch_size=8,
@@ -275,8 +265,7 @@ class TestResultManager:
             "strategy",
             "seed",
             "train_size",
-            "regression_model",
-            "seq_mod_method",
+            "predictor",
         ]
         actual_first_cols = list(df.columns[: len(expected_first_cols)])
         assert actual_first_cols == expected_first_cols

@@ -8,20 +8,13 @@ This module tests the core data processing functions to ensure that:
 - One-hot encoding produces expected shapes and values
 """
 
-import tempfile
-from pathlib import Path
-
 import numpy as np
-import pandas as pd
 import pytest
 import torch
 
 from utils.sequence_utils import (
-    SequenceModificationMethod,
     flatten_one_hot_sequences,
     flatten_one_hot_sequences_with_pca,
-    load_log_likelihood_data,
-    load_sequence_data,
     one_hot_encode_sequences,
     one_hot_encode_single_sequence,
 )
@@ -85,10 +78,7 @@ class TestOneHotEncoding:
     def test_multiple_sequences_same_length(self):
         """Test encoding multiple sequences of the same length."""
         sequences = ["ATCG", "GCTA"]
-        results = one_hot_encode_sequences(
-            sequences,
-            seq_mod_method=SequenceModificationMethod.EMBEDDING,
-        )
+        results = one_hot_encode_sequences(sequences)
 
         assert len(results) == 2
         assert all(seq.shape == (4, 4) for seq in results)
@@ -107,91 +97,11 @@ class TestOneHotEncoding:
     def test_multiple_sequences_different_lengths(self):
         """Test encoding sequences of different lengths."""
         sequences = ["AT", "GCTA"]
-        results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
-        )
+        results = one_hot_encode_sequences(sequences)
 
         assert len(results) == 2
         assert results[0].shape == (2, 4)
         assert results[1].shape == (4, 4)
-
-
-class TestSequenceModification:
-    """Deprecated trimming/padding functions are removed; no tests here."""
-
-    pass
-
-
-class TestDataLoading:
-    """Test data loading functions for various file formats."""
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - data_format parameter not supported"
-    )
-    def test_load_sequence_data_expression_format(self):
-        """Test loading sequence data in expression format."""
-        # Create temporary CSV file
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            f.write("sequence,expression\n")
-            f.write("ATCG,1.5\n")
-            f.write("GCTA,2.3\n")
-
-            temp_path = f.name
-
-        try:
-            data = load_sequence_data(temp_path, data_format="expression")
-
-            assert len(data) == 2
-            assert data[0] == ("ATCG", 1.5)
-            assert data[1] == ("GCTA", 2.3)
-        finally:
-            Path(temp_path).unlink()
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - data_format parameter not supported"
-    )
-    def test_load_sequence_data_missing_file(self):
-        """Test loading from non-existent file."""
-        with pytest.raises(FileNotFoundError):
-            load_sequence_data("non_existent_file.csv", data_format="expression")
-
-    @pytest.mark.skipif(
-        True, reason="Function signature mismatch - data_format parameter not supported"
-    )
-    def test_load_sequence_data_malformed_csv(self):
-        """Test loading malformed CSV data."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            f.write("sequence,expression\n")
-            f.write("ATCG,invalid_number\n")  # Invalid number
-
-            temp_path = f.name
-
-        try:
-            with pytest.raises((ValueError, pd.errors.ParserError)):
-                load_sequence_data(temp_path, data_format="expression")
-        finally:
-            Path(temp_path).unlink()
-
-    @pytest.mark.skipif(
-        True, reason="Column header mismatch - expects 'seqs' and 'scores'"
-    )
-    def test_load_log_likelihood_data_basic(self):
-        """Test loading log likelihood data."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".tsv", delete=False) as f:
-            f.write("sequence\tlog_likelihood\n")
-            f.write("ATCG\t-1.5\n")
-            f.write("GCTA\t-2.3\n")
-
-            temp_path = f.name
-
-        try:
-            data = load_log_likelihood_data(temp_path)
-
-            assert len(data) == 2
-            assert data[0] == ("ATCG", -1.5)
-            assert data[1] == ("GCTA", -2.3)
-        finally:
-            Path(temp_path).unlink()
 
 
 class TestSequenceUtilities:
@@ -200,8 +110,8 @@ class TestSequenceUtilities:
     def test_flatten_one_hot_sequences_basic(self):
         """Test flattening one-hot encoded sequences."""
         # Create sample one-hot sequences
-        seq1 = torch.tensor([[1, 0, 0, 0], [0, 1, 0, 0]], dtype=torch.float32)
-        seq2 = torch.tensor([[0, 0, 1, 0], [0, 0, 0, 1]], dtype=torch.float32)
+        seq1 = np.array([[1, 0, 0, 0], [0, 1, 0, 0]], dtype=np.float32)
+        seq2 = np.array([[0, 0, 1, 0], [0, 0, 0, 1]], dtype=np.float32)
         sequences = [seq1, seq2]
 
         flattened = flatten_one_hot_sequences(sequences)
@@ -268,9 +178,7 @@ class TestSequenceValidation:
         sequences = ["ATCG", "AAAA", "CCGG"]
 
         # Test that all sequences are processed
-        results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
-        )
+        results = one_hot_encode_sequences(sequences)
         assert len(results) == len(sequences)
 
         # Test that shapes are consistent
@@ -281,9 +189,7 @@ class TestSequenceValidation:
     def test_empty_sequence_handling(self):
         """Test handling of empty sequences in batch processing."""
         sequences = ["ATCG", "", "GCTA"]
-        results = one_hot_encode_sequences(
-            sequences, seq_mod_method=SequenceModificationMethod.EMBEDDING
-        )
+        results = one_hot_encode_sequences(sequences)
 
         assert len(results) == 3
         assert results[1].shape == (0, 4)  # Empty sequence

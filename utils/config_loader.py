@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 from utils.model_loader import RegressionModelType
-from utils.sequence_utils import SequenceModificationMethod
 
 
 class SelectionStrategy(str, Enum):
@@ -94,15 +93,6 @@ def convert_config_to_enums(config: Dict[str, Any]) -> Dict[str, Any]:
         }
         config["strategies"] = [
             strategy_map[strategy] for strategy in config["strategies"]
-        ]
-
-    # Convert sequence modification methods from strings to enums
-    if "seq_mod_methods" in config:
-        seq_mod_map = {
-            "EMBEDDING": SequenceModificationMethod.EMBEDDING,
-        }
-        config["seq_mod_methods"] = [
-            seq_mod_map[method] for method in config["seq_mod_methods"]
         ]
 
     # Convert regression models from strings to enums (with default if missing)
@@ -277,7 +267,6 @@ def create_custom_config(
     name: str,
     data_path: str,
     strategies: List[str],
-    seq_mod_methods: List[str],
     output_dir: str,
     seeds: Optional[List[int]] = None,
     **kwargs,
@@ -289,7 +278,6 @@ def create_custom_config(
         name: Name for the experiment
         data_path: Path to the data file
         strategies: List of strategy names
-        seq_mod_methods: List of sequence modification method names
         output_dir: Output directory for results
         seeds: List of random seeds
         **kwargs: Additional configuration parameters
@@ -303,7 +291,6 @@ def create_custom_config(
     config = {
         "data_path": data_path,
         "strategies": strategies,
-        "seq_mod_methods": seq_mod_methods,
         "output_dir": output_dir,
         "seeds": seeds,
         "initial_sample_size": kwargs.get("initial_sample_size", 8),

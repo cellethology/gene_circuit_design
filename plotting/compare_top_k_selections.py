@@ -315,7 +315,7 @@ def plot_embedding_comparison_by_regressor(
 
     plt.tight_layout()
     plt.suptitle(
-        f'Embedding Method Comparison by Regressor: {metric_col.replace("_", " ").title()}',
+        f"Embedding Method Comparison by Regressor: {metric_col.replace('_', ' ').title()}",
         fontsize=14,
         fontweight="bold",
         y=0.98,
