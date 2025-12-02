@@ -64,12 +64,9 @@ class Random(QueryStrategyBase):
         self.seed = seed
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
-        batch_size = min(
-            experiment.batch_size, len(experiment.data_split.unlabeled_indices)
-        )
-        selected_indices = random.Random(self.seed).sample(
-            experiment.data_split.unlabeled_indices, batch_size
-        )
+        unlabeled_pool = experiment.unlabeled_indices
+        batch_size = min(experiment.batch_size, len(unlabeled_pool))
+        selected_indices = random.Random(self.seed).sample(unlabeled_pool, batch_size)
         self._log_round(round_idx, selected_indices)
         return selected_indices
 
@@ -81,11 +78,13 @@ class TopPredictions(QueryStrategyBase):
         super().__init__("TOP_K_PRED")
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
-        unlabeled = experiment.data_split.unlabeled_indices
+        unlabeled = experiment.unlabeled_indices
         if len(unlabeled) < experiment.batch_size:
             return unlabeled
 
-        preds = experiment.predictor.predict(experiment._encode_sequences(unlabeled))
+        preds = experiment.predictor.predict(
+            experiment.dataset.embeddings[unlabeled, :]
+        )
         k = experiment.batch_size
 
         # get indices of top k predictions (descending)
@@ -99,25 +98,24 @@ class TopPredictions(QueryStrategyBase):
 
 
 class TopLogLikelihood(QueryStrategyBase):
-    """Selects sequences with highest zero-shot log likelihood values."""
+    """Selects samples with highest zero-shot log likelihood values."""
 
     def __init__(self) -> None:
         super().__init__("TOP_LOG_LIKELIHOOD")
 
     def select(self, experiment: Any, round_idx: int) -> List[int]:
-        if np.all(np.isnan(experiment.dataset.log_likelihoods)):
+        log_likelihoods = experiment.all_log_likelihoods
+        if log_likelihoods is None or np.all(np.isnan(log_likelihoods)):
             logger.warning("No log likelihood data available.")
             return []
         # Get log likelihood values for unlabeled sequences
-        unlabeled_log_likelihoods = experiment.dataset.log_likelihoods[
-            experiment.data_split.unlabeled_indices
-        ]
+        unlabeled_log_likelihoods = log_likelihoods[experiment.unlabeled_indices]
 
         # Filter out NaN values
         valid_mask = ~np.isnan(unlabeled_log_likelihoods)
         valid_unlabeled_indices = [
-            experiment.data_split.unlabeled_indices[i]
-            for i in range(len(experiment.data_split.unlabeled_indices))
+            experiment.unlabeled_indices[i]
+            for i in range(len(experiment.unlabeled_indices))
             if valid_mask[i]
         ]
         valid_log_likelihoods = unlabeled_log_likelihoods[valid_mask]
@@ -132,11 +130,11 @@ class TopLogLikelihood(QueryStrategyBase):
         selected_local_indices = sorted_indices[:batch_size]
 
         selected_indices = [
-            experiment.data_split.unlabeled_indices[i] for i in selected_local_indices
+            experiment.unlabeled_indices[i] for i in selected_local_indices
         ]
 
         selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
-        selected_values = experiment.dataset.sequence_labels[selected_indices]
+        selected_values = experiment.dataset.labels[selected_indices]
         extra_info = (
             f"Log likelihoods: "
             f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "

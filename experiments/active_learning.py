@@ -47,37 +47,21 @@ def run_single_experiment(
     predictor = instantiate(cfg.predictor)
     query_strategy = instantiate(cfg.query_strategy)
     initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
-    al_settings = cfg.al_settings
+    seed = cfg.seed
 
     predictor_name = predictor.__class__.__name__
 
-    embeddings_path = getattr(cfg, "embedding_path", cfg.data_paths)
-    metadata_path = getattr(
-        cfg,
-        "metadata_path",
-        getattr(cfg, "prediction_path", None),
-    )
-    if metadata_path is None:
-        raise ValueError(
-            "metadata_path or prediction_path must be provided in the config."
-        )
+    embeddings_path = cfg.embedding_path
+    metadata_path = cfg.metadata_path
 
-    seed = al_settings["seed"]
-    initial_sample_size = al_settings["initial_sample_size"]
-    batch_size = al_settings["batch_size"]
-    max_rounds = al_settings["max_rounds"]
-    normalize_features = al_settings.get("normalize_features")
-    normalize_targets = al_settings.get("normalize_targets")
-    if normalize_features is None or normalize_targets is None:
-        legacy_norm = al_settings.get("normalize_input_output", False)
-        normalize_features = (
-            legacy_norm if normalize_features is None else normalize_features
-        )
-        normalize_targets = (
-            legacy_norm if normalize_targets is None else normalize_targets
-        )
-    output_dir = al_settings["output_dir"]
-    target_val_key = al_settings["target_val_key"]
+    al_settings = cfg.al_settings
+    initial_sample_size = al_settings.get("initial_sample_size", None)
+    batch_size = al_settings.get("batch_size", 8)
+    max_rounds = al_settings.get("max_rounds", 20)
+    normalize_features = al_settings.get("normalize_features", True)
+    normalize_labels = al_settings.get("normalize_labels", True)
+    output_dir = al_settings.get("output_dir", None)
+    label_key = al_settings.get("label_key", None)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
@@ -89,8 +73,8 @@ def run_single_experiment(
         batch_size=batch_size,
         random_seed=seed,
         normalize_features=normalize_features,
-        normalize_targets=normalize_targets,
-        target_val_key=target_val_key,
+        normalize_labels=normalize_labels,
+        label_key=label_key,
         initial_selection_strategy=initial_selection_strategy,
     )
 
@@ -113,13 +97,7 @@ def run_single_experiment(
             custom_metrics.append(metrics_with_metadata)
 
     # Save individual results
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    seed_output_path = (
-        output_path / f"{query_strategy.name}_{predictor_name}_seed_{seed}_results.csv"
-    )
-    experiment.save_results(str(seed_output_path))
+    experiment.save_results(output_path=Path(output_dir))
 
     # Log final performance
     final_performance = experiment.get_final_performance()

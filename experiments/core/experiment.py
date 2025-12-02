@@ -7,20 +7,21 @@ by breaking down responsibilities into separate components.
 
 import logging
 import random
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from sklearn.base import RegressorMixin
 
-from experiments.core.data_loader import DataLoader, Dataset, DataSplit
+from experiments.core.data_loader import DataLoader, Dataset
+from experiments.core.initial_selection_strategies import (
+    InitialSelectionStrategy,
+)
 from experiments.core.metrics_calculator import MetricsCalculator
 from experiments.core.predictor_trainer import PredictorTrainer
+from experiments.core.query_strategies import QueryStrategyBase
 from experiments.core.result_manager import ResultManager
 from experiments.core.variant_tracker import VariantTracker
-from experiments.util import encode_sequences as util_encode_sequences
-from utils.sequence_utils import (
-    SequenceModificationMethod,
-    ensure_sequence_modification_method,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -35,52 +36,50 @@ class ActiveLearningExperiment:
 
     def __init__(
         self,
-        data_path: str,
-        query_strategy: Any,
-        predictor: Any,
-        initial_sample_size: int = 8,
+        embeddings_path: str,
+        metadata_path: str,
+        initial_selection_strategy: InitialSelectionStrategy,
+        query_strategy: QueryStrategyBase,
+        predictor: RegressorMixin,
         batch_size: int = 8,
-        test_size: int = 50,
         random_seed: int = 42,
-        seq_mod_method: SequenceModificationMethod = SequenceModificationMethod.EMBEDDING,
-        no_test: bool = True,
-        normalize_input_output: bool = True,
-        use_pca: bool = False,
-        pca_components: int = 4096,
-        target_val_key: str = None,
+        normalize_features: bool = True,
+        normalize_labels: bool = True,
+        initial_sample_size: Optional[int] = None,
+        label_key: Optional[str] = None,
     ) -> None:
         """
         Initialize the active learning experiment.
 
         Args:
-            data_path: Path to CSV or safetensors file with sequence and expression data
-            query_strategy: Strategy for selecting next sequences
-            regression_model: Type of regression model to use
-            initial_sample_size: Number of sequences to start with
-            batch_size: Number of sequences to select in each round
-            test_size: Number of sequences reserved for testing
+            embeddings_path: Path to NPZ file containing embeddings (and optional IDs)
+            metadata_csv_path: CSV file with labels aligned to embeddings
+            query_strategy: Strategy for selecting next samples
+            predictor: Regression model to fit during the loop
+            batch_size: Number of samples to select in each round\
             random_seed: Random seed for reproducibility
-            seq_mod_method: Sequence modification method for encoding
-            no_test: Whether to use the test set
-            normalize_input_output: Whether to normalize expressions and embeddings
-            use_pca: Whether to use PCA for dimensionality reduction
-            pca_components: Number of PCA components if use_pca=True
-            target_val_key: Optional key for target values in safetensors files
+            normalize_features: Whether to re-normalize features each round
+            normalize_labels: Whether to re-normalize labels each round
+            label_key: Column name in the metadata CSV containing target values
+            initial_sample_size: Number of samples to sample initially. If None, will be set to batch_size.
         """
         # Store configuration
-        self.data_path = data_path
+        if label_key is None:
+            raise ValueError("label_key must be provided for metadata loading.")
+
+        self.embeddings_path = embeddings_path
+        self.metadata_path = metadata_path
         self.query_strategy = query_strategy
-        self.initial_sample_size = initial_sample_size
         self.batch_size = batch_size
-        self.test_size = test_size
         self.random_seed = random_seed
-        self.seq_mod_method = ensure_sequence_modification_method(seq_mod_method)
-        self.no_test = no_test
-        self.normalize_input_output = normalize_input_output
-        self.use_pca = use_pca
-        self.pca_components = pca_components
-        self.target_val_key = target_val_key
-        self.predictor_name = predictor.__class__.__name__
+        self.label_key = label_key
+        self.initial_selection_strategy = initial_selection_strategy
+        self.normalize_features = normalize_features
+        self.normalize_labels = normalize_labels
+        if initial_sample_size is None:
+            self.initial_sample_size = self.batch_size
+        else:
+            self.initial_sample_size = initial_sample_size
 
         # Set random seeds for reproducibility
         random.seed(random_seed)
@@ -88,86 +87,59 @@ class ActiveLearningExperiment:
 
         # Initialize components
         self.data_loader = DataLoader(
-            data_path=data_path,
-            seq_mod_method=self.seq_mod_method,
-            normalize_input_output=normalize_input_output,
-            target_val_key=target_val_key,
+            embeddings_path=embeddings_path,
+            metadata_path=metadata_path,
+            label_key=label_key,
         )
 
         # Load data
         self.dataset: Dataset = self.data_loader.load()
 
-        # Create data splits
-        self.data_split: DataSplit = self.data_loader.create_data_split(
-            dataset=self.dataset,
-            initial_sample_size=initial_sample_size,
-            test_size=test_size,
-            no_test=no_test,
-            query_strategy=self.query_strategy,
-            random_seed=random_seed,
-            encode_sequences_fn=self._encode_sequences,
-        )
+        # Initialize training/unlabeled pools
+        (
+            self._train_indices,
+            self._unlabeled_indices,
+        ) = self._initialize_training_set()
 
         # Initialize model and trainer
         self.predictor = predictor
-        self.predictor_trainer = PredictorTrainer(self.predictor)
+        self.predictor_trainer = PredictorTrainer(
+            self.predictor,
+            normalize_features=self.normalize_features,
+            normalize_labels=self.normalize_labels,
+        )
 
         # Initialize metrics calculator
-        self.metrics_calculator = MetricsCalculator(self.dataset.sequence_labels)
+        self.metrics_calculator = MetricsCalculator(self.dataset.labels)
 
         # Initialize variant tracker
         self.variant_tracker = VariantTracker(
-            all_expressions=self.dataset.sequence_labels,
-            all_log_likelihoods=self.dataset.log_likelihoods,
-            all_sequences=self.dataset.sequences,
-            variant_ids=self.dataset.variant_ids,
+            sample_ids=self.dataset.sample_ids,
+            all_labels=self.dataset.labels,
         )
 
         # Initialize result manager
         self.result_manager = ResultManager(
-            strategy=self.query_strategy.name,
-            seq_mod_method=self.seq_mod_method.value,
-            predictor_name=self.predictor_name,
-            seed=random_seed,
-            initial_sample_size=initial_sample_size,
-            batch_size=batch_size,
+            initial_sample_size=self.initial_sample_size,
+            batch_size=self.batch_size,
         )
 
         # Results storage
         self.results: List[Dict[str, Any]] = []
 
         logger.info(
-            f"Start experiment with {self.query_strategy.name}, {self.predictor_name}, seed={random_seed}"
+            f"Start experiment with {self.query_strategy.name}, seed={self.random_seed}"
         )
         logger.info(
             f"Query strategy random state={getattr(self.query_strategy, 'random_state', None)}, Predictor random state={getattr(self.predictor, 'random_state', None)}"
         )
 
-    def _encode_sequences(self, indices: List[int]) -> np.ndarray:
-        """
-        Encode sequences at given indices.
-
-        Args:
-            indices: List of sequence indices to encode
-
-        Returns:
-            Encoded sequences as numpy array
-        """
-        return util_encode_sequences(
-            indices=indices,
-            all_sequences=self.dataset.sequences,
-            embeddings=self.dataset.embeddings,
-            seq_mod_method=self.seq_mod_method,
-            use_pca=self.use_pca,
-            pca_components=self.pca_components,
-        )
-
     def _select_next_batch(self, round_idx: int) -> List[int]:
         """
-        Select next batch of sequences based on the configured strategy.
+        Select next batch of samples based on the configured strategy.
 
         Returns:
-            List of indices for next batch
+            List of indices for next batch of samples
         """
         return self.query_strategy.select(self, round_idx)
 
@@ -181,109 +153,110 @@ class ActiveLearningExperiment:
         Returns:
             List of results for each round
         """
-        logger.info(
-            f"Starting {self.query_strategy.name} learning experiment with {max_rounds} max rounds"
-        )
+        logger.info(f"Starting active learning run with {max_rounds} max rounds")
 
         for round_num in range(max_rounds):
-            logger.info(f"\n--- Round {round_num + 1} ({self.query_strategy.name}) ---")
+            logger.info(f"\n--- Round {round_num} ---")
 
             # Train model
-            X_train = self._encode_sequences(self.data_split.train_indices)
-            y_train = self.dataset.sequence_labels[self.data_split.train_indices]
+            X_train = self.dataset.embeddings[self._train_indices, :]
+            y_train = self.dataset.labels[self._train_indices]
             self.predictor_trainer.train(
                 X_train=X_train,
                 y_train=y_train,
-                train_indices=self.data_split.train_indices,
+                train_indices=self._train_indices,
             )
+            trained_model = self.predictor_trainer.get_model()
+            if trained_model is not None:
+                self.predictor = trained_model
 
-            # Evaluate on test set
-            if not self.no_test and len(self.data_split.test_indices) > 0:
-                X_test = self._encode_sequences(self.data_split.test_indices)
-                y_test = self.dataset.sequence_labels[self.data_split.test_indices]
-                metrics = self.predictor_trainer.evaluate(
-                    X_test=X_test, y_test=y_test, no_test=self.no_test
-                )
-            else:
-                metrics = {}
-
-            # Store results
-            round_results = {
-                "round": round_num + 1,
-                "strategy": self.query_strategy.name,
-                "seq_mod_method": self.seq_mod_method.value,
-                "seed": self.random_seed,
-                "train_size": len(self.data_split.train_indices),
-                "unlabeled_size": len(self.data_split.unlabeled_indices),
-                **metrics,
-            }
-            self.results.append(round_results)
+            metrics: Dict[str, Any] = {}
 
             # First round: evaluate custom metrics on initial training set
             if round_num == 0:
-                X_train_encoded = self._encode_sequences(self.data_split.train_indices)
+                X_train_encoded = self.dataset.embeddings[self._train_indices, :]
                 predictions = self.predictor_trainer.predict(X_train_encoded)
                 round_metrics = self.metrics_calculator.calculate_round_metrics(
-                    selected_indices=self.data_split.train_indices,
-                    query_strategy=self.query_strategy,
+                    selected_indices=self._train_indices,
                     predictions=predictions,
+                    top_percentage=0.1,
                 )
                 self.metrics_calculator.update_cumulative(round_metrics)
 
                 # Track initial training set
                 self.variant_tracker.track_round(
                     round_num=0,
-                    selected_indices=self.data_split.train_indices,
-                    strategy=self.query_strategy.name,
-                    seed=self.random_seed,
+                    selected_indices=self._train_indices,
                 )
 
             # Check stopping criteria
-            if len(self.data_split.unlabeled_indices) == 0:
+            if len(self._unlabeled_indices) == 0:
+                self.results.append(
+                    {
+                        "round": round_num,
+                        "train_size": len(self._train_indices),
+                        "unlabeled_size": len(self._unlabeled_indices),
+                        **metrics,
+                    }
+                )
                 logger.info("No more unlabeled data available. Stopping.")
                 break
 
             # Select next batch
             next_batch = self._select_next_batch(round_idx=round_num)
             if not next_batch:
-                logger.info("No more sequences to select. Stopping.")
+                self.results.append(
+                    {
+                        "round": round_num,
+                        "train_size": len(self._train_indices),
+                        "unlabeled_size": len(self._unlabeled_indices),
+                        **metrics,
+                    }
+                )
+                logger.info("No more samples to select. Stopping.")
                 break
 
             # Track selected variants
             self.variant_tracker.track_round(
-                round_num=round_num + 1,
+                round_num=round_num,
                 selected_indices=next_batch,
-                strategy=self.query_strategy.name,
-                seed=self.random_seed,
             )
 
             # Evaluate custom metrics
-            X_next_batch = self._encode_sequences(next_batch)
-            predictions = self.predictor_trainer.predict(X_next_batch)
+            X_next_batch = self.dataset.embeddings[next_batch, :]
+            predictions = self.predictor_trainer.predict(
+                X_next_batch
+            )  # TODO: unnecessary prediction, should already be available from selection step
             round_metrics = self.metrics_calculator.calculate_round_metrics(
                 selected_indices=next_batch,
-                query_strategy=self.query_strategy,
                 predictions=predictions,
+                top_percentage=0.1,
             )
             self.metrics_calculator.update_cumulative(round_metrics)
 
             # Update training set
-            self.data_split.train_indices.extend(next_batch)
-            self.data_split.unlabeled_indices = [
-                idx
-                for idx in self.data_split.unlabeled_indices
-                if idx not in next_batch
+            self._train_indices.extend(next_batch)
+            self._unlabeled_indices = [
+                idx for idx in self._unlabeled_indices if idx not in next_batch
             ]
 
-        logger.info("Experiment completed!")
+            self.results.append(
+                {
+                    "round": round_num,
+                    "train_size": len(self._train_indices),
+                    "unlabeled_size": len(self._unlabeled_indices),
+                    **metrics,
+                }
+            )
+
         return self.results
 
-    def save_results(self, output_path: str) -> None:
+    def save_results(self, output_path: Path) -> None:
         """
         Save experiment results to CSV files.
 
         Args:
-            output_path: Path to save results CSV
+            output_path: Path to save results
         """
         self.result_manager.save_results(
             output_path=output_path,
@@ -294,55 +267,45 @@ class ActiveLearningExperiment:
 
     def get_final_performance(self) -> Dict[str, float]:
         """
-        Get final performance metrics.
+        Get the final round's custom metrics.
 
         Returns:
-            Dictionary with final performance metrics
+            Dictionary with the last custom metric snapshot, or empty dict if unavailable.
         """
         if not self.results:
             return {}
 
-        return {
-            k: v
-            for k, v in self.results[-1].items()
-            if k not in ["round", "strategy", "seed", "train_size", "unlabeled_size"]
-        }
+        custom_metrics = self.metrics_calculator.get_all_metrics()
+        if custom_metrics:
+            return custom_metrics[-1]
+
+        return {}
 
     # Expose properties for backward compatibility
     @property
-    def all_sequences(self) -> List[str]:
-        """Get all sequences (for backward compatibility)."""
-        return self.dataset.sequences
+    def all_samples(self) -> List[str]:
+        """Get all samples (for backward compatibility)."""
+        return self.dataset.sample_ids
 
     @property
     def all_expressions(self) -> np.ndarray:
         """Get all expressions (for backward compatibility)."""
-        return self.dataset.sequence_labels
+        return self.dataset.labels
 
     @property
-    def all_log_likelihoods(self) -> np.ndarray:
-        """Get all log likelihoods (for backward compatibility)."""
-        return self.dataset.log_likelihoods
-
-    @property
-    def embeddings(self) -> Optional[np.ndarray]:
+    def embeddings(self) -> np.ndarray:
         """Get embeddings (for backward compatibility)."""
         return self.dataset.embeddings
 
     @property
     def train_indices(self) -> List[int]:
         """Get training indices (for backward compatibility)."""
-        return self.data_split.train_indices
-
-    @property
-    def test_indices(self) -> List[int]:
-        """Get test indices (for backward compatibility)."""
-        return self.data_split.test_indices
+        return self._train_indices
 
     @property
     def unlabeled_indices(self) -> List[int]:
         """Get unlabeled indices (for backward compatibility)."""
-        return self.data_split.unlabeled_indices
+        return self._unlabeled_indices
 
     @property
     def custom_metrics(self) -> List[Dict[str, Any]]:
@@ -357,4 +320,37 @@ class ActiveLearningExperiment:
     @property
     def variant_ids(self) -> Optional[np.ndarray]:
         """Get variant IDs (for backward compatibility)."""
-        return self.dataset.variant_ids
+        return None
+
+    def _initialize_training_set(self) -> Tuple[List[int], List[int]]:
+        """
+        Sample the initial training pool using the configured strategy.
+
+        Returns:
+            Tuple of (train_indices, unlabeled_indices)
+        """
+        total_samples = len(self.dataset.sample_ids)
+        if self.initial_sample_size >= total_samples:
+            logger.warning(
+                "initial_sample_size >= total samples. Using all samples for training."
+            )
+            all_indices = list(range(total_samples))
+            return all_indices, []
+
+        selected_indices = self.initial_selection_strategy.select(
+            dataset=self.dataset,
+            initial_sample_size=self.initial_sample_size,
+        )
+
+        selected_set = set(selected_indices)
+        unlabeled_indices = [
+            idx for idx in range(total_samples) if idx not in selected_set
+        ]
+
+        logger.info(
+            f"Initialized training pool with {len(selected_indices)} samples via "
+            f"{self.initial_selection_strategy.name}, leaving "
+            f"{len(unlabeled_indices)} unlabeled samples."
+        )
+
+        return selected_indices, unlabeled_indices

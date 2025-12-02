@@ -22,7 +22,6 @@ class Config:
 
     output_dir: Path
     strategies: Sequence[str]
-    seq_mod_methods: Sequence[str]
     regression_models: Sequence[str]
     seeds: Sequence[int]
     model_aliases: dict[str, Sequence[str]]
@@ -80,7 +79,7 @@ def expected_items(
 ) -> Iterable[tuple[tuple[str, str, str, int], Sequence[str]]]:
     """Yield ((strategy, method, model, seed), stems_for_aliases)."""
     for strategy, method, model, seed in product(
-        cfg.strategies, cfg.seq_mod_methods, cfg.regression_models, cfg.seeds
+        cfg.strategies, cfg.regression_models, cfg.seeds
     ):
         aliases = cfg.model_aliases.get(model, (model.lower(),))
         stems = build_stems_for_model(strategy, method, model, seed, aliases)
@@ -111,7 +110,7 @@ def write_missing_csv(
 ) -> Path:
     """Write a CSV with missing entries; returns the CSV path."""
     csv_path = output_dir / "_missing_results.csv"
-    lines = ["name,strategy,seq_mod_method,regression_model,seed"]
+    lines = ["name,strategy,regression_model,seed"]
     for name, (strategy, method, model, seed) in missing:
         lines.append(f"{name},{strategy},{method},{model},{seed}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -135,12 +134,6 @@ def parse_args() -> argparse.Namespace:
         nargs="+",
         default=["HIGH_EXPRESSION", "RANDOM"],
         help="Strategies, e.g., HIGH_EXPRESSION RANDOM.",
-    )
-    parser.add_argument(
-        "--seq_mod_methods",
-        nargs="+",
-        default=["EMBEDDING"],
-        help="Sequence modification methods, e.g., EMBEDDING.",
     )
     parser.add_argument(
         "--regression_models",
@@ -194,18 +187,12 @@ def main() -> None:
     cfg = Config(
         output_dir=args.output_dir,
         strategies=args.strategies,
-        seq_mod_methods=args.seq_mod_methods,
         regression_models=args.regression_models,
         seeds=args.seeds,
         model_aliases=aliases,
     )
 
-    total = (
-        len(cfg.strategies)
-        * len(cfg.seq_mod_methods)
-        * len(cfg.regression_models)
-        * len(cfg.seeds)
-    )
+    total = len(cfg.strategies) * len(cfg.regression_models) * len(cfg.seeds)
     missing = find_missing(cfg)
 
     print(f"Output directory: {cfg.output_dir}")

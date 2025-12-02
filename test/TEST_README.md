@@ -7,32 +7,28 @@ This directory contains comprehensive unit tests for the refactored active learn
 ### `test_data_loader.py`
 Tests for `DataLoader` and `Dataset` classes:
 - Dataset creation and validation
-- Loading from CSV files (with and without log likelihood)
-- Loading from safetensors files (embeddings and PCA formats)
-- Data normalization
-- Creating train/test/unlabeled splits (random and K-means)
-- Error handling for missing data
+- Loading paired embeddings (safetensors) and metadata (CSV)
+- Generating placeholder sample IDs when sequences are absent
+- Error handling for missing columns or mismatched lengths
 
 **Key Test Cases:**
-- `test_load_csv_basic` - Basic CSV loading
-- `test_load_safetensors_embeddings_format` - Safetensors with embeddings
-- `test_load_safetensors_pca_format` - Safetensors with PCA components
-- `test_normalize_data` - Data normalization
-- `test_create_data_split_random` - Random data splitting
-- `test_create_data_split_kmeans` - K-means data splitting
+- `test_load_paired_files` - Happy path for embeddings + CSV
+- `test_missing_sequence_column_generates_ids` - Fallback sample identifiers
+- `test_mismatched_lengths` - Embeddings/CSV alignment validation
+- `test_missing_target_column` - Required label column validation
 
-### `test_model_trainer.py`
-Tests for `ModelTrainer` class:
+### `test_predictor_trainer.py`
+Tests for `PredictorTrainer` class:
 - Model training with different model types
 - Model evaluation on test sets
 - Prediction functionality
-- Complete train-evaluate workflows
+- Feature/target normalization
 
 **Key Test Cases:**
 - `test_train_basic` - Basic training
 - `test_evaluate_with_test_set` - Evaluation with metrics
-- `test_evaluate_perfect_predictions` - Perfect prediction scenario
-- `test_train_evaluate_workflow` - Complete workflow
+- `test_train_with_normalization` - Ensures per-round scaling works
+- `test_evaluate_with_normalization` - Evaluation after normalization
 
 ### `test_metrics_calculator.py`
 Tests for `MetricsCalculator` class:
@@ -49,16 +45,14 @@ Tests for `MetricsCalculator` class:
 
 ### `test_variant_tracker.py`
 Tests for `VariantTracker` class:
-- Tracking variants across rounds
-- Handling variant IDs
-- Sequence truncation
-- NaN log likelihood handling
+- Tracking sample IDs and expressions across rounds
+- Handling missing identifiers gracefully
 
 **Key Test Cases:**
 - `test_track_round_basic` - Basic variant tracking
-- `test_track_round_with_variant_ids` - With variant IDs
+- `test_track_round_missing_ids` - Fallback sample IDs
 - `test_track_multiple_rounds` - Multi-round tracking
-- `test_track_round_long_sequence_truncation` - Sequence truncation
+- `test_get_all_variants_returns_copy` - Defensive copying
 
 ### `test_result_manager.py`
 Tests for `ResultManager` class:
@@ -77,16 +71,15 @@ Tests for `ResultManager` class:
 Integration tests for `ActiveLearningExperiment`:
 - Complete experiment workflows
 - Different data formats
-- Different selection strategies
-- Different regression models
-- Backward compatibility
+- Different query strategies and predictors
+- Backward compatibility in a no-test-split pipeline
 
 **Key Test Cases:**
 - `test_experiment_initialization_safetensors` - Safetensors initialization
+- `test_experiment_initialization_csv` - CSV initialization
 - `test_run_experiment_multiple_rounds` - Multi-round experiments
 - `test_backward_compatibility_properties` - Backward compatibility
-- `test_different_selection_strategies` - Different strategies
-- `test_different_regression_models` - Different models
+- `test_save_results` - Saving round information
 
 ## Running Tests
 
