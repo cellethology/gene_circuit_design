@@ -7,6 +7,7 @@ by breaking down responsibilities into separate components.
 
 import logging
 import random
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -40,12 +41,12 @@ class ActiveLearningExperiment:
         initial_selection_strategy: InitialSelectionStrategy,
         query_strategy: QueryStrategyBase,
         predictor: RegressorMixin,
-        initial_sample_size: int = 8,
         batch_size: int = 8,
         random_seed: int = 42,
         normalize_features: bool = True,
-        normalize_targets: bool = True,
-        target_val_key: Optional[str] = None,
+        normalize_labels: bool = True,
+        initial_sample_size: Optional[int] = None,
+        label_key: Optional[str] = None,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -55,28 +56,30 @@ class ActiveLearningExperiment:
             metadata_csv_path: CSV file with labels aligned to embeddings
             query_strategy: Strategy for selecting next samples
             predictor: Regression model to fit during the loop
-            initial_sample_size: Number of samples to start with
             batch_size: Number of samples to select in each round\
             random_seed: Random seed for reproducibility
             normalize_features: Whether to re-normalize features each round
-            normalize_targets: Whether to re-normalize targets each round
-            target_val_key: Column name in the metadata CSV containing target values
+            normalize_labels: Whether to re-normalize labels each round
+            label_key: Column name in the metadata CSV containing target values
+            initial_sample_size: Number of samples to sample initially. If None, will be set to batch_size.
         """
         # Store configuration
-        if target_val_key is None:
-            raise ValueError("target_val_key must be provided for metadata loading.")
+        if label_key is None:
+            raise ValueError("label_key must be provided for metadata loading.")
 
         self.embeddings_path = embeddings_path
         self.metadata_path = metadata_path
         self.query_strategy = query_strategy
-        self.initial_sample_size = initial_sample_size
         self.batch_size = batch_size
         self.random_seed = random_seed
-        self.target_val_key = target_val_key
-        self.predictor_name = predictor.__class__.__name__
+        self.label_key = label_key
         self.initial_selection_strategy = initial_selection_strategy
         self.normalize_features = normalize_features
-        self.normalize_targets = normalize_targets
+        self.normalize_labels = normalize_labels
+        if initial_sample_size is None:
+            self.initial_sample_size = self.batch_size
+        else:
+            self.initial_sample_size = initial_sample_size
 
         # Set random seeds for reproducibility
         random.seed(random_seed)
@@ -86,7 +89,7 @@ class ActiveLearningExperiment:
         self.data_loader = DataLoader(
             embeddings_path=embeddings_path,
             metadata_path=metadata_path,
-            target_val_key=target_val_key,
+            label_key=label_key,
         )
 
         # Load data
@@ -96,14 +99,14 @@ class ActiveLearningExperiment:
         (
             self._train_indices,
             self._unlabeled_indices,
-        ) = self._initialize_training_set(initial_sample_size)
+        ) = self._initialize_training_set()
 
         # Initialize model and trainer
         self.predictor = predictor
         self.predictor_trainer = PredictorTrainer(
             self.predictor,
             normalize_features=self.normalize_features,
-            normalize_targets=self.normalize_targets,
+            normalize_labels=self.normalize_labels,
         )
 
         # Initialize metrics calculator
@@ -112,23 +115,20 @@ class ActiveLearningExperiment:
         # Initialize variant tracker
         self.variant_tracker = VariantTracker(
             sample_ids=self.dataset.sample_ids,
-            all_expressions=self.dataset.labels,
+            all_labels=self.dataset.labels,
         )
 
         # Initialize result manager
         self.result_manager = ResultManager(
-            strategy=self.query_strategy.name,
-            predictor_name=self.predictor_name,
-            seed=self.random_seed,
-            initial_sample_size=initial_sample_size,
-            batch_size=batch_size,
+            initial_sample_size=self.initial_sample_size,
+            batch_size=self.batch_size,
         )
 
         # Results storage
         self.results: List[Dict[str, Any]] = []
 
         logger.info(
-            f"Start experiment with {self.query_strategy.name}, {self.predictor_name}, seed={self.random_seed}"
+            f"Start experiment with {self.query_strategy.name}, seed={self.random_seed}"
         )
         logger.info(
             f"Query strategy random state={getattr(self.query_strategy, 'random_state', None)}, Predictor random state={getattr(self.predictor, 'random_state', None)}"
@@ -156,7 +156,7 @@ class ActiveLearningExperiment:
         logger.info(f"Starting active learning run with {max_rounds} max rounds")
 
         for round_num in range(max_rounds):
-            logger.info(f"\n--- Round {round_num + 1} ---")
+            logger.info(f"\n--- Round {round_num} ---")
 
             # Train model
             X_train = self.dataset.embeddings[self._train_indices, :]
@@ -178,8 +178,8 @@ class ActiveLearningExperiment:
                 predictions = self.predictor_trainer.predict(X_train_encoded)
                 round_metrics = self.metrics_calculator.calculate_round_metrics(
                     selected_indices=self._train_indices,
-                    query_strategy=self.query_strategy,
                     predictions=predictions,
+                    top_percentage=0.1,
                 )
                 self.metrics_calculator.update_cumulative(round_metrics)
 
@@ -187,17 +187,13 @@ class ActiveLearningExperiment:
                 self.variant_tracker.track_round(
                     round_num=0,
                     selected_indices=self._train_indices,
-                    strategy=self.query_strategy.name,
-                    seed=self.random_seed,
                 )
 
             # Check stopping criteria
             if len(self._unlabeled_indices) == 0:
                 self.results.append(
                     {
-                        "round": round_num + 1,
-                        "strategy": self.query_strategy.name,
-                        "seed": self.random_seed,
+                        "round": round_num,
                         "train_size": len(self._train_indices),
                         "unlabeled_size": len(self._unlabeled_indices),
                         **metrics,
@@ -211,9 +207,7 @@ class ActiveLearningExperiment:
             if not next_batch:
                 self.results.append(
                     {
-                        "round": round_num + 1,
-                        "strategy": self.query_strategy.name,
-                        "seed": self.random_seed,
+                        "round": round_num,
                         "train_size": len(self._train_indices),
                         "unlabeled_size": len(self._unlabeled_indices),
                         **metrics,
@@ -224,19 +218,19 @@ class ActiveLearningExperiment:
 
             # Track selected variants
             self.variant_tracker.track_round(
-                round_num=round_num + 1,
+                round_num=round_num,
                 selected_indices=next_batch,
-                strategy=self.query_strategy.name,
-                seed=self.random_seed,
             )
 
             # Evaluate custom metrics
             X_next_batch = self.dataset.embeddings[next_batch, :]
-            predictions = self.predictor_trainer.predict(X_next_batch)
+            predictions = self.predictor_trainer.predict(
+                X_next_batch
+            )  # TODO: unnecessary prediction, should already be available from selection step
             round_metrics = self.metrics_calculator.calculate_round_metrics(
                 selected_indices=next_batch,
-                query_strategy=self.query_strategy,
                 predictions=predictions,
+                top_percentage=0.1,
             )
             self.metrics_calculator.update_cumulative(round_metrics)
 
@@ -248,9 +242,7 @@ class ActiveLearningExperiment:
 
             self.results.append(
                 {
-                    "round": round_num + 1,
-                    "strategy": self.query_strategy.name,
-                    "seed": self.random_seed,
+                    "round": round_num,
                     "train_size": len(self._train_indices),
                     "unlabeled_size": len(self._unlabeled_indices),
                     **metrics,
@@ -259,12 +251,12 @@ class ActiveLearningExperiment:
 
         return self.results
 
-    def save_results(self, output_path: str) -> None:
+    def save_results(self, output_path: Path) -> None:
         """
         Save experiment results to CSV files.
 
         Args:
-            output_path: Path to save results CSV
+            output_path: Path to save results
         """
         self.result_manager.save_results(
             output_path=output_path,
@@ -330,9 +322,7 @@ class ActiveLearningExperiment:
         """Get variant IDs (for backward compatibility)."""
         return None
 
-    def _initialize_training_set(
-        self, initial_sample_size: int
-    ) -> Tuple[List[int], List[int]]:
+    def _initialize_training_set(self) -> Tuple[List[int], List[int]]:
         """
         Sample the initial training pool using the configured strategy.
 
@@ -340,7 +330,7 @@ class ActiveLearningExperiment:
             Tuple of (train_indices, unlabeled_indices)
         """
         total_samples = len(self.dataset.sample_ids)
-        if initial_sample_size >= total_samples:
+        if self.initial_sample_size >= total_samples:
             logger.warning(
                 "initial_sample_size >= total samples. Using all samples for training."
             )
@@ -349,7 +339,7 @@ class ActiveLearningExperiment:
 
         selected_indices = self.initial_selection_strategy.select(
             dataset=self.dataset,
-            initial_sample_size=initial_sample_size,
+            initial_sample_size=self.initial_sample_size,
         )
 
         selected_set = set(selected_indices)

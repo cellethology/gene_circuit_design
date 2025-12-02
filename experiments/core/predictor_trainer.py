@@ -24,7 +24,7 @@ class PredictorTrainer:
         self,
         predictor: RegressorMixin,
         normalize_features: bool = False,
-        normalize_targets: bool = False,
+        normalize_labels: bool = False,
     ) -> None:
         """
         Initialize the predictor trainer.
@@ -32,15 +32,15 @@ class PredictorTrainer:
         Args:
             predictor: Scikit-learn compatible regression predictor
             normalize_features: Whether to standardize features each round
-            normalize_targets: Whether to standardize targets each round
+            normalize_labels: Whether to standardize labels each round
         """
         self.base_predictor = predictor
         self.normalize_features = normalize_features
-        self.normalize_targets = normalize_targets
+        self.normalize_labels = normalize_labels
         self.model_: Optional[Any] = None
 
         logger.info(
-            f"PredictorTrainer initialized with normalize_features={normalize_features} and normalize_targets={normalize_targets}"
+            f"PredictorTrainer initialized with normalize_features={normalize_features} and normalize_labels={normalize_labels}"
         )
 
     def _build_estimator(self) -> Any:
@@ -55,7 +55,7 @@ class PredictorTrainer:
         else:
             estimator = Pipeline(steps)
 
-        if self.normalize_targets:
+        if self.normalize_labels:
             estimator = TransformedTargetRegressor(
                 regressor=estimator,
                 transformer=StandardScaler(),
@@ -67,11 +67,11 @@ class PredictorTrainer:
         self, X_train: np.ndarray, y_train: np.ndarray, train_indices: List[int]
     ) -> None:
         """
-        Train a fresh model on training data, re-normalizing features/targets if specified.
+        Train a fresh model on training data, re-normalizing features/labels if specified.
 
         Args:
             X_train: Training features
-            y_train: Training targets
+            y_train: Training labels
             train_indices: Indices of training samples (for logging)
         """
         if len(train_indices) == 0:

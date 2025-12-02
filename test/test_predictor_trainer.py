@@ -65,7 +65,7 @@ class TestPredictorTrainer:
     def test_train_with_normalization(self):
         """Ensure feature/target normalization works per round."""
         trainer = PredictorTrainer(
-            LinearRegression(), normalize_features=True, normalize_targets=True
+            LinearRegression(), normalize_features=True, normalize_labels=True
         )
 
         X_train = np.array([[1.0], [2.0], [3.0], [4.0]])

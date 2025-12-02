@@ -5,45 +5,15 @@ Utility functions for calculating metrics.
 import numpy as np
 
 
-def normalized_to_best_val_metric(y_pred, all_y_true):
-    """
-    Normalize the predicted values to the best possible value in the sequence pool.
-    """
-    # Best in the sequence pool -> this should be a constant value
-    highest_expression_val = np.max(all_y_true)
-    highest_y_pred = np.max(y_pred)
-    return highest_y_pred / highest_expression_val
-
-
-def top_10_ratio_intersected_indices_metric(y_pred_indices, all_y_true):
-    """
-    Calculate the intersection ratio between top 10 predicted and true indices.
-
-    Args:
-        y_pred_indices: Array of predicted values
-        all_y_true: Array of true values
-
-    Returns:
-        float: Ratio of overlapping indices between top 10 predicted and true values
-    """
+def proportion_of_selected_indices_in_top_labels(
+    selected_indices: np.ndarray, labels: np.ndarray, top_percentage: float = 0.1
+) -> float:
     # Get indices of top 10% values
-    num_top_precent = 0.1  # Take top 10% values
-    num_top = int(
-        len(all_y_true) * num_top_precent
-    )  # rounded down to the nearest integer
-    # top_pred_indices = np.argsort(y_pred_indices)[-num_top:]
-    top_true_indices = np.argsort(all_y_true)[-num_top:]
-
-    # Find intersection
-    intersection = np.intersect1d(y_pred_indices, top_true_indices)
+    num_top = int(len(labels) * top_percentage)
+    top_labels = np.argsort(labels)[-num_top:]
 
     # Calculate ratio of intersection size to total size
-    intersection_ratio = len(intersection) / num_top
+    intersection_ratio = len(np.intersect1d(selected_indices, top_labels)) / len(
+        selected_indices
+    )
     return intersection_ratio
-
-
-def get_best_value_metric(y_pred):
-    """
-    Get the best value the model picked.
-    """
-    return np.max(y_pred)

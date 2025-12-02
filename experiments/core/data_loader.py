@@ -53,7 +53,7 @@ class DataLoader:
         self,
         embeddings_path: str,
         metadata_path: str,
-        target_val_key: str,
+        label_key: str,
     ) -> None:
         """
         Initialize the data loader.
@@ -61,11 +61,11 @@ class DataLoader:
         Args:
             embeddings_path: Path to safetensors file containing embeddings.
             metadata_path: CSV with labels aligned to embeddings.
-            target_val_key: Column in the CSV to use as the training target.
+            label_key: Column in the CSV to use as the training label.
         """
         self.embeddings_path = embeddings_path
         self.metadata_path = metadata_path
-        self.target_val_key = target_val_key
+        self.label_key = label_key
         self.dataset: Optional[Dataset] = None
 
     def load(self) -> Dataset:
@@ -109,5 +109,5 @@ class DataLoader:
 
         # IMPORTANT: sample_ids is row index of csv, so we can use it to index the dataframe
         df = df.iloc[sample_ids]
-        labels = df[self.target_val_key].to_numpy()
+        labels = df[self.label_key].to_numpy()
         return labels

@@ -53,8 +53,8 @@ class TestActiveLearningExperiment:
             initial_sample_size=initial_sample_size,
             batch_size=batch_size,
             normalize_features=False,
-            normalize_targets=False,
-            target_val_key="Expression",
+            normalize_labels=False,
+            label_key="Expression",
         )
 
     def test_experiment_initialization(self, tmp_path):
@@ -94,8 +94,8 @@ class TestActiveLearningExperiment:
         assert experiment.custom_metrics
 
         final_metrics = experiment.get_final_performance()
-        assert "top_10_ratio_intersected_indices" in final_metrics
-        assert "best_value_ground_truth_values_cumulative" in final_metrics
+        assert "top_proportion" in final_metrics
+        assert "best_true" in final_metrics
 
     def test_save_results(self, tmp_path):
         """Saving results writes results, custom metrics, and selected variants."""
@@ -112,7 +112,7 @@ class TestActiveLearningExperiment:
         experiment.run_experiment(max_rounds=2)
 
         output_path = Path(tmp_path) / "results.csv"
-        experiment.save_results(str(output_path))
+        experiment.save_results(output_path)
 
         assert output_path.exists()
         assert (tmp_path / "results_custom_metrics.csv").exists()

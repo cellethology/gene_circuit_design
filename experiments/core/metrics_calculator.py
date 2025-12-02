@@ -3,15 +3,12 @@ Custom metrics calculation for active learning experiments.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
-from experiments.core.query_strategies import QueryStrategyBase
 from utils.metrics import (
-    get_best_value_metric,
-    normalized_to_best_val_metric,
-    top_10_ratio_intersected_indices_metric,
+    proportion_of_selected_indices_in_top_labels,
 )
 
 logger = logging.getLogger(__name__)
@@ -22,68 +19,49 @@ class MetricsCalculator:
     Calculates and tracks custom metrics for active learning experiments.
     """
 
-    def __init__(self, all_expressions: np.ndarray) -> None:
+    def __init__(self, labels: np.ndarray) -> None:
         """
         Initialize the metrics calculator.
 
         Args:
-            all_expressions: Array of all expression values in the dataset
+            labels: Array of all target values in the dataset
         """
-        self.all_expressions = all_expressions
+        self.labels = labels
         self.cumulative_metrics: List[Dict[str, float]] = []
 
     def calculate_round_metrics(
         self,
-        selected_indices: List[int],
-        query_strategy: QueryStrategyBase,
-        predictions: Optional[np.ndarray] = None,
+        selected_indices: np.ndarray,
+        predictions: np.ndarray,
+        top_percentage: float = 0.1,
     ) -> Dict[str, float]:
         """
         Calculate metrics for a single round.
 
         Args:
             selected_indices: Indices of selected sequences
-            selection_strategy: Current selection strategy
-            predictions: Model predictions for selected indices (optional)
-
-        Returns:
-            Dictionary with round metrics
+            predictions: Model predictions for selected indices
+            top_percentage: Percentage of top labels to consider
         """
-        # Top 10 ratio intersection
-        top_10_ratio_intersection = top_10_ratio_intersected_indices_metric(
-            selected_indices, self.all_expressions
+        # Proportion of selected indices in top labels
+        top_proportion = proportion_of_selected_indices_in_top_labels(
+            selected_indices, self.labels, top_percentage=top_percentage
         )
 
-        # Get true values
-        y_true = self.all_expressions[selected_indices]
-        best_value_true = get_best_value_metric(y_true)
-        normalized_predictions_true = normalized_to_best_val_metric(
-            y_true, self.all_expressions
-        )
+        # Best value predictions
+        best_value_pred = np.max(predictions)
+        normalized_pred_values = best_value_pred / np.max(self.labels)
 
-        # Get prediction metrics
-        if query_strategy.name == "TopLogLikelihood":
-            # For LOG_LIKELIHOOD, use true values to maintain model independence
-            best_value_pred = best_value_true
-            normalized_predictions_pred = normalized_predictions_true
-        else:
-            # For other strategies, use model predictions if available
-            if predictions is not None:
-                best_value_pred = get_best_value_metric(predictions)
-                normalized_predictions_pred = normalized_to_best_val_metric(
-                    predictions, self.all_expressions
-                )
-            else:
-                # Fallback to true values if predictions not available
-                best_value_pred = best_value_true
-                normalized_predictions_pred = normalized_predictions_true
+        # Best value ground truth
+        best_value_true = np.max(self.labels[selected_indices])
+        normalized_true_values = best_value_true / np.max(self.labels)
 
         return {
-            "top_10_ratio_intersected_indices": top_10_ratio_intersection,
-            "best_value_predictions_values": best_value_pred,
-            "normalized_predictions_predictions_values": normalized_predictions_pred,
-            "best_value_ground_truth_values": best_value_true,
-            "normalized_predictions_ground_truth_values": normalized_predictions_true,
+            "top_proportion": top_proportion,
+            "best_pred": best_value_pred,
+            "normalized_pred": normalized_pred_values,
+            "best_true": best_value_true,
+            "normalized_true": normalized_true_values,
         }
 
     def update_cumulative(self, round_metrics: Dict[str, float]) -> Dict[str, float]:
@@ -101,49 +79,35 @@ class MetricsCalculator:
             prev_metrics = self.cumulative_metrics[-1]
 
             cumulative_metrics = {
-                "top_10_ratio_intersected_indices_cumulative": (
-                    prev_metrics["top_10_ratio_intersected_indices_cumulative"]
-                    + round_metrics["top_10_ratio_intersected_indices"]
+                "top_proportion_cumulative": (
+                    prev_metrics["top_proportion_cumulative"]
+                    + round_metrics["top_proportion"]
                 ),
-                "best_value_predictions_values_cumulative": max(
-                    prev_metrics["best_value_predictions_values_cumulative"],
-                    round_metrics["best_value_predictions_values"],
+                "best_pred_cumulative": max(
+                    prev_metrics["best_pred_cumulative"],
+                    round_metrics["best_pred"],
                 ),
-                "normalized_predictions_predictions_values_cumulative": max(
-                    prev_metrics[
-                        "normalized_predictions_predictions_values_cumulative"
-                    ],
-                    round_metrics["normalized_predictions_predictions_values"],
+                "normalized_pred_cumulative": max(
+                    prev_metrics["normalized_pred_cumulative"],
+                    round_metrics["normalized_pred"],
                 ),
-                "best_value_ground_truth_values_cumulative": max(
-                    prev_metrics["best_value_ground_truth_values_cumulative"],
-                    round_metrics["best_value_ground_truth_values"],
+                "best_true_cumulative": max(
+                    prev_metrics["best_true_cumulative"],
+                    round_metrics["best_true"],
                 ),
-                "normalized_predictions_ground_truth_values_cumulative": max(
-                    prev_metrics[
-                        "normalized_predictions_ground_truth_values_cumulative"
-                    ],
-                    round_metrics["normalized_predictions_ground_truth_values"],
+                "normalized_true_cumulative": max(
+                    prev_metrics["normalized_true_cumulative"],
+                    round_metrics["normalized_true"],
                 ),
             }
         else:
             # First round: cumulative equals current
             cumulative_metrics = {
-                "top_10_ratio_intersected_indices_cumulative": round_metrics[
-                    "top_10_ratio_intersected_indices"
-                ],
-                "best_value_predictions_values_cumulative": round_metrics[
-                    "best_value_predictions_values"
-                ],
-                "normalized_predictions_predictions_values_cumulative": round_metrics[
-                    "normalized_predictions_predictions_values"
-                ],
-                "best_value_ground_truth_values_cumulative": round_metrics[
-                    "best_value_ground_truth_values"
-                ],
-                "normalized_predictions_ground_truth_values_cumulative": round_metrics[
-                    "normalized_predictions_ground_truth_values"
-                ],
+                "top_proportion_cumulative": round_metrics["top_proportion"],
+                "best_pred_cumulative": round_metrics["best_pred"],
+                "normalized_pred_cumulative": round_metrics["normalized_pred"],
+                "best_true_cumulative": round_metrics["best_true"],
+                "normalized_true_cumulative": round_metrics["normalized_true"],
             }
 
         # Combine round and cumulative metrics

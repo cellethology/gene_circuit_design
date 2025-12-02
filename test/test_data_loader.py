@@ -68,7 +68,7 @@ class TestDataLoader:
         loader = DataLoader(
             embeddings_path=emb_path,
             metadata_path=csv_path,
-            target_val_key="Expression",
+            label_key="Expression",
         )
 
         dataset = loader.load()
@@ -86,7 +86,7 @@ class TestDataLoader:
         loader = DataLoader(
             embeddings_path=emb_path,
             metadata_path=str(csv_path),
-            target_val_key="Expression",
+            label_key="Expression",
         )
 
         dataset = loader.load()
@@ -100,7 +100,7 @@ class TestDataLoader:
         loader = DataLoader(
             embeddings_path=emb_path,
             metadata_path=str(csv_path),
-            target_val_key="Expression",
+            label_key="Expression",
         )
 
         with pytest.raises(KeyError, match="Expression"):
@@ -113,7 +113,7 @@ class TestDataLoader:
         loader = DataLoader(
             embeddings_path=emb_path,
             metadata_path=csv_path,
-            target_val_key="Expression",
+            label_key="Expression",
         )
 
         with pytest.raises(IndexError):

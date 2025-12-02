@@ -3,6 +3,7 @@ Result saving utilities for active learning experiments.
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -17,9 +18,6 @@ class ResultManager:
 
     def __init__(
         self,
-        strategy: str,
-        predictor_name: str,
-        seed: int,
         initial_sample_size: int,
         batch_size: int,
     ) -> None:
@@ -33,18 +31,15 @@ class ResultManager:
             initial_sample_size: Initial training set size
             batch_size: Batch size for each round
         """
-        self.strategy = strategy
-        self.predictor_name = predictor_name
-        self.seed = seed
         self.initial_sample_size = initial_sample_size
         self.batch_size = batch_size
 
     def save_results(
         self,
-        output_path: str,
-        results: List[Dict[str, Any]],
-        custom_metrics: List[Dict[str, Any]],
-        selected_variants: List[Dict[str, Any]],
+        output_path: Path,
+        results: List[Dict[str, Any]] = None,
+        custom_metrics: List[Dict[str, Any]] = None,
+        selected_variants: List[Dict[str, Any]] = None,
     ) -> None:
         """
         Save all experiment results to CSV files.
@@ -63,13 +58,12 @@ class ResultManager:
 
         # Save custom metrics
         if custom_metrics:
-            custom_metrics_path = output_path.replace(".csv", "_custom_metrics.csv")
+            custom_metrics_path = output_path.with_name(
+                output_path.stem + "_custom_metrics.csv"
+            )
             custom_metrics_df = pd.DataFrame(custom_metrics)
 
             # Add metadata columns
-            custom_metrics_df["strategy"] = self.strategy
-            custom_metrics_df["predictor"] = self.predictor_name
-            custom_metrics_df["seed"] = self.seed
             custom_metrics_df["round"] = range(1, len(custom_metrics) + 1)
 
             # Calculate train_size for each round
@@ -85,10 +79,7 @@ class ResultManager:
             # Reorder columns
             metadata_cols = [
                 "round",
-                "strategy",
-                "seed",
                 "train_size",
-                "predictor",
             ]
             cols = metadata_cols + [
                 col for col in custom_metrics_df.columns if col not in metadata_cols
@@ -100,20 +91,14 @@ class ResultManager:
 
         # Save selected variants
         if selected_variants:
-            selected_variants_path = output_path.replace(
-                ".csv", "_selected_variants.csv"
+            selected_variants_path = output_path.with_name(
+                output_path.stem + "_selected_variants.csv"
             )
             selected_variants_df = pd.DataFrame(selected_variants)
-
-            # Add metadata
-            selected_variants_df["predictor"] = self.predictor_name
 
             # Reorder columns
             metadata_cols = [
                 "round",
-                "strategy",
-                "seed",
-                "predictor",
                 "variant_index",
                 "sample_id",
                 "expression",

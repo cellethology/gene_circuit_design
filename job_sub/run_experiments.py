@@ -14,10 +14,9 @@ from typing import List
 import hydra
 from omegaconf import OmegaConf
 
-from experiments.run_experiments_parallelization import run_single_experiment
+from experiments.active_learning import run_single_experiment
 
 LIST_OF_EMBEDDING_PATHS: List[str] = [
-    "embeddings.npz",
     "embeddings.npz",
 ]
 

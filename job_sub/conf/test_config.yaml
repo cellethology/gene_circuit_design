@@ -8,27 +8,30 @@ defaults:
 embedding_path: embeddings.npz
 metadata_path: expressions.csv
 
+seed: 42
+
 al_settings:
   # Fixed (non-swept)
-  initial_sample_size: 8
   batch_size: 8
   max_rounds: 2
   normalize_features: true
-  normalize_targets: true
-  output_dir: results/demo_experiment
+  normalize_labels: true
+  output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  target_val_key: expressions
+  label_key: expressions
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
-  seed: 42
+  seed: ${seed}
 
 hydra:
+  sweep:
+    subdir: ${hydra.job.override_dirname}
   sweeper:
     params:
       # query_strategy: topk, random
       # predictor: rf_regressor, mlp_regressor
       # initial_selection_strategy: random, kmeans
-      al_settings.seed: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+      seed: 1, 2
   # launcher:
   #   timeout_min: 240
   #   partition: wzt_20250411,intel-sc3
