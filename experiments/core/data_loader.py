@@ -59,7 +59,7 @@ class DataLoader:
         Initialize the data loader.
 
         Args:
-            embeddings_path: Path to safetensors file containing embeddings.
+            embeddings_path: Path to npz file containing embeddings.
             metadata_path: CSV with labels aligned to embeddings.
             label_key: Column in the CSV to use as the training label.
         """
