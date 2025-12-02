@@ -58,21 +58,23 @@ class RoundTracker:
         )
         self.round_num += 1
 
-    def compute_auc(self, metric_column: str = "normalized_true") -> float:
+    def compute_auc(self, metric_columns: List[str]) -> Dict[str, float]:
         """
         Compute the AUC across all rounds.
         The AUC is computed by summing up the maximum value of the metric column up to that round, divided by the number of selected samples in that round.
         """
-        if metric_column not in self.rounds[0].keys():
-            raise ValueError(f"Metric column {metric_column} not found in rounds")
+        aucs = {}
+        for metric_column in metric_columns:
+            if metric_column not in self.rounds[0].keys():
+                raise ValueError(f"Metric column {metric_column} not found in rounds")
 
-        values = np.array([round[metric_column] for round in self.rounds])
-        cumulative_max_per_round = np.maximum.accumulate(values)
-        auc = np.sum(
-            cumulative_max_per_round
-            / np.array([len(round["selected_sample_ids"]) for round in self.rounds])
-        )
-        return auc
+            values = np.array([round[metric_column] for round in self.rounds])
+            cumulative_max_per_round = np.maximum.accumulate(values)
+            aucs[metric_column] = np.sum(
+                cumulative_max_per_round
+                / np.array([len(round["selected_sample_ids"]) for round in self.rounds])
+            )
+        return aucs
 
     def save_to_csv(self, output_path: Path) -> None:
         """
