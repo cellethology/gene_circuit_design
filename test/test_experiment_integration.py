@@ -69,8 +69,8 @@ class TestActiveLearningExperiment:
             initial_selection_strategy=RandomInitialSelection(seed=42),
         )
 
-        assert len(experiment.all_samples) == 18
-        assert experiment.embeddings is not None
+        assert len(experiment.dataset.sample_ids) == 18
+        assert experiment.dataset.embeddings is not None
         assert len(experiment.train_indices) == 6
         assert len(experiment.unlabeled_indices) == 12
 
@@ -86,16 +86,12 @@ class TestActiveLearningExperiment:
             initial_selection_strategy=RandomInitialSelection(seed=42),
         )
 
-        results = experiment.run_experiment(max_rounds=3)
+        experiment.run_experiment(max_rounds=3)
 
-        assert len(results) == 3
-        assert results[-1]["train_size"] == 5 + (4 * 3)
-        assert isinstance(experiment.custom_metrics, list)
-        assert experiment.custom_metrics
-
-        final_metrics = experiment.get_final_performance()
-        assert "top_proportion" in final_metrics
-        assert "best_true" in final_metrics
+        expected_train_size = 5 + (4 * 3)
+        assert len(experiment.train_indices) == expected_train_size
+        # Initial training set plus one entry per round
+        assert len(experiment.round_tracker.rounds) == 1 + 3
 
     def test_save_results(self, tmp_path):
         """Saving results writes results, custom metrics, and selected variants."""
@@ -115,8 +111,6 @@ class TestActiveLearningExperiment:
         experiment.save_results(output_path)
 
         assert output_path.exists()
-        assert (tmp_path / "results_custom_metrics.csv").exists()
-        assert (tmp_path / "results_selected_variants.csv").exists()
 
     def test_backward_compatibility_properties(self, tmp_path):
         """Compatibility properties stay available even without a test split."""
@@ -130,9 +124,8 @@ class TestActiveLearningExperiment:
             initial_selection_strategy=RandomInitialSelection(seed=1),
         )
 
-        assert isinstance(experiment.all_samples, list)
-        assert isinstance(experiment.all_expressions, np.ndarray)
+        assert isinstance(experiment.dataset.sample_ids, np.ndarray)
+        assert isinstance(experiment.dataset.labels, np.ndarray)
         assert isinstance(experiment.train_indices, list)
         assert isinstance(experiment.unlabeled_indices, list)
-        assert isinstance(experiment.custom_metrics, list)
-        assert isinstance(experiment.selected_variants, list)
+        assert isinstance(experiment.round_tracker.rounds, list)

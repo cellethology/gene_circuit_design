@@ -22,7 +22,7 @@ class TestPredictorTrainer:
 
         X_train = np.array([[1, 2], [3, 4], [5, 6]])
         y_train = np.array([1, 2, 3])
-        trainer.train(X_train, y_train, [0, 1, 2])
+        trainer.train(X_train, y_train)
 
         trained_model = trainer.get_model()
         assert trained_model is not None
@@ -39,11 +39,9 @@ class TestPredictorTrainer:
 
         X_train = np.random.randn(10, 5)
         y_train = np.random.randn(10)
-        train_indices = list(range(10))
-
         for model in models:
             trainer = PredictorTrainer(model)
-            trainer.train(X_train, y_train, train_indices)
+            trainer.train(X_train, y_train)
             trained_model = trainer.get_model()
             assert trained_model is not None
             preds = trainer.predict(X_train)
@@ -55,7 +53,7 @@ class TestPredictorTrainer:
 
         X_train = np.array([[1, 2], [3, 4], [5, 6]])
         y_train = np.array([1, 2, 3])
-        trainer.train(X_train, y_train, [0, 1, 2])
+        trainer.train(X_train, y_train)
 
         predictions = trainer.predict(np.array([[2, 3], [4, 5]]))
 
@@ -70,7 +68,7 @@ class TestPredictorTrainer:
 
         X_train = np.array([[1.0], [2.0], [3.0], [4.0]])
         y_train = np.array([10.0, 20.0, 30.0, 40.0])
-        trainer.train(X_train, y_train, list(range(len(X_train))))
+        trainer.train(X_train, y_train)
 
         preds = trainer.predict(np.array([[5.0], [6.0]]))
         assert np.allclose(preds, np.array([50.0, 60.0]), atol=1e-3)

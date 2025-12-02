@@ -3,7 +3,7 @@ Model training and evaluation utilities for active learning experiments.
 """
 
 import logging
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 from sklearn.base import RegressorMixin, clone
@@ -63,21 +63,18 @@ class PredictorTrainer:
 
         return estimator
 
-    def train(
-        self, X_train: np.ndarray, y_train: np.ndarray, train_indices: List[int]
-    ) -> None:
+    def train(self, X_train: np.ndarray, y_train: np.ndarray) -> None:
         """
         Train a fresh model on training data, re-normalizing features/labels if specified.
 
         Args:
             X_train: Training features
             y_train: Training labels
-            train_indices: Indices of training samples (for logging)
         """
-        if len(train_indices) == 0:
+        if len(X_train) == 0:
             raise ValueError("Training requires at least one sample.")
 
-        logger.info(f"Total training samples: {len(train_indices)}")
+        logger.info(f"Total training samples: {len(X_train)}")
 
         estimator = self._build_estimator()
         estimator.fit(X_train, y_train)

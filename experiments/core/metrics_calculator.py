@@ -7,10 +7,6 @@ from typing import Dict, List
 
 import numpy as np
 
-from utils.metrics import (
-    proportion_of_selected_indices_in_top_labels,
-)
-
 logger = logging.getLogger(__name__)
 
 
@@ -29,23 +25,24 @@ class MetricsCalculator:
         self.labels = labels
         self.cumulative_metrics: List[Dict[str, float]] = []
 
-    def calculate_round_metrics(
+    def compute_metrics_for_round(
         self,
         selected_indices: np.ndarray,
         predictions: np.ndarray,
-        top_percentage: float = 0.1,
+        top_p: float = 0.1,
     ) -> Dict[str, float]:
         """
-        Calculate metrics for a single round.
+        Compute metrics for a single round.
 
         Args:
             selected_indices: Indices of selected sequences
             predictions: Model predictions for selected indices
-            top_percentage: Percentage of top labels to consider
+            top_p: Percentage of top labels to consider
         """
-        # Proportion of selected indices in top labels
-        top_proportion = proportion_of_selected_indices_in_top_labels(
-            selected_indices, self.labels, top_percentage=top_percentage
+        # Proportion of selected in top
+        top_proportion = self.proportion_of_selected_in_top(
+            selected_indices=selected_indices,
+            top_p=top_p,
         )
 
         # Best value predictions
@@ -64,63 +61,19 @@ class MetricsCalculator:
             "normalized_true": normalized_true_values,
         }
 
-    def update_cumulative(self, round_metrics: Dict[str, float]) -> Dict[str, float]:
+    def proportion_of_selected_in_top(
+        self, selected_indices: np.ndarray, top_p: float = 0.1
+    ) -> float:
         """
-        Update cumulative metrics based on current round metrics.
+        Calculate the proportion of selected are top performers.
 
         Args:
-            round_metrics: Metrics from current round
-
-        Returns:
-            Dictionary with cumulative metrics added
+            selected_indices: Indices of selected sequences
+            top_p: Percentage of top labels to consider
         """
-        if len(self.cumulative_metrics) > 0:
-            # Calculate cumulative metrics
-            prev_metrics = self.cumulative_metrics[-1]
+        if not 0.0 < top_p <= 1.0:
+            raise ValueError("top_p must be between 0.0 and 1.0")
 
-            cumulative_metrics = {
-                "top_proportion_cumulative": (
-                    prev_metrics["top_proportion_cumulative"]
-                    + round_metrics["top_proportion"]
-                ),
-                "best_pred_cumulative": max(
-                    prev_metrics["best_pred_cumulative"],
-                    round_metrics["best_pred"],
-                ),
-                "normalized_pred_cumulative": max(
-                    prev_metrics["normalized_pred_cumulative"],
-                    round_metrics["normalized_pred"],
-                ),
-                "best_true_cumulative": max(
-                    prev_metrics["best_true_cumulative"],
-                    round_metrics["best_true"],
-                ),
-                "normalized_true_cumulative": max(
-                    prev_metrics["normalized_true_cumulative"],
-                    round_metrics["normalized_true"],
-                ),
-            }
-        else:
-            # First round: cumulative equals current
-            cumulative_metrics = {
-                "top_proportion_cumulative": round_metrics["top_proportion"],
-                "best_pred_cumulative": round_metrics["best_pred"],
-                "normalized_pred_cumulative": round_metrics["normalized_pred"],
-                "best_true_cumulative": round_metrics["best_true"],
-                "normalized_true_cumulative": round_metrics["normalized_true"],
-            }
-
-        # Combine round and cumulative metrics
-        combined_metrics = {**round_metrics, **cumulative_metrics}
-        self.cumulative_metrics.append(combined_metrics)
-
-        return combined_metrics
-
-    def get_all_metrics(self) -> List[Dict[str, float]]:
-        """
-        Get all calculated metrics.
-
-        Returns:
-            List of metric dictionaries for each round
-        """
-        return self.cumulative_metrics.copy()
+        num_top = int(len(self.labels) * top_p)
+        top_labels = np.argsort(self.labels)[-num_top:]
+        return len(np.intersect1d(selected_indices, top_labels)) / len(selected_indices)

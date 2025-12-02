@@ -75,8 +75,8 @@ class TestDataLoader:
 
         assert dataset.embeddings.shape == embeddings.shape
         assert dataset.labels.shape[0] == embeddings.shape[0]
-        expected_ids = [str(i) for i in range(embeddings.shape[0])]
-        assert dataset.sample_ids == expected_ids
+        expected_ids = np.arange(embeddings.shape[0], dtype=np.int32)
+        np.testing.assert_array_equal(dataset.sample_ids, expected_ids)
         assert np.allclose(dataset.labels, data["Expression"])
 
     def test_missing_sequence_column_generates_ids(self, tmp_path):
@@ -90,7 +90,7 @@ class TestDataLoader:
         )
 
         dataset = loader.load()
-        assert dataset.sample_ids == ["0", "1", "2"]
+        np.testing.assert_array_equal(dataset.sample_ids, np.array([0, 1, 2]))
 
     def test_missing_target_column(self, tmp_path):
         emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=3)
