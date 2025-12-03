@@ -43,7 +43,7 @@ class ActiveLearningExperiment:
         random_seed: int = 42,
         normalize_features: bool = True,
         normalize_labels: bool = True,
-        initial_sample_size: Optional[int] = None,
+        starting_batch_size: Optional[int] = None,
         label_key: Optional[str] = None,
     ) -> None:
         """
@@ -59,7 +59,7 @@ class ActiveLearningExperiment:
             normalize_features: Whether to re-normalize features each round
             normalize_labels: Whether to re-normalize labels each round
             label_key: Column name in the metadata CSV containing target values
-            initial_sample_size: Number of samples to sample initially. If None, will be set to batch_size.
+            starting_batch_size: Number of samples to sample initially. If None, will be set to batch_size.
         """
         # Store configuration
         if label_key is None:
@@ -74,10 +74,10 @@ class ActiveLearningExperiment:
         self.initial_selection_strategy = initial_selection_strategy
         self.normalize_features = normalize_features
         self.normalize_labels = normalize_labels
-        if initial_sample_size is None:
-            self.initial_sample_size = self.batch_size
+        if starting_batch_size is None:
+            self.starting_batch_size = self.batch_size
         else:
-            self.initial_sample_size = initial_sample_size
+            self.starting_batch_size = starting_batch_size
 
         # Set random seeds for reproducibility
         random.seed(random_seed)
@@ -124,17 +124,14 @@ class ActiveLearningExperiment:
             List of indices for the initial training pool
         """
         total_samples = len(self.dataset.sample_ids)
-        if self.initial_sample_size >= total_samples:
+        if self.starting_batch_size >= total_samples:
             logger.warning(
-                "initial_sample_size >= total samples. Using all samples for training."
+                "starting_batch_size >= total samples. Using all samples for training."
             )
             all_indices = list(range(total_samples))
             return all_indices
 
-        selected_indices = self.initial_selection_strategy.select(
-            dataset=self.dataset,
-            initial_sample_size=self.initial_sample_size,
-        )
+        selected_indices = self.initial_selection_strategy.select(dataset=self.dataset)
 
         logger.info(
             f"Initialized training pool with {len(selected_indices)} samples via "

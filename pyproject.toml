@@ -134,7 +134,10 @@ dev = [
 ]
 
 [tool.coverage.run]
-source = ["gene_circuit_design"]
+source = [
+    "experiments",
+    "job_sub",
+]
 branch = true
 
 [tool.coverage.report]

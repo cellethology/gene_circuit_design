@@ -37,7 +37,7 @@ def run_single_experiment(
     metadata_path = cfg.metadata_path
     al_settings = cfg.al_settings
     batch_size = al_settings.get("batch_size", 8)
-    initial_sample_size = al_settings.get("initial_sample_size", batch_size)
+    starting_batch_size = al_settings.get("starting_batch_size", batch_size)
     max_rounds = al_settings.get("max_rounds", 30)
     normalize_features = al_settings.get("normalize_features", True)
     normalize_labels = al_settings.get("normalize_labels", True)
@@ -50,7 +50,7 @@ def run_single_experiment(
         metadata_path=metadata_path,
         query_strategy=query_strategy,
         predictor=predictor,
-        initial_sample_size=initial_sample_size,
+        starting_batch_size=starting_batch_size,
         batch_size=batch_size,
         random_seed=seed,
         normalize_features=normalize_features,

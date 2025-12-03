@@ -39,18 +39,20 @@ class TestActiveLearningExperiment:
         embeddings_path: str,
         metadata_path: str,
         query_strategy,
-        initial_sample_size: int,
+        starting_batch_size: int,
         batch_size: int,
         initial_selection_strategy=None,
     ) -> ActiveLearningExperiment:
-        initial_strategy = initial_selection_strategy or RandomInitialSelection(seed=0)
+        initial_strategy = initial_selection_strategy or RandomInitialSelection(
+            seed=0, starting_batch_size=starting_batch_size
+        )
         return ActiveLearningExperiment(
             embeddings_path=embeddings_path,
             metadata_path=metadata_path,
             initial_selection_strategy=initial_strategy,
             query_strategy=query_strategy,
             predictor=LinearRegression(),
-            initial_sample_size=initial_sample_size,
+            starting_batch_size=starting_batch_size,
             batch_size=batch_size,
             normalize_features=False,
             normalize_labels=False,
@@ -64,9 +66,11 @@ class TestActiveLearningExperiment:
             embeddings_path=emb_path,
             metadata_path=csv_path,
             query_strategy=Random(seed=42),
-            initial_sample_size=6,
+            starting_batch_size=6,
             batch_size=3,
-            initial_selection_strategy=RandomInitialSelection(seed=42),
+            initial_selection_strategy=RandomInitialSelection(
+                seed=42, starting_batch_size=6
+            ),
         )
 
         assert len(experiment.dataset.sample_ids) == 18
@@ -81,9 +85,11 @@ class TestActiveLearningExperiment:
             embeddings_path=emb_path,
             metadata_path=csv_path,
             query_strategy=TopPredictions(),
-            initial_sample_size=5,
+            starting_batch_size=5,
             batch_size=4,
-            initial_selection_strategy=RandomInitialSelection(seed=42),
+            initial_selection_strategy=RandomInitialSelection(
+                seed=42, starting_batch_size=5
+            ),
         )
 
         experiment.run_experiment(max_rounds=3)
@@ -100,9 +106,11 @@ class TestActiveLearningExperiment:
             embeddings_path=emb_path,
             metadata_path=csv_path,
             query_strategy=Random(seed=99),
-            initial_sample_size=5,
+            starting_batch_size=5,
             batch_size=5,
-            initial_selection_strategy=RandomInitialSelection(seed=99),
+            initial_selection_strategy=RandomInitialSelection(
+                seed=99, starting_batch_size=5
+            ),
         )
 
         experiment.run_experiment(max_rounds=2)
@@ -119,9 +127,11 @@ class TestActiveLearningExperiment:
             embeddings_path=emb_path,
             metadata_path=csv_path,
             query_strategy=Random(seed=1),
-            initial_sample_size=4,
+            starting_batch_size=4,
             batch_size=4,
-            initial_selection_strategy=RandomInitialSelection(seed=1),
+            initial_selection_strategy=RandomInitialSelection(
+                seed=1, starting_batch_size=4
+            ),
         )
 
         assert isinstance(experiment.dataset.sample_ids, np.ndarray)

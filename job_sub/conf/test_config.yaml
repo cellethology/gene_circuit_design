@@ -12,6 +12,7 @@ seed: 42
 
 al_settings:
   batch_size: 8
+  starting_batch_size: 8
   max_rounds: 5
   normalize_features: true
   normalize_labels: true
