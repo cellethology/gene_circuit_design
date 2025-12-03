@@ -31,7 +31,7 @@ class TestRoundTracker:
         assert len(tracker.rounds) == 1
         recorded = tracker.rounds[0]
         assert recorded["round"] == 0
-        assert recorded["selected_sample_ids"] == ["0", "2"]
+        assert recorded["selected_sample_ids"] == [0, 2]
         assert recorded["unlabeled_pool_size"] == 1
 
     def test_track_round_missing_ids(self):
