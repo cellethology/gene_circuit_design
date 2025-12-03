@@ -57,9 +57,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/gene-circuit-design"
-Repository = "https://github.com/your-org/gene-circuit-design.git"
-Issues = "https://github.com/your-org/gene-circuit-design/issues"
+Homepage = "https://github.com/cellethology/gene-circuit-design"
+Repository = "https://github.com/cellethology/gene-circuit-design.git"
+Issues = "https://github.com/cellethology/gene-circuit-design/issues"
 
 [project.scripts]
 run-active-learning = "run_experiments:main"
