@@ -61,7 +61,7 @@ jobs:
 
       - name: Run pytest with coverage
         run: |
-          uv run pytest --cov=experiments --cov=job_sub --cov-report=xml
+          uv run pytest --cov=experiments --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
