@@ -3,9 +3,12 @@ Initial selection strategies for choosing the seed batch.
 """
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from typing import List, Optional
+
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.metrics import pairwise_distances_argmin_min
 
 from experiments.core.data_loader import Dataset
 
@@ -15,14 +18,16 @@ logger = logging.getLogger(__name__)
 class InitialSelectionStrategy(ABC):
     """Interface for selecting the initial labeled pool."""
 
-    def __init__(self, name: Optional[str] = None) -> None:
+    def __init__(
+        self, name: Optional[str] = None, starting_batch_size: int = 8
+    ) -> None:
         self.name = name or self.__class__.__name__
+        self.starting_batch_size = starting_batch_size
 
     @abstractmethod
     def select(
         self,
         dataset: Dataset,
-        initial_sample_size: int,
     ) -> List[int]:
         """Return indices for the initial training pool."""
 
@@ -30,48 +35,32 @@ class InitialSelectionStrategy(ABC):
 class RandomInitialSelection(InitialSelectionStrategy):
     """Randomly sample the initial training points."""
 
-    def __init__(self, seed: int) -> None:
-        super().__init__("RANDOM_INITIAL")
+    def __init__(self, seed: int, starting_batch_size: int) -> None:
+        super().__init__("RANDOM", starting_batch_size=starting_batch_size)
         self.seed = seed
 
     def select(
         self,
         dataset: Dataset,
-        initial_sample_size: int,
     ) -> List[int]:
-        total = len(dataset.sample_ids)
-        if initial_sample_size >= total:
-            return list(range(total))
-        rng = random.Random(self.seed)
-        return rng.sample(range(total), initial_sample_size)
+        rng = np.random.default_rng(self.seed)
+        return rng.choice(
+            len(dataset.sample_ids), self.starting_batch_size, replace=False
+        ).tolist()
 
 
 class KMeansInitialSelection(InitialSelectionStrategy):
     """Select initial samples using K-means clustering on sequence features."""
 
-    def __init__(self, seed: int) -> None:
-        super().__init__("KMEANS_INITIAL")
+    def __init__(self, seed: int, starting_batch_size: int) -> None:
+        super().__init__("KMEANS", starting_batch_size=starting_batch_size)
         self.seed = seed
 
     def select(
         self,
         dataset: Dataset,
-        initial_sample_size: int,
     ) -> List[int]:
-        total = len(dataset.sample_ids)
-        if initial_sample_size >= total:
-            return list(range(total))
-
-        from experiments.util import select_initial_batch_kmeans_from_features
-
-        all_indices = list(range(len(dataset.sample_ids)))
-        embeddings = dataset.embeddings[all_indices, :]
-
-        selected = select_initial_batch_kmeans_from_features(
-            X_all=embeddings,
-            initial_sample_size=initial_sample_size,
-            seed=self.seed,
-        )
+        selected = self.kmeans_initial_selection(embeddings=dataset.embeddings)
 
         labels = dataset.labels[selected]
         logger.info(
@@ -81,3 +70,15 @@ class KMeansInitialSelection(InitialSelectionStrategy):
         )
 
         return selected
+
+    def kmeans_initial_selection(
+        self,
+        embeddings: np.ndarray,
+    ) -> List[int]:
+        kmeans = KMeans(
+            n_clusters=self.starting_batch_size, random_state=self.seed
+        ).fit(embeddings)
+        closest_indices, _ = pairwise_distances_argmin_min(
+            kmeans.cluster_centers_, embeddings
+        )
+        return closest_indices.tolist()

@@ -1,8 +1,12 @@
 # Gene Circuit Design - Active Learning Project
 
-This project implements active learning strategies for DNA sequence-expression prediction using machine learning models.
+[![CI](https://github.com/cellethology/gene_circuit_design/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/cellethology/gene_circuit_design/actions/workflows/pre-commit.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/cellethology/gene_circuit_design?logo=codecov)](https://codecov.io/gh/cellethology/gene_circuit_design)
+
+This project implements active learning strategies for circuit design using glm embeddings.
 
 ## Install Dependencies
+
 ```bash
 # Clone the repository
 git clone git@github.com:cellethology/gene_circuit_design.git
@@ -24,9 +28,7 @@ pre-commit install
 The pre-commit configuration includes:
 
 - **Ruff**: Automatic code linting and formatting (replaces `black`, `isort`, `flake8`)
-
 - **File Checks**: Basic file quality checks
-
 - **Pytest**: Runs tests before committing
 
 ### Manual Execution
@@ -43,7 +45,9 @@ pre-commit run ruff-format --all-files
 ```
 
 ## Data Directory
+
 Symlink can be made
+
 ```
 cd gene_circuit_design
 ln -s "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new" "data_new" # create symlink
@@ -51,6 +55,7 @@ ls -l "data_new" # verify link
 ```
 
 The structure of the `data_new` directory should look something like this
+
 ```bash
 ./data_new
 ├── 166k
@@ -77,6 +82,7 @@ python job_sub/submitit/sequential_parallel_job_test.py \
 python job_sub/submitit/sequential_parallel_job_test.py \
     --config-files configs/cis_regulations/166k_cis_regulators_evo2_experiments.yaml
 ```
+
 - **Do check the config file to update the experiment path for it to run properly**
 
 This script allows running multiple experiment configurations in parallel on a Slurm cluster. Each parameter combination is submitted as a separate Slurm job. The script handles job submission, monitoring, and result collection.
@@ -151,6 +157,7 @@ python plotting/area_under_curve_grid_plot.py \
 ```
 
 Options:
+
 - `--results-base-path`: Base directory containing result files (default: `results/auc_result`)
 - Output: Saves plots to `plots/AUC_results/`
 
@@ -166,6 +173,7 @@ python plotting/averaged_performance_analysis.py \
 ```
 
 Options:
+
 - `--results-base-path`: Base path for results (default: `results/166k_2024_regulators_auto_gen`)
 - `--output-dir`: Output directory for plots (default: `plots/166k_2024_regulators_summary`)
 - `--metric`: Metric to analyze (default: `auc_normalized_pred`)
@@ -175,12 +183,14 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 ## Output Structure
 
 ### Results
+
 - Individual experiment results: `results/{experiment_name}/`
 - Combined results: `results/{experiment_name}/combined_all_results.csv`
 - Custom metrics: `results/{experiment_name}/combined_all_custom_metrics.csv`
 - Selected variants tracking: `results/{experiment_name}/*_selected_variants.csv`
 
 ### Plots
+
 - Saved in `plots/` directory
 - Includes learning curves, regressor comparisons, AUC heatmaps, and custom metrics
 - High-resolution PNG formats (300 DPI)
@@ -192,6 +202,7 @@ All plots are saved in high-resolution PNG format (300 DPI) suitable for publica
 1. **Memory issues**: Reduce `max_workers` or `cores_per_process` in config
 
 ### Performance Tips
+
 - Use `--max-workers` for parallel processing
 - Set `cores_per_process` in config for CPU-intensive models
 - Use filtered data files to reduce memory usage

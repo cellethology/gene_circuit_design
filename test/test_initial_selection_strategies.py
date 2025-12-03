@@ -20,12 +20,9 @@ def _create_dataset(n_samples: int, embedding_dim: int = 4) -> Dataset:
 
 def test_random_initial_selection_basic():
     dataset = _create_dataset(20)
-    strategy = RandomInitialSelection(seed=123)
+    strategy = RandomInitialSelection(seed=123, starting_batch_size=5)
 
-    indices = strategy.select(
-        dataset=dataset,
-        initial_sample_size=5,
-    )
+    indices = strategy.select(dataset=dataset)
 
     assert len(indices) == 5
     assert len(set(indices)) == 5
@@ -33,12 +30,9 @@ def test_random_initial_selection_basic():
 
 def test_kmeans_initial_selection_returns_expected_count():
     dataset = _create_dataset(15, embedding_dim=3)
-    strategy = KMeansInitialSelection(seed=42)
+    strategy = KMeansInitialSelection(seed=42, starting_batch_size=6)
 
-    indices = strategy.select(
-        dataset=dataset,
-        initial_sample_size=6,
-    )
+    indices = strategy.select(dataset=dataset)
 
     assert len(indices) == 6
     assert len(set(indices)) == 6

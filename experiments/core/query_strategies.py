@@ -27,7 +27,7 @@ class QueryStrategyBase(ABC):
         self.name = name or self.__class__.__name__
 
     @abstractmethod
-    def select(self, experiment: Any, round_idx: int) -> List[int]:
+    def select(self, experiment: Any) -> List[int]:
         """
         Select the next batch of sequences.
 
@@ -38,7 +38,6 @@ class QueryStrategyBase(ABC):
 
     def _log_round(
         self,
-        round_idx: int,
         selected_indices: List[int],
         extra_info: Optional[str] = None,
     ) -> None:
@@ -46,11 +45,10 @@ class QueryStrategyBase(ABC):
         Log information about the round.
 
         Args:
-            round_idx: Round index
             selected_indices: Indices that were selected
             extra_info: Extra information to include in the log message
         """
-        log_msg = f"Round {round_idx} - selected indices: {selected_indices}"
+        log_msg = f"Selected indices: {selected_indices}"
         if extra_info:
             log_msg += f" {extra_info}"
         logger.info(log_msg)
@@ -63,11 +61,11 @@ class Random(QueryStrategyBase):
         super().__init__("RANDOM")
         self.seed = seed
 
-    def select(self, experiment: Any, round_idx: int) -> List[int]:
+    def select(self, experiment: Any) -> List[int]:
         unlabeled_pool = experiment.unlabeled_indices
         batch_size = min(experiment.batch_size, len(unlabeled_pool))
         selected_indices = random.Random(self.seed).sample(unlabeled_pool, batch_size)
-        self._log_round(round_idx, selected_indices)
+        self._log_round(selected_indices)
         return selected_indices
 
 
@@ -77,14 +75,12 @@ class TopPredictions(QueryStrategyBase):
     def __init__(self) -> None:
         super().__init__("TOP_K_PRED")
 
-    def select(self, experiment: Any, round_idx: int) -> List[int]:
+    def select(self, experiment: Any) -> List[int]:
         unlabeled = experiment.unlabeled_indices
         if len(unlabeled) < experiment.batch_size:
             return unlabeled
 
-        preds = experiment.predictor.predict(
-            experiment.dataset.embeddings[unlabeled, :]
-        )
+        preds = experiment.trainer.predict(experiment.dataset.embeddings[unlabeled, :])
         k = experiment.batch_size
 
         # get indices of top k predictions (descending)
@@ -92,7 +88,7 @@ class TopPredictions(QueryStrategyBase):
 
         # map to original indices
         selected_indices = [unlabeled[i] for i in top_k_local]
-        self._log_round(round_idx, selected_indices)
+        self._log_round(selected_indices)
 
         return selected_indices
 
@@ -103,7 +99,7 @@ class TopLogLikelihood(QueryStrategyBase):
     def __init__(self) -> None:
         super().__init__("TOP_LOG_LIKELIHOOD")
 
-    def select(self, experiment: Any, round_idx: int) -> List[int]:
+    def select(self, experiment: Any) -> List[int]:
         log_likelihoods = experiment.all_log_likelihoods
         if log_likelihoods is None or np.all(np.isnan(log_likelihoods)):
             logger.warning("No log likelihood data available.")
@@ -129,9 +125,7 @@ class TopLogLikelihood(QueryStrategyBase):
         batch_size = min(experiment.batch_size, len(valid_unlabeled_indices))
         selected_local_indices = sorted_indices[:batch_size]
 
-        selected_indices = [
-            experiment.unlabeled_indices[i] for i in selected_local_indices
-        ]
+        selected_indices = [valid_unlabeled_indices[i] for i in selected_local_indices]
 
         selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
         selected_values = experiment.dataset.labels[selected_indices]
@@ -140,6 +134,6 @@ class TopLogLikelihood(QueryStrategyBase):
             f"[{', '.join(f'{ll:.4f}' for ll in selected_log_likelihoods)}] "
             f"True values: [{', '.join(f'{expr:.1f}' for expr in selected_values)}]"
         )
-        self._log_round(round_idx, selected_indices, extra_info)
+        self._log_round(selected_indices, extra_info)
 
         return selected_indices

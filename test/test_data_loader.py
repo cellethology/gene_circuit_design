@@ -75,8 +75,8 @@ class TestDataLoader:
 
         assert dataset.embeddings.shape == embeddings.shape
         assert dataset.labels.shape[0] == embeddings.shape[0]
-        expected_ids = [str(i) for i in range(embeddings.shape[0])]
-        assert dataset.sample_ids == expected_ids
+        expected_ids = np.arange(embeddings.shape[0], dtype=np.int32)
+        np.testing.assert_array_equal(dataset.sample_ids, expected_ids)
         assert np.allclose(dataset.labels, data["Expression"])
 
     def test_missing_sequence_column_generates_ids(self, tmp_path):
@@ -90,7 +90,7 @@ class TestDataLoader:
         )
 
         dataset = loader.load()
-        assert dataset.sample_ids == ["0", "1", "2"]
+        np.testing.assert_array_equal(dataset.sample_ids, np.array([0, 1, 2]))
 
     def test_missing_target_column(self, tmp_path):
         emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=3)
@@ -112,6 +112,38 @@ class TestDataLoader:
 
         loader = DataLoader(
             embeddings_path=emb_path,
+            metadata_path=csv_path,
+            label_key="Expression",
+        )
+
+        with pytest.raises(IndexError):
+            loader.load()
+
+    def test_missing_embeddings_key_raises(self, tmp_path):
+        path = tmp_path / "embeddings.npz"
+        np.savez_compressed(path, ids=np.arange(2, dtype=np.int32))
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=2)
+
+        loader = DataLoader(
+            embeddings_path=str(path),
+            metadata_path=csv_path,
+            label_key="Expression",
+        )
+
+        with pytest.raises(ValueError, match="embeddings"):
+            loader.load()
+
+    def test_sample_ids_out_of_bounds(self, tmp_path):
+        # Create embeddings with ids that reference rows outside the CSV
+        embeddings = np.random.randn(3, 4).astype(np.float32)
+        ids = np.array([0, 5, 6], dtype=np.int32)
+        emb_path = tmp_path / "embeddings.npz"
+        np.savez_compressed(emb_path, embeddings=embeddings, ids=ids)
+
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=3)
+
+        loader = DataLoader(
+            embeddings_path=str(emb_path),
             metadata_path=csv_path,
             label_key="Expression",
         )
