@@ -46,7 +46,7 @@ class RoundTracker:
             else 0
         )
         unlabeled_pool_size = len(self.sample_ids) - train_size - len(selected_indices)
-        selected_ids = list(self.sample_ids[selected_indices])
+        selected_ids = [str(self.sample_ids[idx]) for idx in selected_indices]
         self.rounds.append(
             {
                 "round": self.round_num,
