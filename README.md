@@ -3,7 +3,7 @@
 [![CI](https://github.com/cellethology/gene_circuit_design/actions/workflows/pre-commit.yml/badge.svg)](https://github.com/cellethology/gene_circuit_design/actions/workflows/pre-commit.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/cellethology/gene_circuit_design?logo=codecov)](https://codecov.io/gh/cellethology/gene_circuit_design)
 
-This project implements active learning strategies for DNA sequence-expression prediction using machine learning models.
+This project implements active learning strategies for circuit design using glm embeddings.
 
 ## Install Dependencies
 
