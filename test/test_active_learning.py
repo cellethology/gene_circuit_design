@@ -9,10 +9,11 @@ from types import SimpleNamespace
 import numpy as np
 import pandas as pd
 import pytest
+from omegaconf import OmegaConf
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-from experiments.active_learning import run_single_experiment
+from experiments.active_learning import make_steps, run_single_experiment
 
 
 def _make_dataset(tmp_path, n_samples=8, dim=4):
@@ -94,3 +95,26 @@ def test_run_single_experiment_requires_output_dir(tmp_path, monkeypatch):
     _patch_make_steps(monkeypatch)
     with pytest.raises(ValueError):
         run_single_experiment(cfg)
+
+
+def test_make_steps_builds_pipeline(monkeypatch):
+    class DummyTransformer:
+        pass
+
+    step_cfg = OmegaConf.create(
+        [
+            {
+                "id": "dummy",
+                "_target_": "test.test_active_learning.DummyTransformer",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "experiments.active_learning.instantiate",
+        lambda cfg: DummyTransformer(),
+    )
+    steps = make_steps(step_cfg)
+    assert len(steps) == 1
+    name, transformer = steps[0]
+    assert name == "dummy"
+    assert isinstance(transformer, DummyTransformer)
