@@ -118,3 +118,35 @@ class TestDataLoader:
 
         with pytest.raises(IndexError):
             loader.load()
+
+    def test_missing_embeddings_key_raises(self, tmp_path):
+        path = tmp_path / "embeddings.npz"
+        np.savez_compressed(path, ids=np.arange(2, dtype=np.int32))
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=2)
+
+        loader = DataLoader(
+            embeddings_path=str(path),
+            metadata_path=csv_path,
+            label_key="Expression",
+        )
+
+        with pytest.raises(ValueError, match="embeddings"):
+            loader.load()
+
+    def test_sample_ids_out_of_bounds(self, tmp_path):
+        # Create embeddings with ids that reference rows outside the CSV
+        embeddings = np.random.randn(3, 4).astype(np.float32)
+        ids = np.array([0, 5, 6], dtype=np.int32)
+        emb_path = tmp_path / "embeddings.npz"
+        np.savez_compressed(emb_path, embeddings=embeddings, ids=ids)
+
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=3)
+
+        loader = DataLoader(
+            embeddings_path=str(emb_path),
+            metadata_path=csv_path,
+            label_key="Expression",
+        )
+
+        with pytest.raises(IndexError):
+            loader.load()

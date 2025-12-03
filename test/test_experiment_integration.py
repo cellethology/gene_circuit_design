@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.linear_model import LinearRegression
 
 from experiments.core.experiment import ActiveLearningExperiment
@@ -119,6 +120,47 @@ class TestActiveLearningExperiment:
         experiment.save_results(output_path)
 
         assert output_path.exists()
+
+    def test_label_key_required(self, tmp_path):
+        emb_path, csv_path = self.create_dataset(tmp_path, n_samples=5)
+        with pytest.raises(ValueError):
+            ActiveLearningExperiment(
+                embeddings_path=emb_path,
+                metadata_path=csv_path,
+                initial_selection_strategy=RandomInitialSelection(
+                    seed=0, starting_batch_size=3
+                ),
+                query_strategy=Random(seed=0),
+                predictor=LinearRegression(),
+                starting_batch_size=3,
+                batch_size=2,
+                normalize_features=False,
+                normalize_labels=False,
+                label_key=None,
+            )
+
+    def test_starting_batch_size_larger_than_total(self, tmp_path):
+        emb_path, csv_path = self.create_dataset(tmp_path, n_samples=4)
+        experiment = self._build_experiment(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            query_strategy=Random(seed=1),
+            starting_batch_size=10,
+            batch_size=2,
+        )
+        assert len(experiment.train_indices) == 4
+
+    def test_run_experiment_stops_when_all_selected(self, tmp_path):
+        emb_path, csv_path = self.create_dataset(tmp_path, n_samples=6)
+        experiment = self._build_experiment(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            query_strategy=Random(seed=2),
+            starting_batch_size=3,
+            batch_size=6,
+        )
+        experiment.run_experiment(max_rounds=5)
+        assert len(experiment.train_indices) == len(experiment.dataset.sample_ids)
 
     def test_backward_compatibility_properties(self, tmp_path):
         """Compatibility properties stay available even without a test split."""
