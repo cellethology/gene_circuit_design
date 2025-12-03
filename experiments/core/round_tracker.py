@@ -61,7 +61,7 @@ class RoundTracker:
     def compute_auc(self, metric_columns: List[str]) -> Dict[str, float]:
         """
         Compute the AUC across all rounds.
-        The AUC is computed by summing up the maximum value of the metric column up to that round, divided by the number of selected samples in that round.
+        The AUC is computed by summing up the maximum value of the metric column up to that round.
         """
         if not self.rounds:
             raise ValueError("Cannot compute AUC: no rounds have been tracked yet")
@@ -73,10 +73,7 @@ class RoundTracker:
 
             values = np.array([round[metric_column] for round in self.rounds])
             cumulative_max_per_round = np.maximum.accumulate(values)
-            aucs[metric_column] = np.sum(
-                cumulative_max_per_round
-                / np.array([len(round["selected_sample_ids"]) for round in self.rounds])
-            )
+            aucs[metric_column] = np.sum(cumulative_max_per_round)
         return aucs
 
     def save_to_csv(self, output_path: Path) -> None:

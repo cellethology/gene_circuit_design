@@ -2,6 +2,8 @@ defaults:
   - predictor: ridge_regressor
   - query_strategy: topk
   - initial_selection_strategy: random
+  - transforms@feature_transforms: standardize
+  - transforms@target_transforms: log_standardize
   - _self_
   - override hydra/launcher: submitit_local
 
@@ -13,9 +15,9 @@ seed: 42
 al_settings:
   batch_size: 8
   starting_batch_size: 8
-  max_rounds: 5
-  normalize_features: true
-  normalize_labels: true
+  max_rounds: 20
+  feature_transforms: ${feature_transforms}
+  target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
   label_key: expressions
@@ -28,10 +30,7 @@ hydra:
     subdir: ${hydra.job.override_dirname}
   sweeper:
     params:
-      query_strategy: topk, random
-      predictor: rf_regressor, mlp_regressor
-      initial_selection_strategy: random, kmeans
-      seed: 1, 2, 3, 4, 5
+      seed: 1, 2, 3
   # launcher:
   #   timeout_min: 240
   #   partition: wzt_20250411,intel-sc3

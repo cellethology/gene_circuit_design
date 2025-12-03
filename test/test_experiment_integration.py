@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from experiments.core.experiment import ActiveLearningExperiment
 from experiments.core.initial_selection_strategies import RandomInitialSelection
@@ -27,7 +28,7 @@ class TestActiveLearningExperiment:
         df = pd.DataFrame(
             {
                 "Sequence": [f"ATGC{i}" for i in range(n_samples)],
-                "Expression": np.random.randn(n_samples),
+                "Expression": np.linspace(1.0, n_samples, n_samples),
             }
         )
         csv_path = tmp_path / "metadata.csv"
@@ -55,8 +56,8 @@ class TestActiveLearningExperiment:
             predictor=LinearRegression(),
             starting_batch_size=starting_batch_size,
             batch_size=batch_size,
-            normalize_features=False,
-            normalize_labels=False,
+            feature_transforms=[("scaler", StandardScaler())],
+            target_transforms=[("log", FunctionTransformer(np.log1p, np.expm1))],
             label_key="Expression",
         )
 
@@ -134,8 +135,8 @@ class TestActiveLearningExperiment:
                 predictor=LinearRegression(),
                 starting_batch_size=3,
                 batch_size=2,
-                normalize_features=False,
-                normalize_labels=False,
+                feature_transforms=[("scaler", StandardScaler())],
+                target_transforms=[("log", FunctionTransformer(np.log1p, np.expm1))],
                 label_key=None,
             )
 

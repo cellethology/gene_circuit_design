@@ -10,10 +10,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from experiments.active_learning import run_single_experiment
-from experiments.core.initial_selection_strategies import RandomInitialSelection
-from experiments.core.query_strategies import Random as RandomStrategy
 
 
 def _make_dataset(tmp_path, n_samples=8, dim=4):
@@ -34,27 +33,48 @@ def _build_cfg(tmp_path):
         "batch_size": 2,
         "starting_batch_size": 2,
         "max_rounds": 1,
-        "normalize_features": False,
-        "normalize_labels": False,
         "output_dir": str(tmp_path / "outputs"),
         "label_key": "Expression",
     }
+    feature_steps = [("scaler", StandardScaler())]
+    target_steps = [
+        (
+            "log",
+            FunctionTransformer(np.log1p, np.expm1),
+        )
+    ]
+    query_strategy = SimpleNamespace(
+        name="RANDOM",
+        select=lambda experiment: experiment.train_indices[: experiment.batch_size],
+    )
+    initial_selection = SimpleNamespace(
+        name="RANDOM_INITIAL",
+        select=lambda dataset: list(range(2)),
+    )
     return SimpleNamespace(
         predictor=LinearRegression(),
-        query_strategy=RandomStrategy(seed=0),
-        initial_selection_strategy=RandomInitialSelection(
-            seed=0, starting_batch_size=2
-        ),
+        query_strategy=query_strategy,
+        initial_selection_strategy=initial_selection,
         seed=0,
         embedding_path=emb_path,
         metadata_path=csv_path,
+        feature_transforms=SimpleNamespace(steps=feature_steps),
+        target_transforms=SimpleNamespace(steps=target_steps),
         al_settings=al_settings,
     )
 
 
+def _patch_make_steps(monkeypatch):
+    def _make_steps(steps_cfg):
+        return steps_cfg
+
+    monkeypatch.setattr("experiments.active_learning.make_steps", _make_steps)
+    monkeypatch.setattr("experiments.active_learning.instantiate", lambda obj: obj)
+
+
 def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
     cfg = _build_cfg(tmp_path)
-    monkeypatch.setattr("experiments.active_learning.instantiate", lambda obj: obj)
+    _patch_make_steps(monkeypatch)
     summary = run_single_experiment(cfg)
 
     out_dir = Path(cfg.al_settings["output_dir"])
@@ -71,6 +91,6 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
 def test_run_single_experiment_requires_output_dir(tmp_path, monkeypatch):
     cfg = _build_cfg(tmp_path)
     cfg.al_settings.pop("output_dir")
-    monkeypatch.setattr("experiments.active_learning.instantiate", lambda obj: obj)
+    _patch_make_steps(monkeypatch)
     with pytest.raises(ValueError):
         run_single_experiment(cfg)
