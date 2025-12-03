@@ -40,6 +40,14 @@ class TestRoundTracker:
         with pytest.raises(IndexError):
             tracker.track_round(selected_indices=[3], metrics=DUMMY_METRICS)
 
+    def test_compute_auc_with_no_rounds(self):
+        tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
+
+        with pytest.raises(
+            ValueError, match="Cannot compute AUC: no rounds have been tracked yet"
+        ):
+            tracker.compute_auc(["normalized_true"])
+
     def test_compute_auc_and_missing_metric(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
         tracker.track_round(

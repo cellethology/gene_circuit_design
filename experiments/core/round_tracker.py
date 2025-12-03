@@ -63,6 +63,9 @@ class RoundTracker:
         Compute the AUC across all rounds.
         The AUC is computed by summing up the maximum value of the metric column up to that round, divided by the number of selected samples in that round.
         """
+        if not self.rounds:
+            raise ValueError("Cannot compute AUC: no rounds have been tracked yet")
+
         aucs = {}
         for metric_column in metric_columns:
             if metric_column not in self.rounds[0].keys():
