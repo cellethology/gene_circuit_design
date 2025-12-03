@@ -41,8 +41,8 @@ class ActiveLearningExperiment:
         predictor: RegressorMixin,
         batch_size: int = 8,
         random_seed: int = 42,
-        normalize_features: bool = True,
-        normalize_labels: bool = True,
+        feature_transforms: Optional[List[Tuple[str, Any]]] = None,
+        target_transforms: Optional[List[Tuple[str, Any]]] = None,
         starting_batch_size: Optional[int] = None,
         label_key: Optional[str] = None,
     ) -> None:
@@ -56,8 +56,8 @@ class ActiveLearningExperiment:
             predictor: Regression model to fit during the loop
             batch_size: Number of samples to select in each round\
             random_seed: Random seed for reproducibility
-            normalize_features: Whether to re-normalize features each round
-            normalize_labels: Whether to re-normalize labels each round
+            feature_transforms: List of (name, transformer) steps to apply to the *features*
+            target_transforms: List of (name, transformer) steps to apply to the *targets*
             label_key: Column name in the metadata CSV containing target values
             starting_batch_size: Number of samples to sample initially. If None, will be set to batch_size.
         """
@@ -72,8 +72,8 @@ class ActiveLearningExperiment:
         self.random_seed = random_seed
         self.label_key = label_key
         self.initial_selection_strategy = initial_selection_strategy
-        self.normalize_features = normalize_features
-        self.normalize_labels = normalize_labels
+        self.feature_transforms = feature_transforms
+        self.target_transforms = target_transforms
         if starting_batch_size is None:
             self.starting_batch_size = self.batch_size
         else:
@@ -99,8 +99,8 @@ class ActiveLearningExperiment:
         # Initialize trainer
         self.trainer = PredictorTrainer(
             predictor,
-            normalize_features=self.normalize_features,
-            normalize_labels=self.normalize_labels,
+            feature_transform=feature_transforms,
+            target_transform=target_transforms,
         )
 
         # Initialize metrics calculator

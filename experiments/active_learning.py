@@ -6,9 +6,10 @@ This script implements an active learning approach to design circuit with specif
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from hydra.utils import instantiate
+from omegaconf import ListConfig, OmegaConf
 
 from experiments.core.experiment import ActiveLearningExperiment
 
@@ -30,6 +31,8 @@ def run_single_experiment(
     predictor = instantiate(cfg.predictor)
     query_strategy = instantiate(cfg.query_strategy)
     initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
+    feature_transforms = make_steps(cfg.feature_transforms.steps)
+    target_transforms = make_steps(cfg.target_transforms.steps)
     seed = cfg.seed
 
     # Extract active learning settings
@@ -39,8 +42,6 @@ def run_single_experiment(
     batch_size = al_settings.get("batch_size", 8)
     starting_batch_size = al_settings.get("starting_batch_size", batch_size)
     max_rounds = al_settings.get("max_rounds", 30)
-    normalize_features = al_settings.get("normalize_features", True)
-    normalize_labels = al_settings.get("normalize_labels", True)
     output_dir = al_settings.get("output_dir", None)
     label_key = al_settings.get("label_key", None)
 
@@ -53,8 +54,8 @@ def run_single_experiment(
         starting_batch_size=starting_batch_size,
         batch_size=batch_size,
         random_seed=seed,
-        normalize_features=normalize_features,
-        normalize_labels=normalize_labels,
+        feature_transforms=feature_transforms,
+        target_transforms=target_transforms,
         label_key=label_key,
         initial_selection_strategy=initial_selection_strategy,
     )
@@ -77,14 +78,20 @@ def run_single_experiment(
     )
 
     # Summarize results
+    feature_transforms_names = (
+        [item[0] for item in feature_transforms] if feature_transforms else []
+    )
+    target_transforms_names = (
+        [item[0] for item in target_transforms] if target_transforms else []
+    )
     summary = {
         "embedding_path": embeddings_path,
         "metadata_path": metadata_path,
         "query_strategy": query_strategy.name,
         "predictor": predictor.__class__.__name__,
         "initial_selection": initial_selection_strategy.name,
-        "normalize_features": normalize_features,
-        "normalize_labels": normalize_labels,
+        "feature_transforms": feature_transforms_names,
+        "target_transforms": target_transforms_names,
         "seed": seed,
         "auc_normalized_true": aucs["normalized_true"],
         "auc_normalized_pred": aucs["normalized_pred"],
@@ -96,3 +103,22 @@ def run_single_experiment(
     summary_path.write_text(json.dumps(summary, indent=2))
 
     return summary
+
+
+def make_steps(steps_cfg: ListConfig) -> List[Tuple[str, Any]]:
+    """
+    Make a list of (name, transformer) steps from a list of step configurations.
+
+    Args:
+        steps_cfg: List of step configurations
+
+    Returns:
+        List of (name, transformer) steps
+    """
+    steps: List[Tuple[str, Any]] = []
+    for step_cfg in steps_cfg:
+        step_dict = OmegaConf.to_container(step_cfg, resolve=True)
+        name = step_dict.pop("id")
+        transformer = instantiate(step_dict)
+        steps.append((name, transformer))
+    return steps
