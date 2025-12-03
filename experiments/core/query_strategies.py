@@ -125,9 +125,7 @@ class TopLogLikelihood(QueryStrategyBase):
         batch_size = min(experiment.batch_size, len(valid_unlabeled_indices))
         selected_local_indices = sorted_indices[:batch_size]
 
-        selected_indices = [
-            experiment.unlabeled_indices[i] for i in selected_local_indices
-        ]
+        selected_indices = [valid_unlabeled_indices[i] for i in selected_local_indices]
 
         selected_log_likelihoods = valid_log_likelihoods[selected_local_indices]
         selected_values = experiment.dataset.labels[selected_indices]
