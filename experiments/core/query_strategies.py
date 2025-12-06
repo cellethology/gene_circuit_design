@@ -6,7 +6,6 @@ selection strategies for active learning experiments.
 """
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
@@ -63,8 +62,13 @@ class Random(QueryStrategyBase):
 
     def select(self, experiment: Any) -> List[int]:
         unlabeled_pool = experiment.unlabeled_indices
-        batch_size = min(experiment.batch_size, len(unlabeled_pool))
-        selected_indices = random.Random(self.seed).sample(unlabeled_pool, batch_size)
+        if len(unlabeled_pool) < experiment.batch_size:
+            return unlabeled_pool
+
+        rng = np.random.default_rng(self.seed)
+        selected_indices = rng.choice(
+            unlabeled_pool, experiment.batch_size, replace=False
+        ).tolist()
         self._log_round(selected_indices)
         return selected_indices
 
