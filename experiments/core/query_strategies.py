@@ -22,6 +22,8 @@ class QueryStrategyBase(ABC):
     the next batch of samples based on its specific criteria.
     """
 
+    requires_model: bool = True
+
     def __init__(self, name: Optional[str] = None):
         self.name = name or self.__class__.__name__
 
@@ -59,6 +61,7 @@ class Random(QueryStrategyBase):
     def __init__(self, seed: int) -> None:
         super().__init__("RANDOM")
         self.seed = seed
+        self.requires_model = False
 
     def select(self, experiment: Any) -> List[int]:
         unlabeled_pool = experiment.unlabeled_indices

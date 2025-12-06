@@ -151,10 +151,15 @@ class ActiveLearningExperiment:
         return self.query_strategy.select(self)
 
     def _evaluate_and_track(
-        self, indices: List[int], top_p: float = 0.1
+        self,
+        indices: List[int],
+        top_p: float = 0.1,
+        predictions_override: Optional[np.ndarray] = None,
     ) -> Dict[str, float]:
         """
         Evaluate and track the performance of the model on the given indices.
+        When `predictions_override` is provided (e.g., for model-free strategies),
+        those predictions are used instead of calling the trainer.
 
         Args:
             indices: Indices of the samples to evaluate
@@ -162,7 +167,11 @@ class ActiveLearningExperiment:
         Returns:
             Metrics for the round
         """
-        predictions = self.trainer.predict(self.dataset.embeddings[indices, :])
+
+        if predictions_override is not None:
+            predictions = predictions_override
+        else:
+            predictions = self.trainer.predict(self.dataset.embeddings[indices, :])
         round_metrics = self.metrics_calculator.compute_metrics_for_round(
             selected_indices=indices,
             predictions=predictions,
@@ -176,6 +185,8 @@ class ActiveLearningExperiment:
     ) -> List[Dict[str, Any]]:
         """
         Run the active learning experiment.
+        Uses zero-valued prediction overrides when the query strategy skips model training
+        so downstream metrics/round tracking continue to work.
 
         Args:
             max_rounds: Maximum number of active learning rounds
@@ -185,21 +196,39 @@ class ActiveLearningExperiment:
         """
         logger.info(f"Starting active learning run with {max_rounds} max rounds")
 
+        requires_model = getattr(self.query_strategy, "requires_model", True)
+
         for round_num in range(max_rounds):
             logger.info(f"\n--- Round {round_num} ---")
 
-            # Train model
-            X_train = self.dataset.embeddings[self.train_indices, :]
-            y_train = self.dataset.labels[self.train_indices]
-            self.trainer.train(X_train=X_train, y_train=y_train)
+            if requires_model:
+                X_train = self.dataset.embeddings[self.train_indices, :]
+                y_train = self.dataset.labels[self.train_indices]
+                self.trainer.train(X_train=X_train, y_train=y_train)
+            elif round_num == 0:
+                logger.info(
+                    "Skipping model training because query strategy does not require a predictor."
+                )
+
+            initial_predictions = (
+                None if requires_model else np.zeros(len(self.train_indices))
+            )
             if round_num == 0:
-                self._evaluate_and_track(indices=self.train_indices, top_p=top_p)
+                self._evaluate_and_track(
+                    indices=self.train_indices,
+                    top_p=top_p,
+                    predictions_override=initial_predictions,
+                )
 
             # Select next batch
             next_batch = self._select_next_batch()
 
-            # Track selected variants
-            self._evaluate_and_track(indices=next_batch, top_p=top_p)
+            next_predictions = None if requires_model else np.zeros(len(next_batch))
+            self._evaluate_and_track(
+                indices=next_batch,
+                top_p=top_p,
+                predictions_override=next_predictions,
+            )
 
             # Update training set
             self.train_indices.extend(next_batch)

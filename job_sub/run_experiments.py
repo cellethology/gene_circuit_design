@@ -10,7 +10,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, Set
+from typing import List, Optional, Set
 
 import hydra
 import pandas as pd
@@ -96,9 +96,12 @@ def _list_sweep_dirs() -> Set[Path]:
     return sweeps
 
 
-def _combine_summaries(sweep_dir: Path) -> None:
-    """Combine all summary.json files inside a sweep directory into one CSV."""
-    summary_files = sorted(sweep_dir.rglob("summary.json"))
+def _combine_summaries(sweep_dir: Path, embedding_name: Optional[str] = None) -> None:
+    """Combine all summary.json files inside the sweep (per embedding)."""
+    search_dir = sweep_dir / embedding_name if embedding_name else sweep_dir
+    if not search_dir.exists():
+        search_dir = sweep_dir
+    summary_files = sorted(search_dir.rglob("summary.json"))
     if not summary_files:
         return
 
@@ -115,7 +118,7 @@ def _combine_summaries(sweep_dir: Path) -> None:
         return
 
     df = pd.DataFrame(rows)
-    output_csv = sweep_dir / "combined_summaries.csv"
+    output_csv = search_dir / "combined_summaries.csv"
     df.to_csv(output_csv, index=False)
     print(f"Combined {len(rows)} summaries into {output_csv}")
 
@@ -144,8 +147,9 @@ def main():
             env=env,
         )
         new_sweeps = _list_sweep_dirs() - existing_sweeps
+        embedding_name = Path(embedding_path).stem
         for sweep_dir in sorted(new_sweeps):
-            _combine_summaries(sweep_dir)
+            _combine_summaries(sweep_dir, embedding_name=embedding_name)
 
 
 if __name__ == "__main__":

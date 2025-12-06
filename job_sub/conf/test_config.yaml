@@ -32,9 +32,9 @@ hydra:
     subdir: ${embedding_name}/${hydra.job.override_dirname}
   sweeper:
     params:
-      initial_selection_strategy: random, kmeans
-      query_strategy: random, topk
-      predictor: ridge_regressor, rf_regressor, kn_regressor, mlp_regressor
+      initial_selection_strategy: random
+      query_strategy: random
+      predictor: ridge_regressor
       seed: 1, 2, 3
   # launcher:
   #   timeout_min: 240
