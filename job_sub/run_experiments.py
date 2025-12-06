@@ -18,13 +18,49 @@ from omegaconf import OmegaConf
 
 from experiments.active_learning import run_single_experiment
 
-LIST_OF_EMBEDDING_PATHS: List[str] = [
-    "embeddings.npz",
-]
-
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
 _MULTIRUN_BASE = _SCRIPT_PATH.parent / "multirun"
+_EMBED_PATH_ENV = "AL_EMBEDDING_PATH"
+_EMBED_NAME_ENV = "AL_EMBEDDING_NAME"
+_PATHS_CONFIG = _SCRIPT_PATH.parent / "conf" / "paths" / "paths.yaml"
+
+_get_resolver_names = getattr(OmegaConf, "get_resolver_names", None)
+env_registered = (
+    "env" in _get_resolver_names()
+    if callable(_get_resolver_names)
+    else OmegaConf.has_resolver("env")
+)
+if not env_registered:
+    OmegaConf.register_new_resolver(
+        "env",
+        lambda key, default=None: os.environ.get(key, default),
+        use_cache=False,
+    )
+
+OmegaConf.register_new_resolver(
+    "path_stem",
+    lambda value: Path(value).stem if value else "",
+    replace=True,
+)
+
+
+def _load_embedding_paths() -> List[str]:
+    """Load embedding paths from the paths config so users edit YAML only."""
+    if not _PATHS_CONFIG.exists():
+        return []
+    cfg = OmegaConf.load(_PATHS_CONFIG)
+    root = OmegaConf.create({"paths": cfg})
+    OmegaConf.resolve(root)
+    paths_cfg = root.paths
+    embedding_list = paths_cfg.get("embedding_paths")
+    if not embedding_list:
+        fallback = paths_cfg.get("embedding_file")
+        embedding_list = [fallback] if fallback else []
+    return [str(path) for path in embedding_list]
+
+
+LIST_OF_EMBEDDING_PATHS: List[str] = _load_embedding_paths()
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="test_config")
@@ -94,13 +130,14 @@ def main():
         print(f"{'=' * 80}\n")
         env = os.environ.copy()
         env[_HYDRA_CHILD_ENV] = "1"
+        env[_EMBED_PATH_ENV] = embedding_path
+        env[_EMBED_NAME_ENV] = Path(embedding_path).stem
         existing_sweeps = _list_sweep_dirs()
         subprocess.run(
             [
                 sys.executable,
                 str(_SCRIPT_PATH),
                 "-m",
-                f"embedding_path={embedding_path}",
                 *user_overrides,
             ],
             check=True,
