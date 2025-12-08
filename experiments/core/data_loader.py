@@ -94,20 +94,20 @@ class DataLoader:
         return self.dataset
 
     def _load_embeddings(self) -> tuple[np.ndarray, np.ndarray]:
-        data = np.load(self.embeddings_path)
+        data = np.load(self.embeddings_path, allow_pickle=True)
         if "embeddings" not in data:
             raise ValueError(
                 f"'embeddings' array not found in {self.embeddings_path}. "
                 f"Available keys: {list(data.keys())}"
             )
         embeddings = data["embeddings"]
-        sample_ids = data["ids"] if "ids" in data else np.arange(len(embeddings))
+        sample_ids = data["ids"].astype(
+            np.int32
+        )  # sample_ids is row index of csv, so we need to convert it to integer
         return embeddings, sample_ids
 
     def _load_metadata(self, sample_ids: np.ndarray) -> np.ndarray:
         df = pd.read_csv(self.metadata_path)
-
-        # IMPORTANT: sample_ids is row index of csv, so we can use it to index the dataframe
         df = df.iloc[sample_ids]
         labels = df[self.label_key].to_numpy()
         return labels

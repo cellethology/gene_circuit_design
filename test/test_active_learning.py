@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-from experiments.active_learning import make_steps, run_single_experiment
+from experiments.active_learning import make_steps, run_one_experiment
 
 
 def _make_dataset(tmp_path, n_samples=8, dim=4):
@@ -76,7 +76,7 @@ def _patch_make_steps(monkeypatch):
 def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
     cfg = _build_cfg(tmp_path)
     _patch_make_steps(monkeypatch)
-    summary = run_single_experiment(cfg)
+    summary = run_one_experiment(cfg)
 
     out_dir = Path(cfg.al_settings["output_dir"])
     summary_path = out_dir / "summary.json"
@@ -94,7 +94,7 @@ def test_run_single_experiment_requires_output_dir(tmp_path, monkeypatch):
     cfg.al_settings.pop("output_dir")
     _patch_make_steps(monkeypatch)
     with pytest.raises(ValueError):
-        run_single_experiment(cfg)
+        run_one_experiment(cfg)
 
 
 def test_make_steps_builds_pipeline(monkeypatch):

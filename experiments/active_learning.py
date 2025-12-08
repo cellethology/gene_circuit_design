@@ -14,7 +14,7 @@ from omegaconf import ListConfig, OmegaConf
 from experiments.core.experiment import ActiveLearningExperiment
 
 
-def run_single_experiment(
+def run_one_experiment(
     cfg: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
@@ -33,7 +33,6 @@ def run_single_experiment(
     initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
     feature_transforms = make_steps(cfg.feature_transforms.steps)
     target_transforms = make_steps(cfg.target_transforms.steps)
-    seed = cfg.seed
 
     # Extract active learning settings
     embeddings_path = cfg.embedding_path
@@ -44,6 +43,7 @@ def run_single_experiment(
     max_rounds = al_settings.get("max_rounds", 30)
     output_dir = al_settings.get("output_dir", None)
     label_key = al_settings.get("label_key", None)
+    seed = al_settings.get("seed", 0)
 
     # Create experiment
     experiment = ActiveLearningExperiment(
@@ -85,8 +85,6 @@ def run_single_experiment(
         [item[0] for item in target_transforms] if target_transforms else []
     )
     summary = {
-        "embedding_path": embeddings_path,
-        "metadata_path": metadata_path,
         "query_strategy": query_strategy.name,
         "predictor": predictor.__class__.__name__,
         "initial_selection": initial_selection_strategy.name,
@@ -96,6 +94,8 @@ def run_single_experiment(
         "auc_normalized_true": aucs["normalized_true"],
         "auc_normalized_pred": aucs["normalized_pred"],
         "auc_top_proportion": aucs["top_proportion"],
+        "embedding_path": embeddings_path,
+        "metadata_path": metadata_path,
     }
 
     # Persist summary for downstream aggregation

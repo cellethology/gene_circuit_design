@@ -1,12 +1,11 @@
 """
-Selection strategy implementations using the Strategy pattern.
+Query strategy implementations.
 
 This module provides a clean, extensible way to implement different
 selection strategies for active learning experiments.
 """
 
 import logging
-import random
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
@@ -17,11 +16,13 @@ logger = logging.getLogger(__name__)
 
 class QueryStrategyBase(ABC):
     """
-    Abstract base class for selection strategies.
+    Abstract base class for query strategies.
 
     Each concrete strategy implements the `select` method to choose
-    the next batch of sequences based on its specific criteria.
+    the next batch of samples based on its specific criteria.
     """
+
+    requires_model: bool = True
 
     def __init__(self, name: Optional[str] = None):
         self.name = name or self.__class__.__name__
@@ -29,7 +30,7 @@ class QueryStrategyBase(ABC):
     @abstractmethod
     def select(self, experiment: Any) -> List[int]:
         """
-        Select the next batch of sequences.
+        Select the next batch of samples.
 
         Returns:
             List of selected indices from unlabeled_indices
@@ -55,33 +56,39 @@ class QueryStrategyBase(ABC):
 
 
 class Random(QueryStrategyBase):
-    """Strategy that selects sequences randomly."""
+    """Strategy that selects samples randomly."""
 
     def __init__(self, seed: int) -> None:
         super().__init__("RANDOM")
         self.seed = seed
+        self.requires_model = False
 
     def select(self, experiment: Any) -> List[int]:
         unlabeled_pool = experiment.unlabeled_indices
-        batch_size = min(experiment.batch_size, len(unlabeled_pool))
-        selected_indices = random.Random(self.seed).sample(unlabeled_pool, batch_size)
+        if len(unlabeled_pool) < experiment.batch_size:
+            return unlabeled_pool
+
+        rng = np.random.default_rng(self.seed)
+        selected_indices = rng.choice(
+            unlabeled_pool, experiment.batch_size, replace=False
+        ).tolist()
         self._log_round(selected_indices)
         return selected_indices
 
 
 class TopPredictions(QueryStrategyBase):
-    """Selects sequences with highest k predicted expression values."""
+    """Selects samples with highest k predicted label values."""
 
     def __init__(self) -> None:
         super().__init__("TOP_K_PRED")
 
     def select(self, experiment: Any) -> List[int]:
+        k = experiment.batch_size
         unlabeled = experiment.unlabeled_indices
-        if len(unlabeled) < experiment.batch_size:
+        if len(unlabeled) < k:
             return unlabeled
 
         preds = experiment.trainer.predict(experiment.dataset.embeddings[unlabeled, :])
-        k = experiment.batch_size
 
         # get indices of top k predictions (descending)
         top_k_local = np.argpartition(-preds, k - 1)[:k]
@@ -94,7 +101,7 @@ class TopPredictions(QueryStrategyBase):
 
 
 class TopLogLikelihood(QueryStrategyBase):
-    """Selects samples with highest zero-shot log likelihood values."""
+    """Selects samples with highest log likelihood values."""
 
     def __init__(self) -> None:
         super().__init__("TOP_LOG_LIKELIHOOD")
@@ -104,7 +111,7 @@ class TopLogLikelihood(QueryStrategyBase):
         if log_likelihoods is None or np.all(np.isnan(log_likelihoods)):
             logger.warning("No log likelihood data available.")
             return []
-        # Get log likelihood values for unlabeled sequences
+        # Get log likelihood values for unlabeled samples
         unlabeled_log_likelihoods = log_likelihoods[experiment.unlabeled_indices]
 
         # Filter out NaN values
@@ -117,7 +124,7 @@ class TopLogLikelihood(QueryStrategyBase):
         valid_log_likelihoods = unlabeled_log_likelihoods[valid_mask]
 
         if len(valid_unlabeled_indices) == 0:
-            logger.warning("No valid log likelihood values for unlabeled sequences. ")
+            logger.warning("No valid log likelihood values for unlabeled samples. ")
             return []
 
         # Select indices with highest log likelihood values
