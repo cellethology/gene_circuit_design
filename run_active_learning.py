@@ -82,7 +82,7 @@ def run_one_experiment(
 
     # Compute AUC
     aucs = experiment.round_tracker.compute_auc(
-        metric_columns=["normalized_true", "normalized_pred", "top_proportion"]
+        metric_columns=["normalized_true", "normalized_pred", "n_selected_in_top"]
     )
 
     # Summarize results
@@ -103,7 +103,7 @@ def run_one_experiment(
         "seed": seed,
         "auc_normalized_true": aucs["normalized_true"],
         "auc_normalized_pred": aucs["normalized_pred"],
-        "auc_top_proportion": aucs["top_proportion"],
+        "auc_n_selected_in_top": aucs["n_selected_in_top"],
     }
 
     # Persist summary for downstream aggregation

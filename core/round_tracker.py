@@ -67,13 +67,23 @@ class RoundTracker:
             raise ValueError("Cannot compute AUC: no rounds have been tracked yet")
 
         aucs = {}
+        total_selected = sum(len(round["selected_sample_ids"]) for round in self.rounds)
+
         for metric_column in metric_columns:
             if metric_column not in self.rounds[0].keys():
                 raise ValueError(f"Metric column {metric_column} not found in rounds")
 
             values = np.array([round[metric_column] for round in self.rounds])
-            cumulative_max_per_round = np.maximum.accumulate(values)
-            aucs[metric_column] = np.sum(cumulative_max_per_round)
+            if metric_column == "n_selected_in_top":
+                cumulative_sum = np.cumsum(values)
+                aucs[metric_column] = (
+                    float(np.sum(cumulative_sum)) / total_selected
+                    if total_selected > 0
+                    else 0.0
+                )
+            else:
+                cumulative_max_per_round = np.maximum.accumulate(values)
+                aucs[metric_column] = float(np.sum(cumulative_max_per_round))
         return aucs
 
     def save_to_csv(self, output_path: Path) -> None:
