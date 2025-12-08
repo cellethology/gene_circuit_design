@@ -15,8 +15,8 @@ embedding_model: enformer_pca32
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 1
-parallelize_seeds: false
+num_seeds_per_job: 200
+parallelize_seeds: true
 
 # active learning settings
 al_settings:
@@ -40,12 +40,13 @@ hydra:
     params:
       initial_selection_strategy: random, kmeans
       query_strategy: topk
-      predictor: histgradboost_regressor
+      predictor: rf_regressor, ridge_regressor, kn_regressor, mlp_regressor, histgradboost_regressor
       embedding_model: enformer_pca32, evo_1p5_pca32
   launcher:
     timeout_min: 240
+    # everything below is used only for submitting jobs to the cluster
     # partition: wzt_20250411,intel-sc3
     # cpus_per_task: 8
     # mem_per_cpu: 8GB
     # qos: huge
-    # submitit_folder: logs_experiments
+    # submitit_folder: slurm_logs
