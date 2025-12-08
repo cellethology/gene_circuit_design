@@ -32,7 +32,6 @@ _MULTIRUN_BASE = _SCRIPT_PATH.parent / "multirun"
 _DATASET_ENV = "AL_DATASET_NAME"
 _METADATA_ENV = "AL_METADATA_PATH"
 _EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
-_EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
 DATASETS: List[DatasetConfig] = load_dataset_configs()
 if not DATASETS:
@@ -59,8 +58,6 @@ def main():
         env[_DATASET_ENV] = dataset.name
         env[_METADATA_ENV] = dataset.metadata_path
         env[_EMBED_DIR_ENV] = dataset.embedding_dir
-        if dataset.default_embedding_model:
-            env[_EMBED_MODEL_ENV] = dataset.default_embedding_model
         existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
         subprocess.run(
             [

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from experiments.core.query_strategies import (
+from core.query_strategies import (
     Random,
     TopLogLikelihood,
     TopPredictions,

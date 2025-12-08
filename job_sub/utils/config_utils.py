@@ -20,7 +20,6 @@ class DatasetConfig:
     name: str
     metadata_path: str
     embedding_dir: str
-    default_embedding_model: str
 
 
 def ensure_resolvers() -> None:
@@ -77,24 +76,11 @@ def load_dataset_configs() -> List[DatasetConfig]:
                 f"Embedding directory '{embedding_dir_path}' for dataset '{name}' does not exist"
             )
 
-        default_model_value = str(dataset.get("default_embedding_model", "")).strip()
-        default_model = Path(default_model_value).stem if default_model_value else ""
-        if not default_model:
-            raise ValueError(
-                f"Dataset '{name}' is missing default_embedding_model (stem without extension)"
-            )
-        default_path = embedding_dir_path / f"{default_model}.npz"
-        if not default_path.exists():
-            raise ValueError(
-                f"Default embedding file '{default_path}' not found for dataset '{name}'"
-            )
-
         dataset_configs.append(
             DatasetConfig(
                 name=name,
                 metadata_path=metadata_path,
                 embedding_dir=str(embedding_dir_path),
-                default_embedding_model=default_model,
             )
         )
 

@@ -4,8 +4,8 @@ Tests for initial selection strategies.
 
 import numpy as np
 
-from experiments.core.data_loader import Dataset
-from experiments.core.initial_selection_strategies import (
+from core.data_loader import Dataset
+from core.initial_selection_strategies import (
     KMeansInitialSelection,
     RandomInitialSelection,
 )

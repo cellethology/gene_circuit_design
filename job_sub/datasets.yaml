@@ -2,4 +2,3 @@ datasets:
   - name: "166k_library"
     metadata_path: "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/synbio-glm/166k_Data/166k_Library_CLASSIC_Data.csv"
     embedding_dir: "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/synbio-glm/runpod"
-    default_embedding_model: "enformer_pca32"

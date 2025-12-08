@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from experiments.core.round_tracker import RoundTracker
+from core.round_tracker import RoundTracker
 
 DUMMY_METRICS = {
     "top_proportion": 0.5,
