@@ -5,18 +5,20 @@ Run the script (`python job_sub/run_experiments.py`) to sweep across the
 paths below.
 """
 
+import copy
 import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import hydra
 import pandas as pd
 from omegaconf import OmegaConf
 
-from experiments.active_learning import run_single_experiment
+from job_sub.seed_runner import run_seed_experiment
 
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
@@ -63,11 +65,55 @@ def _load_embedding_paths() -> List[str]:
 LIST_OF_EMBEDDING_PATHS: List[str] = _load_embedding_paths()
 
 
-@hydra.main(version_base=None, config_path="conf", config_name="test_config")
-def run_experiments(cfg):
+def _generate_seed_values(cfg) -> List[int]:
+    """Return sequential seeds to run inside a single Hydra job."""
+    num_seeds = int(OmegaConf.select(cfg, "num_seeds_per_job", default=1))
+    if num_seeds < 1:
+        raise ValueError("num_seeds_per_job must be >= 1")
+    start_seed = int(OmegaConf.select(cfg, "seed", default=0))
+    return [start_seed + offset for offset in range(num_seeds)]
+
+
+def _materialize_seed_cfgs(cfg) -> List[Dict[str, Any]]:
+    """Return serialized configs for each seed to support multiprocessing."""
+    base_output_dir = Path(str(cfg.al_settings.output_dir))
+    base_cfg = OmegaConf.to_container(cfg, resolve=False)
+    seed_cfgs: List[Dict[str, Any]] = []
+    for seed in _generate_seed_values(cfg):
+        seed_output_dir = base_output_dir / f"seed_{seed}"
+        seed_cfg = copy.deepcopy(base_cfg)
+        al_settings = seed_cfg.setdefault("al_settings", {})
+        al_settings["seed"] = seed
+        al_settings["output_dir"] = str(seed_output_dir)
+        seed_cfgs.append(seed_cfg)
+    return seed_cfgs
+
+
+def _max_seed_workers(cfg, num_tasks: int) -> int:
+    """Decide max workers based on config flag and available CPUs."""
+    if not OmegaConf.select(cfg, "parallelize_seeds", default=True):
+        return 1
+    available = os.cpu_count() or 1
+    return max(1, min(available, num_tasks))
+
+
+@hydra.main(version_base=None, config_path="conf", config_name="experiment_config")
+def run_one_job(cfg):
     """Run a single experiment with the given configuration (Hydra entrypoint)."""
     print(OmegaConf.to_yaml(cfg.al_settings))
-    run_single_experiment(cfg)
+    seed_cfgs = _materialize_seed_cfgs(cfg)
+    max_workers = _max_seed_workers(cfg, len(seed_cfgs))
+    if max_workers == 1 or len(seed_cfgs) == 1:
+        for raw_cfg in seed_cfgs:
+            run_seed_experiment(raw_cfg)
+        return
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(run_seed_experiment, raw_cfg) for raw_cfg in seed_cfgs
+        ]
+        for future in as_completed(futures):
+            future.result()
 
 
 def _collect_user_overrides() -> List[str]:
@@ -155,10 +201,10 @@ def main():
 if __name__ == "__main__":
     if os.environ.get(_HYDRA_CHILD_ENV) == "1":
         # Already inside Hydra child: run once
-        run_experiments()
+        run_one_job()
     elif any(flag in sys.argv[1:] for flag in ("-m", "--multirun")):
         # User requested multirun: fan out over data paths via subprocess
         main()
     else:
         # Single run, no wrapper looping and no sweeps
-        run_experiments()
+        run_one_job()

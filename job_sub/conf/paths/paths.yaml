@@ -11,4 +11,3 @@ embedding_file: "${paths.base_data_dir}/runpod/166k_enformer_embedding_pca32.npz
 # this list of path will be run during multirun mode
 embedding_paths:
   - "${paths.embedding_file}"
-  - "${paths.embedding_file}"

@@ -8,12 +8,16 @@ defaults:
   - _self_
   - override hydra/launcher: submitit_local
 
+# data paths
 embedding_path: ${env:AL_EMBEDDING_PATH,${paths.embedding_file}}
 embedding_name: ${path_stem:${embedding_path}}
 metadata_path: ${paths.metadata_file}
 
-seed: 42
+# number of random seeds to run for each active learning experiment
+num_seeds_per_job: 2
+parallelize_seeds: true
 
+# active learning settings
 al_settings:
   batch_size: 8
   starting_batch_size: 8
@@ -25,17 +29,17 @@ al_settings:
   label_key: "Fold Change (Induced/Basal)"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
-  seed: ${seed}
+  seed: 0
 
+# hydra settings
 hydra:
   sweep:
     subdir: ${embedding_name}/${hydra.job.override_dirname}
-  sweeper:
+  sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: random
-      query_strategy: random
+      query_strategy: topk
       predictor: ridge_regressor
-      seed: 1, 2, 3
   # launcher:
   #   timeout_min: 240
   #   partition: wzt_20250411,intel-sc3
