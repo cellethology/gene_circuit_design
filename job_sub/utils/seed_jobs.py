@@ -16,8 +16,7 @@ def generate_seed_values(cfg) -> List[int]:
     num_seeds = int(OmegaConf.select(cfg, "num_seeds_per_job", default=1))
     if num_seeds < 1:
         raise ValueError("num_seeds_per_job must be >= 1")
-    start_seed = int(OmegaConf.select(cfg, "seed", default=0))
-    return [start_seed + offset for offset in range(num_seeds)]
+    return list(range(num_seeds))
 
 
 def materialize_seed_cfgs(cfg) -> List[Dict[str, Any]]:
