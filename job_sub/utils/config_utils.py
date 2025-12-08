@@ -85,3 +85,23 @@ def load_dataset_configs() -> List[DatasetConfig]:
         )
 
     return dataset_configs
+
+
+def seed_env_from_datasets(
+    datasets: List[DatasetConfig],
+    hydra_child_env: str = "GENE_CIRCUIT_HYDRA_CHILD",
+    dataset_env: str = "AL_DATASET_NAME",
+    metadata_env: str = "AL_METADATA_PATH",
+    embedding_env: str = "AL_EMBEDDING_ROOT",
+) -> None:
+    """Seed dataset env vars when invoked outside the Hydra child."""
+    if os.environ.get(hydra_child_env) == "1":
+        return
+    if os.environ.get(dataset_env):
+        return
+    if not datasets:
+        return
+    dataset = datasets[0]
+    os.environ.setdefault(dataset_env, dataset.name)
+    os.environ.setdefault(metadata_env, dataset.metadata_path)
+    os.environ.setdefault(embedding_env, dataset.embedding_dir)

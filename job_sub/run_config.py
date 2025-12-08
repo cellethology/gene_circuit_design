@@ -18,6 +18,7 @@ from job_sub.utils.config_utils import (
     DatasetConfig,
     ensure_resolvers,
     load_dataset_configs,
+    seed_env_from_datasets,
 )
 from job_sub.utils.seed_jobs import run_seed_jobs
 from job_sub.utils.sweep_utils import (
@@ -32,10 +33,21 @@ _MULTIRUN_BASE = _SCRIPT_PATH.parent / "multirun"
 _DATASET_ENV = "AL_DATASET_NAME"
 _METADATA_ENV = "AL_METADATA_PATH"
 _EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
+# Deprecated but kept for compatibility
+_EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
 DATASETS: List[DatasetConfig] = load_dataset_configs()
 if not DATASETS:
     raise RuntimeError("No datasets configured in job_sub/datasets.yaml")
+
+
+seed_env_from_datasets(
+    DATASETS,
+    hydra_child_env=_HYDRA_CHILD_ENV,
+    dataset_env=_DATASET_ENV,
+    metadata_env=_METADATA_ENV,
+    embedding_env=_EMBED_DIR_ENV,
+)
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
