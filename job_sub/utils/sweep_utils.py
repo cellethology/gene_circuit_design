@@ -8,15 +8,8 @@ import pandas as pd
 
 
 def collect_user_overrides(argv: List[str]) -> List[str]:
-    """Keep any user overrides other than multirun flag or embedding_paths."""
-    overrides: List[str] = []
-    for arg in argv:
-        if arg in ("-m", "--multirun"):
-            continue
-        if arg.startswith("embedding_path="):
-            continue
-        overrides.append(arg)
-    return overrides
+    """Keep any user overrides other than the multirun flag."""
+    return [arg for arg in argv if arg not in ("-m", "--multirun")]
 
 
 def list_sweep_dirs(multirun_base: Path) -> Set[Path]:
@@ -33,9 +26,9 @@ def list_sweep_dirs(multirun_base: Path) -> Set[Path]:
     return sweeps
 
 
-def combine_summaries(sweep_dir: Path, embedding_name: Optional[str] = None) -> None:
-    """Combine all summary.json files inside the sweep (per embedding)."""
-    search_dir = sweep_dir / embedding_name if embedding_name else sweep_dir
+def combine_summaries(sweep_dir: Path, dataset_name: Optional[str] = None) -> None:
+    """Combine all summary.json files inside the sweep (per dataset)."""
+    search_dir = sweep_dir / dataset_name if dataset_name else sweep_dir
     if not search_dir.exists():
         search_dir = sweep_dir
     summary_files = sorted(search_dir.rglob("summary.json"))
