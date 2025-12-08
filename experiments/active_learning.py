@@ -47,6 +47,12 @@ def run_one_experiment(
     label_key = al_settings.get("label_key", None)
     seed = al_settings.get("seed", 0)
 
+    # Check embedding path matches embedding model
+    if not embeddings_path.endswith(f"{embedding_model_name}.npz"):
+        raise ValueError(
+            f"Embedding path {embeddings_path} does not match embedding model {embedding_model_name}"
+        )
+
     # Create experiment
     experiment = ActiveLearningExperiment(
         embeddings_path=embeddings_path,
