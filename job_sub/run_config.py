@@ -1,8 +1,8 @@
 """
 Minimal wrapper that runs the Hydra multirun entrypoint once per dataset.
 
-Run the script (`python job_sub/run_experiments.py`) to sweep across the
-paths below.
+Run the script (`python job_sub/run_config.py`) to sweep across the
+datasets defined in datasets.yaml.
 """
 
 import os
@@ -14,7 +14,12 @@ from typing import List
 import hydra
 from omegaconf import OmegaConf
 
-from job_sub.utils.config_utils import ensure_resolvers, load_embedding_paths
+from job_sub.utils.config_utils import (
+    DatasetConfig,
+    ensure_resolvers,
+    load_dataset_configs,
+    seed_env_from_datasets,
+)
 from job_sub.utils.seed_jobs import run_seed_jobs
 from job_sub.utils.sweep_utils import (
     collect_user_overrides,
@@ -25,10 +30,24 @@ from job_sub.utils.sweep_utils import (
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
 _MULTIRUN_BASE = _SCRIPT_PATH.parent / "multirun"
-_EMBED_PATH_ENV = "AL_EMBEDDING_PATH"
-_EMBED_NAME_ENV = "AL_EMBEDDING_NAME"
+_DATASET_ENV = "AL_DATASET_NAME"
+_METADATA_ENV = "AL_METADATA_PATH"
+_EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
+# Deprecated but kept for compatibility
+_EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
-LIST_OF_EMBEDDING_PATHS: List[str] = load_embedding_paths()
+DATASETS: List[DatasetConfig] = load_dataset_configs()
+if not DATASETS:
+    raise RuntimeError("No datasets configured in job_sub/datasets.yaml")
+
+
+seed_env_from_datasets(
+    DATASETS,
+    hydra_child_env=_HYDRA_CHILD_ENV,
+    dataset_env=_DATASET_ENV,
+    metadata_env=_METADATA_ENV,
+    embedding_env=_EMBED_DIR_ENV,
+)
 
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
@@ -42,14 +61,15 @@ def main():
     """Loop over datasets and launch Hydra multirun for each via subprocess."""
     user_overrides = collect_user_overrides(sys.argv[1:])
 
-    for embedding_path in LIST_OF_EMBEDDING_PATHS:
+    for dataset in DATASETS:
         print(f"\n{'=' * 80}")
-        print(f"Processing dataset: {embedding_path}")
+        print(f"Processing dataset: {dataset.name}")
         print(f"{'=' * 80}\n")
         env = os.environ.copy()
         env[_HYDRA_CHILD_ENV] = "1"
-        env[_EMBED_PATH_ENV] = embedding_path
-        env[_EMBED_NAME_ENV] = Path(embedding_path).stem
+        env[_DATASET_ENV] = dataset.name
+        env[_METADATA_ENV] = dataset.metadata_path
+        env[_EMBED_DIR_ENV] = dataset.embedding_dir
         existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
         subprocess.run(
             [
@@ -62,9 +82,8 @@ def main():
             env=env,
         )
         new_sweeps = list_sweep_dirs(_MULTIRUN_BASE) - existing_sweeps
-        embedding_name = Path(embedding_path).stem
         for sweep_dir in sorted(new_sweeps):
-            combine_summaries(sweep_dir, embedding_name=embedding_name)
+            combine_summaries(sweep_dir, dataset_name=dataset.name)
 
 
 if __name__ == "__main__":

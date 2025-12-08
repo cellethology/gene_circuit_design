@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Tuple
 from hydra.utils import instantiate
 from omegaconf import ListConfig, OmegaConf
 
-from experiments.core.experiment import ActiveLearningExperiment
+from core.experiment import ActiveLearningExperiment
 
 
 def run_one_experiment(
@@ -36,6 +36,8 @@ def run_one_experiment(
 
     # Extract active learning settings
     embeddings_path = cfg.embedding_path
+    dataset_name = getattr(cfg, "dataset_name", "")
+    embedding_model_name = getattr(cfg, "embedding_model", "")
     metadata_path = cfg.metadata_path
     al_settings = cfg.al_settings
     batch_size = al_settings.get("batch_size", 8)
@@ -44,6 +46,12 @@ def run_one_experiment(
     output_dir = al_settings.get("output_dir", None)
     label_key = al_settings.get("label_key", None)
     seed = al_settings.get("seed", 0)
+
+    # Check embedding path matches embedding model
+    if not embeddings_path.endswith(f"{embedding_model_name}.npz"):
+        raise ValueError(
+            f"Embedding path {embeddings_path} does not match embedding model {embedding_model_name}"
+        )
 
     # Create experiment
     experiment = ActiveLearningExperiment(
@@ -85,6 +93,8 @@ def run_one_experiment(
         [item[0] for item in target_transforms] if target_transforms else []
     )
     summary = {
+        "dataset_name": dataset_name,
+        "embedding_model": embedding_model_name,
         "query_strategy": query_strategy.name,
         "predictor": predictor.__class__.__name__,
         "initial_selection": initial_selection_strategy.name,
@@ -94,8 +104,6 @@ def run_one_experiment(
         "auc_normalized_true": aucs["normalized_true"],
         "auc_normalized_pred": aucs["normalized_pred"],
         "auc_top_proportion": aucs["top_proportion"],
-        "embedding_path": embeddings_path,
-        "metadata_path": metadata_path,
     }
 
     # Persist summary for downstream aggregation

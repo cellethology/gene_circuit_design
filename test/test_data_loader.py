@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from experiments.core.data_loader import DataLoader, Dataset
+from core.data_loader import DataLoader, Dataset
 
 
 class TestDataset:

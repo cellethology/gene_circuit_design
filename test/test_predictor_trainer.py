@@ -10,7 +10,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-from experiments.core.predictor_trainer import PredictorTrainer
+from core.predictor_trainer import PredictorTrainer
 
 
 class TestPredictorTrainer:

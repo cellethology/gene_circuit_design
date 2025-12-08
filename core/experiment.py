@@ -12,14 +12,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from sklearn.base import RegressorMixin
 
-from experiments.core.data_loader import DataLoader, Dataset
-from experiments.core.initial_selection_strategies import (
+from core.data_loader import DataLoader, Dataset
+from core.initial_selection_strategies import (
     InitialSelectionStrategy,
 )
-from experiments.core.metrics_calculator import MetricsCalculator
-from experiments.core.predictor_trainer import PredictorTrainer
-from experiments.core.query_strategies import QueryStrategyBase
-from experiments.core.round_tracker import RoundTracker
+from core.metrics_calculator import MetricsCalculator
+from core.predictor_trainer import PredictorTrainer
+from core.query_strategies import QueryStrategyBase
+from core.round_tracker import RoundTracker
 
 logger = logging.getLogger(__name__)
 

@@ -4,17 +4,18 @@ defaults:
   - initial_selection_strategy: random
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
-  - paths: paths
   - _self_
   - override hydra/launcher: submitit_local
 
 # data paths
-embedding_path: ${env:AL_EMBEDDING_PATH,${paths.embedding_file}}
-embedding_name: ${path_stem:${embedding_path}}
-metadata_path: ${paths.metadata_file}
+dataset_name: ${env:AL_DATASET_NAME}
+metadata_path: ${env:AL_METADATA_PATH}
+embedding_dir: ${env:AL_EMBEDDING_ROOT}
+embedding_model: enformer_pca32
+embedding_path: ${embedding_dir}/${embedding_model}.npz
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 2
+num_seeds_per_job: 200
 parallelize_seeds: true
 
 # active learning settings
@@ -34,16 +35,18 @@ al_settings:
 # hydra settings
 hydra:
   sweep:
-    subdir: ${embedding_name}/${hydra.job.override_dirname}
+    subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: random
+      initial_selection_strategy: random, kmeans
       query_strategy: topk
-      predictor: ridge_regressor
-  # launcher:
-  #   timeout_min: 240
-  #   partition: wzt_20250411,intel-sc3
-  #   cpus_per_task: 8
-  #   mem_per_cpu: 8GB
-  #   qos: huge
-  #   submitit_folder: logs_experiments
+      predictor: rf_regressor, ridge_regressor, kn_regressor, mlp_regressor, histgradboost_regressor
+      embedding_model: enformer_pca32, evo_1p5_pca32
+  launcher:
+    timeout_min: 240
+    # everything below is used only for submitting jobs to the cluster
+    # partition: wzt_20250411,intel-sc3
+    # cpus_per_task: 8
+    # mem_per_cpu: 8GB
+    # qos: huge
+    # submitit_folder: slurm_logs

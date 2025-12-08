@@ -10,7 +10,7 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import pairwise_distances_argmin_min
 
-from experiments.core.data_loader import Dataset
+from core.data_loader import Dataset
 
 logger = logging.getLogger(__name__)
 

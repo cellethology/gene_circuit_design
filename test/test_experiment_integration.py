@@ -10,9 +10,9 @@ import pytest
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-from experiments.core.experiment import ActiveLearningExperiment
-from experiments.core.initial_selection_strategies import RandomInitialSelection
-from experiments.core.query_strategies import Random, TopPredictions
+from core.experiment import ActiveLearningExperiment
+from core.initial_selection_strategies import RandomInitialSelection
+from core.query_strategies import Random, TopPredictions
 
 
 class TestActiveLearningExperiment:

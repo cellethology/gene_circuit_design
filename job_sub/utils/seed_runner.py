@@ -4,8 +4,8 @@ from typing import Any, Dict
 
 from omegaconf import OmegaConf
 
-from experiments.active_learning import run_one_experiment
 from job_sub.utils.config_utils import ensure_resolvers
+from run_active_learning import run_one_experiment
 
 
 def run_seed_experiment(raw_cfg: Dict[str, Any]) -> None:

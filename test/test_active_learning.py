@@ -1,5 +1,5 @@
 """
-Tests for experiments.active_learning.run_single_experiment.
+Tests for run_active_learning.run_one_experiment.
 """
 
 import json
@@ -13,7 +13,7 @@ from omegaconf import OmegaConf
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
-from experiments.active_learning import make_steps, run_one_experiment
+from run_active_learning import make_steps, run_one_experiment
 
 
 def _make_dataset(tmp_path, n_samples=8, dim=4):
@@ -69,8 +69,8 @@ def _patch_make_steps(monkeypatch):
     def _make_steps(steps_cfg):
         return steps_cfg
 
-    monkeypatch.setattr("experiments.active_learning.make_steps", _make_steps)
-    monkeypatch.setattr("experiments.active_learning.instantiate", lambda obj: obj)
+    monkeypatch.setattr("run_active_learning.make_steps", _make_steps)
+    monkeypatch.setattr("run_active_learning.instantiate", lambda obj: obj)
 
 
 def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
@@ -110,7 +110,7 @@ def test_make_steps_builds_pipeline(monkeypatch):
         ]
     )
     monkeypatch.setattr(
-        "experiments.active_learning.instantiate",
+        "run_active_learning.instantiate",
         lambda cfg: DummyTransformer(),
     )
     steps = make_steps(step_cfg)
