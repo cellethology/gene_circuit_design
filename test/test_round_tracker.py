@@ -9,7 +9,7 @@ import pytest
 from core.round_tracker import RoundTracker
 
 DUMMY_METRICS = {
-    "top_proportion": 0.5,
+    "n_selected_in_top": 1,
     "best_pred": 1.0,
     "normalized_pred": 0.5,
     "best_true": 1.0,

@@ -82,7 +82,7 @@ def run_one_experiment(
 
     # Compute AUC
     aucs = experiment.round_tracker.compute_auc(
-        metric_columns=["normalized_true", "normalized_pred", "top_proportion"]
+        metric_columns=["normalized_true", "normalized_pred", "n_selected_in_top"]
     )
 
     # Summarize results
@@ -92,18 +92,22 @@ def run_one_experiment(
     target_transforms_names = (
         [item[0] for item in target_transforms] if target_transforms else []
     )
+    is_random_strategy = query_strategy.name.upper() == "RANDOM"
+    reported_embedding_model = None if is_random_strategy else embedding_model_name
+    reported_predictor = None if is_random_strategy else predictor.__class__.__name__
+
     summary = {
         "dataset_name": dataset_name,
-        "embedding_model": embedding_model_name,
+        "embedding_model": reported_embedding_model,
         "query_strategy": query_strategy.name,
-        "predictor": predictor.__class__.__name__,
+        "predictor": reported_predictor,
         "initial_selection": initial_selection_strategy.name,
         "feature_transforms": feature_transforms_names,
         "target_transforms": target_transforms_names,
         "seed": seed,
         "auc_normalized_true": aucs["normalized_true"],
         "auc_normalized_pred": aucs["normalized_pred"],
-        "auc_top_proportion": aucs["top_proportion"],
+        "auc_n_selected_in_top": aucs["n_selected_in_top"],
     }
 
     # Persist summary for downstream aggregation

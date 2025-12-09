@@ -39,8 +39,8 @@ class MetricsCalculator:
             predictions: Model predictions for selected indices
             top_p: Percentage of top labels to consider
         """
-        # Proportion of selected in top
-        top_proportion = self.proportion_of_selected_in_top(
+        # Number of selected samples within the top performers
+        n_selected_in_top = self.n_selected_in_top(
             selected_indices=selected_indices,
             top_p=top_p,
         )
@@ -54,18 +54,18 @@ class MetricsCalculator:
         normalized_true_values = best_value_true / np.max(self.labels)
 
         return {
-            "top_proportion": top_proportion,
+            "n_selected_in_top": n_selected_in_top,
             "best_pred": best_value_pred,
             "normalized_pred": normalized_pred_values,
             "best_true": best_value_true,
             "normalized_true": normalized_true_values,
         }
 
-    def proportion_of_selected_in_top(
+    def n_selected_in_top(
         self, selected_indices: np.ndarray, top_p: float = 0.1
-    ) -> float:
+    ) -> int:
         """
-        Calculate the proportion of selected are top performers.
+        Calculate how many selected samples fall into the top performers.
 
         Args:
             selected_indices: Indices of selected sequences
@@ -74,6 +74,6 @@ class MetricsCalculator:
         if not 0.0 < top_p <= 1.0:
             raise ValueError("top_p must be between 0.0 and 1.0")
 
-        num_top = int(len(self.labels) * top_p)
+        num_top = max(1, int(len(self.labels) * top_p))
         top_labels = np.argsort(self.labels)[-num_top:]
-        return len(np.intersect1d(selected_indices, top_labels)) / len(selected_indices)
+        return int(len(np.intersect1d(selected_indices, top_labels)))
