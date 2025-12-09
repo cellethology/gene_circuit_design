@@ -1,0 +1,3 @@
+# conf/model/gradboost_regressor.yaml
+_target_: sklearn.ensemble.GradientBoostingRegressor
+random_state: ${al_settings.seed}
