@@ -15,7 +15,7 @@ embedding_model: enformer_pca32
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 20
+num_seeds_per_job: 50
 parallelize_seeds: true
 
 # active learning settings
