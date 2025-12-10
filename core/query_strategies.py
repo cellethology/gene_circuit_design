@@ -100,6 +100,30 @@ class TopPredictions(QueryStrategyBase):
         return selected_indices
 
 
+class CombinedPredictionUncertainty(QueryStrategyBase):
+    """Selects samples with highest combined prediction uncertainty."""
+
+    def __init__(self, alpha: float) -> None:
+        super().__init__("TOP_K_PRED_AND_UNCERTAINTY")
+        self.alpha = alpha
+
+    def select(self, experiment: Any) -> List[int]:
+        # get weighted sum of prediction and standard deviation of prediction
+        preds, stds = experiment.trainer.predict(
+            experiment.dataset.embeddings[experiment.unlabeled_indices, :],
+            return_std=True,
+        )
+        weights = np.array([self.alpha, 1 - self.alpha])
+        weighted_preds = preds * weights[0] + stds * weights[1]
+        top_k_local = np.argpartition(-weighted_preds, experiment.batch_size - 1)[
+            : experiment.batch_size
+        ]
+        selected_indices = [experiment.unlabeled_indices[i] for i in top_k_local]
+        self._log_round(selected_indices)
+
+        return selected_indices
+
+
 class TopLogLikelihood(QueryStrategyBase):
     """Selects samples with highest log likelihood values."""
 

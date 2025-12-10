@@ -28,8 +28,8 @@ def run_one_experiment(
     """
 
     # Instantiate components
-    predictor = instantiate(cfg.predictor)
     query_strategy = instantiate(cfg.query_strategy)
+    predictor = instantiate(cfg.predictor)
     initial_selection_strategy = instantiate(cfg.initial_selection_strategy)
     feature_transforms = make_steps(cfg.feature_transforms.steps)
     target_transforms = make_steps(cfg.target_transforms.steps)
