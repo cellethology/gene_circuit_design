@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from core.query_strategies import (
+    PredStdHybrid,
     Random,
     TopLogLikelihood,
     TopPredictions,
@@ -20,10 +21,13 @@ class DummyDataset:
 
 
 class DummyTrainer:
-    def __init__(self, outputs: np.ndarray) -> None:
+    def __init__(self, outputs: np.ndarray, stds: np.ndarray = None) -> None:
         self._outputs = outputs
+        self._stds = stds if stds is not None else np.zeros_like(outputs)
 
-    def predict(self, _):
+    def predict(self, _, return_std: bool = False):
+        if return_std:
+            return self._outputs, self._stds
         return self._outputs
 
 
@@ -121,3 +125,35 @@ class TestTopLogLikelihoodStrategy:
 
         selected = TopLogLikelihood().select(exp)
         assert sorted(selected) == [2, 3]
+
+
+class TestPredStdHybridStrategy:
+    def test_pred_std_hybrid_selects_based_on_weighted_score(self):
+        unlabeled = [0, 1, 2, 3]
+        embeddings = np.eye(4)
+        # High pred, low std -> score = 0.75 * 0.9 + 0.25 * 0.1 = 0.7
+        # Low pred, high std -> score = 0.75 * 0.1 + 0.25 * 0.9 = 0.3
+        preds = np.array([0.1, 0.9, 0.2, 0.8])
+        stds = np.array([0.9, 0.1, 0.8, 0.2])
+        trainer = DummyTrainer(preds, stds)
+        exp = DummyExperiment(
+            unlabeled_indices=unlabeled,
+            batch_size=2,
+            embeddings=embeddings,
+            trainer=trainer,
+        )
+
+        # With alpha=0.75, should prefer high predictions
+        selected = PredStdHybrid(alpha=0.75).select(exp)
+        assert sorted(selected) == [1, 3]
+
+    def test_pred_std_hybrid_returns_all_when_pool_small(self):
+        unlabeled = [0, 1]
+        preds = np.array([0.5, 0.4])
+        stds = np.array([0.1, 0.2])
+        trainer = DummyTrainer(preds, stds)
+        exp = DummyExperiment(
+            unlabeled_indices=unlabeled, batch_size=5, trainer=trainer
+        )
+
+        assert PredStdHybrid(alpha=0.75).select(exp) == unlabeled
