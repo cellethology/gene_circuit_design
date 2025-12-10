@@ -38,10 +38,10 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: random
-      query_strategy: random
+      initial_selection_strategy: kmeans
+      query_strategy: predstdhybrid
       predictor: rf_regressor
-      embedding_model: evo_1p5_pca32
+      embedding_model: enformer_pca32
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster

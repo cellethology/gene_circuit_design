@@ -100,11 +100,11 @@ class TopPredictions(QueryStrategyBase):
         return selected_indices
 
 
-class CombinedPredictionUncertainty(QueryStrategyBase):
-    """Selects samples with highest combined prediction uncertainty."""
+class PredStdHybrid(QueryStrategyBase):
+    """Selects samples with highest combined prediction and uncertainty."""
 
     def __init__(self, alpha: float) -> None:
-        super().__init__("TOP_K_PRED_AND_UNCERTAINTY")
+        super().__init__("PRED_STD_HYBRID")
         self.alpha = alpha
 
     def select(self, experiment: Any) -> List[int]:
