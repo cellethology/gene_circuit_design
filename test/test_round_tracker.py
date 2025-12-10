@@ -61,8 +61,8 @@ class TestRoundTracker:
         )
 
         aucs = tracker.compute_auc(["normalized_true", "best_true"])
-        assert pytest.approx(1.0, rel=1e-6) == aucs["normalized_true"]
-        assert pytest.approx(0.7, rel=1e-6) == aucs["best_true"]
+        assert pytest.approx(1.0 / 3, rel=1e-6) == aucs["normalized_true"]
+        assert pytest.approx(0.7 / 3, rel=1e-6) == aucs["best_true"]
 
         with pytest.raises(ValueError):
             tracker.compute_auc(["missing_metric"])

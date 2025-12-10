@@ -11,6 +11,8 @@ from sklearn.compose import TransformedTargetRegressor
 from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.pipeline import Pipeline
 
+from core.uncertainty import UncertaintyWrapper
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,19 +116,20 @@ class PredictorTrainer:
 
         logger.info(f"Train RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
 
-    def predict(self, X: np.ndarray) -> np.ndarray:
+    def predict(self, X: np.ndarray, return_std: bool = False):
         """
         Make predictions using the trained model.
-
-        Args:
-            X: Features to predict on
-
-        Returns:
-            Predictions array
         """
         if self.model_ is None:
             raise ValueError("PredictorTrainer.train must be called before predict.")
-        return self.model_.predict(X)
+
+        preds = self.model_.predict(X)
+
+        if not return_std:
+            return preds
+
+        stds = UncertaintyWrapper(self.model_).compute_std(X)
+        return preds, stds
 
     def get_model(self) -> Optional[Any]:
         """Return the underlying fitted model (pipeline or estimator)."""

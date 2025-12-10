@@ -10,6 +10,7 @@ from core.initial_selection_strategies import InitialSelectionStrategy
 from core.predictor_trainer import PredictorTrainer
 from core.query_strategies import QueryStrategyBase
 from core.round_tracker import RoundTracker
+from core.uncertainty import UncertaintyWrapper
 
 __all__ = [
     "DataLoader",
@@ -18,4 +19,5 @@ __all__ = [
     "InitialSelectionStrategy",
     "QueryStrategyBase",
     "RoundTracker",
+    "UncertaintyWrapper",
 ]

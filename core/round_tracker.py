@@ -87,7 +87,9 @@ class RoundTracker:
                 )
             else:
                 cumulative_max_per_round = np.maximum.accumulate(values)
-                aucs[metric_column] = float(np.sum(cumulative_max_per_round))
+                aucs[metric_column] = float(np.sum(cumulative_max_per_round)) / len(
+                    self.rounds
+                )
         return aucs
 
     def save_to_csv(self, output_path: Path) -> None:
