@@ -1,0 +1,3 @@
+# select samples with highest combined prediction and uncertainty
+_target_: core.query_strategies.PredStdHybrid
+alpha: 0.75
