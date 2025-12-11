@@ -5,7 +5,7 @@ defaults:
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
   - _self_
-  - override hydra/launcher: submitit_local
+  - override hydra/launcher: submitit_slurm
 
 # data paths
 dataset_name: ${env:AL_DATASET_NAME}
@@ -39,14 +39,14 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: kmeans
-      query_strategy: predstdhybrid
+      query_strategy: topk
       predictor: rf_regressor
-      embedding_model: enformer_pca32
+      embedding_model: one_hot_pca4096
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
-    # partition: wzt_20250411,intel-sc3
-    # cpus_per_task: 8
-    # mem_per_cpu: 8GB
-    # qos: huge
-    # submitit_folder: slurm_logs
+    partition: wzt_20250411,intel-sc3
+    cpus_per_task: 32
+    mem_per_cpu: 4GB
+    qos: huge
+    submitit_folder: slurm_logs
