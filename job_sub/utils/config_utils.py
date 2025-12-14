@@ -69,8 +69,7 @@ def load_dataset_configs() -> List[DatasetConfig]:
         embedding_dir_raw = dataset.get("embedding_dir")
         if not embedding_dir_raw:
             raise ValueError(f"Dataset '{name}' is missing embedding_dir")
-        embedding_root = Path(str(embedding_dir_raw)).expanduser()
-        embedding_dir_path = (embedding_root / name).resolve()
+        embedding_dir_path = Path(str(embedding_dir_raw)).expanduser().resolve()
         if not embedding_dir_path.exists():
             raise ValueError(
                 f"Embedding directory '{embedding_dir_path}' for dataset '{name}' does not exist"
