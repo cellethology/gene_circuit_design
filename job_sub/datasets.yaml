@@ -1,4 +1,4 @@
 datasets:
-  - name: "166k_library"
-    metadata_path: "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/synbio-glm/166k_Data/166k_Library_CLASSIC_Data.csv"
-    embedding_dir: "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/synbio-glm/runpod/166k_library"
+  - name: "Rai_2024_166k"
+    metadata_path: "/home/wangzitongLab/wangzitong/gene_circuit_design/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
+    embedding_dir: "/home/wangzitongLab/wangzitong/gene_circuit_design/data_new/Rai_2024_166k"
