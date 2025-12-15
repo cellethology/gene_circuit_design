@@ -39,6 +39,7 @@ def run_one_experiment(
     dataset_name = getattr(cfg, "dataset_name", "")
     embedding_model_name = getattr(cfg, "embedding_model", "")
     metadata_path = cfg.metadata_path
+    subset_ids_path = getattr(cfg, "subset_ids_path", None)
     al_settings = cfg.al_settings
     batch_size = al_settings.get("batch_size", 8)
     starting_batch_size = al_settings.get("starting_batch_size", batch_size)
@@ -66,6 +67,7 @@ def run_one_experiment(
         target_transforms=target_transforms,
         label_key=label_key,
         initial_selection_strategy=initial_selection_strategy,
+        subset_ids_path=subset_ids_path,
     )
 
     # Resolve and create output directory

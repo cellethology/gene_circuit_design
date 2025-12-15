@@ -7,7 +7,8 @@ labels (and optional sample identifiers), ensuring row alignment between the two
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -54,6 +55,7 @@ class DataLoader:
         embeddings_path: str,
         metadata_path: str,
         label_key: str,
+        subset_ids_path: Optional[str] = None,
     ) -> None:
         """
         Initialize the data loader.
@@ -62,10 +64,12 @@ class DataLoader:
             embeddings_path: Path to npz file containing embeddings.
             metadata_path: CSV with labels aligned to embeddings.
             label_key: Column in the CSV to use as the training label.
+            subset_ids_path: Optional path to a newline-delimited file of sample IDs to keep.
         """
         self.embeddings_path = embeddings_path
         self.metadata_path = metadata_path
         self.label_key = label_key
+        self.subset_ids_path = subset_ids_path
         self.dataset: Optional[Dataset] = None
 
     def load(self) -> Dataset:
@@ -78,6 +82,7 @@ class DataLoader:
         )
 
         embeddings, sample_ids = self._load_embeddings()
+        embeddings, sample_ids = self._apply_subset_if_needed(embeddings, sample_ids)
         labels = self._load_metadata(sample_ids)
 
         self.dataset = Dataset(
@@ -93,7 +98,7 @@ class DataLoader:
 
         return self.dataset
 
-    def _load_embeddings(self) -> tuple[np.ndarray, np.ndarray]:
+    def _load_embeddings(self) -> Tuple[np.ndarray, np.ndarray]:
         data = np.load(self.embeddings_path, allow_pickle=True)
         if "embeddings" not in data:
             raise ValueError(
@@ -111,3 +116,58 @@ class DataLoader:
         df = df.iloc[sample_ids]
         labels = df[self.label_key].to_numpy()
         return labels
+
+    def _apply_subset_if_needed(
+        self, embeddings: np.ndarray, sample_ids: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        subset_ids = self._load_subset_ids(sample_ids.dtype)
+        if subset_ids is None:
+            return embeddings, sample_ids
+
+        mask = np.isin(sample_ids, subset_ids)
+        if not np.any(mask):
+            raise ValueError(
+                "Subset id filtering removed all samples. "
+                "Ensure the subset ids match those stored in the embeddings file."
+            )
+
+        filtered_embeddings = embeddings[mask]
+        filtered_sample_ids = sample_ids[mask]
+
+        missing = set(subset_ids.tolist()) - set(filtered_sample_ids.tolist())
+        if missing:
+            logger.warning(
+                "Subset ids file contained %d ids not present in embeddings; ignoring smallest few: %s",
+                len(missing),
+                sorted(missing)[:5],
+            )
+
+        logger.info(
+            "Subset filtering retained %d / %d samples.",
+            len(filtered_sample_ids),
+            len(sample_ids),
+        )
+        return filtered_embeddings, filtered_sample_ids
+
+    def _load_subset_ids(self, dtype) -> Optional[np.ndarray]:
+        if not self.subset_ids_path:
+            return None
+        subset_path = Path(self.subset_ids_path)
+        if not subset_path.exists():
+            raise FileNotFoundError(f"Subset ids file {subset_path} does not exist.")
+        subset_ids = []
+        for line in subset_path.read_text().splitlines():
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                subset_ids.append(int(text))
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid sample id '{text}' in subset file {subset_path}"
+                ) from exc
+        if not subset_ids:
+            raise ValueError(
+                f"Subset ids file {subset_path} did not contain any sample ids."
+            )
+        return np.asarray(subset_ids, dtype=dtype)
