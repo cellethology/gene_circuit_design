@@ -4,12 +4,38 @@ Variant tracking utilities for active learning experiments.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+
+# Default metric columns to summarize (can be overridden per call).
+DEFAULT_SUMMARY_METRICS = [
+    "normalized_true",
+    "normalized_pred",
+    "n_selected_in_top",
+]
+# Aggregation rules (and descriptions) keyed by per-round metric names.
+SUMMARY_METRIC_RULES = {
+    # Average of the cumulative best normalized label observed so far.
+    "normalized_true": (
+        "cumulative_max_mean",
+        "Best normalized ground truth per round.",
+    ),
+    # Average of the cumulative best predictions observed so far.
+    "normalized_pred": ("cumulative_max_mean", "Best normalized prediction per round."),
+    # Fractional area under curve of how many selected samples fall in the top bucket.
+    "n_selected_in_top": (
+        "normalized_cumulative_sum",
+        "Selected samples in top bracket.",
+    ),
+    # The raw best ground-truth value (used in some tests); defaults to cumulative max.
+    "best_true": ("cumulative_max_mean", "Best absolute ground truth per round."),
+    "best_pred": ("cumulative_max_mean", "Best absolute prediction per round."),
+}
 
 
 class RoundTracker:
@@ -58,39 +84,54 @@ class RoundTracker:
         )
         self.round_num += 1
 
-    def compute_auc(self, metric_columns: List[str]) -> Dict[str, float]:
+    def compute_summary_metrics(
+        self, metric_columns: Optional[List[str]] = None
+    ) -> Dict[str, float]:
         """
-        Compute the AUC across all rounds.
-        The AUC is computed by summing up the maximum value of the metric column up to that round.
+        Compute summary metrics defined by `metric_columns`.
+        The default list captures the common Hydra sweep outputs and describes the aggregation
+        strategy for each metric via `SUMMARY_METRIC_RULES`.
         """
         if not self.rounds:
-            raise ValueError("Cannot compute AUC: no rounds have been tracked yet")
+            raise ValueError(
+                "Cannot compute summary metrics: no rounds have been tracked yet"
+            )
 
-        aucs = {}
         cumulative_selected = np.sum(
             np.cumsum(
                 np.array([len(round["selected_sample_ids"]) for round in self.rounds])
             )
         )
+        metric_columns = metric_columns or DEFAULT_SUMMARY_METRICS
+        summary_values: Dict[str, float] = {}
 
         for metric_column in metric_columns:
-            if metric_column not in self.rounds[0].keys():
+            if metric_column not in self.rounds[0]:
                 raise ValueError(f"Metric column {metric_column} not found in rounds")
 
             values = np.array([round[metric_column] for round in self.rounds])
-            if metric_column == "n_selected_in_top":
+            rule, _ = SUMMARY_METRIC_RULES.get(
+                metric_column, ("cumulative_max_mean", "")
+            )
+            if rule == "normalized_cumulative_sum":
                 cumulative_sum = np.cumsum(values)
-                aucs[metric_column] = (
+                summary_values[metric_column] = (
                     float(np.sum(cumulative_sum)) / cumulative_selected
                     if cumulative_selected > 0
                     else 0.0
                 )
-            else:
+            elif rule == "cumulative_max_mean":
                 cumulative_max_per_round = np.maximum.accumulate(values)
-                aucs[metric_column] = float(np.sum(cumulative_max_per_round)) / len(
-                    self.rounds
+                summary_values[metric_column] = float(
+                    np.sum(cumulative_max_per_round)
+                ) / len(self.rounds)
+            elif rule == "max_overall":
+                summary_values[metric_column] = float(np.max(values))
+            else:
+                raise ValueError(
+                    f"Unknown summary metric rule '{rule}' for {metric_column}"
                 )
-        return aucs
+        return summary_values
 
     def save_to_csv(self, output_path: Path) -> None:
         """

@@ -80,10 +80,8 @@ def run_one_experiment(
     # Save individual results
     experiment.save_results(output_path=output_dir_path / "results.csv")
 
-    # Compute AUC
-    aucs = experiment.round_tracker.compute_auc(
-        metric_columns=["normalized_true", "normalized_pred", "n_selected_in_top"]
-    )
+    # Compute summary metrics (default list includes normalized_true/pred + n_selected_in_top)
+    summary_metrics = experiment.round_tracker.compute_summary_metrics()
 
     # Summarize results
     feature_transforms_names = (
@@ -105,9 +103,9 @@ def run_one_experiment(
         "feature_transforms": feature_transforms_names,
         "target_transforms": target_transforms_names,
         "seed": seed,
-        "auc_normalized_true": aucs["normalized_true"],
-        "auc_normalized_pred": aucs["normalized_pred"],
-        "auc_n_selected_in_top": aucs["n_selected_in_top"],
+        "auc_normalized_true": summary_metrics["normalized_true"],
+        "auc_normalized_pred": summary_metrics["normalized_pred"],
+        "auc_n_selected_in_top": summary_metrics["n_selected_in_top"],
     }
 
     # Persist summary for downstream aggregation

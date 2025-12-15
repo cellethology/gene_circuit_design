@@ -40,15 +40,16 @@ class TestRoundTracker:
         with pytest.raises(IndexError):
             tracker.track_round(selected_indices=[3], metrics=DUMMY_METRICS)
 
-    def test_compute_auc_with_no_rounds(self):
+    def test_compute_summary_metrics_with_no_rounds(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
 
         with pytest.raises(
-            ValueError, match="Cannot compute AUC: no rounds have been tracked yet"
+            ValueError,
+            match="Cannot compute summary metrics: no rounds have been tracked yet",
         ):
-            tracker.compute_auc(["normalized_true"])
+            tracker.compute_summary_metrics(["normalized_true"])
 
-    def test_compute_auc_and_missing_metric(self):
+    def test_compute_summary_metrics_and_missing_metric(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
         tracker.track_round(
             selected_indices=[0], metrics={"normalized_true": 0.2, "best_true": 0.1}
@@ -60,12 +61,12 @@ class TestRoundTracker:
             selected_indices=[2], metrics={"normalized_true": 0.3, "best_true": 0.1}
         )
 
-        aucs = tracker.compute_auc(["normalized_true", "best_true"])
+        aucs = tracker.compute_summary_metrics(["normalized_true", "best_true"])
         assert pytest.approx(1.0 / 3, rel=1e-6) == aucs["normalized_true"]
         assert pytest.approx(0.7 / 3, rel=1e-6) == aucs["best_true"]
 
         with pytest.raises(ValueError):
-            tracker.compute_auc(["missing_metric"])
+            tracker.compute_summary_metrics(["missing_metric"])
 
     def test_save_to_csv(self, tmp_path):
         tracker = RoundTracker(sample_ids=np.array([0, 1]))
