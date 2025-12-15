@@ -15,14 +15,14 @@ embedding_model: enformer_pca32
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 200
+num_seeds_per_job: 100
 parallelize_seeds: true
 
 # active learning settings
 al_settings:
-  batch_size: 8
-  starting_batch_size: 8
-  max_rounds: 20
+  batch_size: 12
+  starting_batch_size: 12
+  max_rounds: 10
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -40,8 +40,8 @@ hydra:
     params:
       initial_selection_strategy: random, kmeans
       query_strategy: topk
-      predictor: rf_regressor, mlp_regressor, gaussian_regressor, ridge_regressor
-      embedding_model: enformer_pca32, evo2_finaltoken_block18_pca16, evo2_finaltoken_block28_pca8, evo2_meanpool_block18_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32
+      predictor: rf_regressor, mlp_regressor, gaussian_regressor
+      embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
