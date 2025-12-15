@@ -86,7 +86,8 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
     assert summary_path.exists()
     saved_summary = json.loads(summary_path.read_text())
     assert saved_summary["query_strategy"] == summary["query_strategy"]
-    assert "auc_normalized_true" in saved_summary
+    for key in ("auc_true", "auc_pred", "avg_top", "overall_true"):
+        assert key in saved_summary
 
 
 def test_run_single_experiment_requires_output_dir(tmp_path, monkeypatch):

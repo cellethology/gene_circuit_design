@@ -4,7 +4,7 @@ Variant tracking utilities for active learning experiments.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -12,29 +12,11 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-# Default metric columns to summarize (can be overridden per call).
-DEFAULT_SUMMARY_METRICS = [
-    "normalized_true",
-    "normalized_pred",
-    "n_selected_in_top",
-]
-# Aggregation rules (and descriptions) keyed by per-round metric names.
 SUMMARY_METRIC_RULES = {
-    # Average of the cumulative best normalized label observed so far.
-    "normalized_true": (
-        "cumulative_max_mean",
-        "Best normalized ground truth per round.",
-    ),
-    # Average of the cumulative best predictions observed so far.
-    "normalized_pred": ("cumulative_max_mean", "Best normalized prediction per round."),
-    # Fractional area under curve of how many selected samples fall in the top bucket.
-    "n_selected_in_top": (
-        "normalized_cumulative_sum",
-        "Selected samples in top bracket.",
-    ),
-    # The raw best ground-truth value (used in some tests); defaults to cumulative max.
-    "best_true": ("cumulative_max_mean", "Best absolute ground truth per round."),
-    "best_pred": ("cumulative_max_mean", "Best absolute prediction per round."),
+    "auc_true": ("max_accumulate", "normalized_true"),
+    "auc_pred": ("max_accumulate", "normalized_pred"),
+    "avg_top": ("top_mean", "n_selected_in_top"),
+    "overall_true": ("max_overall", "best_true"),
 }
 
 
@@ -84,13 +66,9 @@ class RoundTracker:
         )
         self.round_num += 1
 
-    def compute_summary_metrics(
-        self, metric_columns: Optional[List[str]] = None
-    ) -> Dict[str, float]:
+    def compute_summary_metrics(self) -> Dict[str, float]:
         """
-        Compute summary metrics defined by `metric_columns`.
-        The default list captures the common Hydra sweep outputs and describes the aggregation
-        strategy for each metric via `SUMMARY_METRIC_RULES`.
+        Compute summary metrics defined by `SUMMARY_METRIC_RULES`.
         """
         if not self.rounds:
             raise ValueError(
@@ -102,34 +80,31 @@ class RoundTracker:
                 np.array([len(round["selected_sample_ids"]) for round in self.rounds])
             )
         )
-        metric_columns = metric_columns or DEFAULT_SUMMARY_METRICS
+
         summary_values: Dict[str, float] = {}
 
-        for metric_column in metric_columns:
+        for metric_name, (rule, metric_column) in SUMMARY_METRIC_RULES.items():
             if metric_column not in self.rounds[0]:
-                raise ValueError(f"Metric column {metric_column} not found in rounds")
+                raise ValueError(f"Metric column {metric_name} not found in rounds")
 
             values = np.array([round[metric_column] for round in self.rounds])
-            rule, _ = SUMMARY_METRIC_RULES.get(
-                metric_column, ("cumulative_max_mean", "")
-            )
-            if rule == "normalized_cumulative_sum":
+            if rule == "top_mean":
                 cumulative_sum = np.cumsum(values)
-                summary_values[metric_column] = (
+                summary_values[metric_name] = (
                     float(np.sum(cumulative_sum)) / cumulative_selected
                     if cumulative_selected > 0
                     else 0.0
                 )
-            elif rule == "cumulative_max_mean":
+            elif rule == "max_accumulate":
                 cumulative_max_per_round = np.maximum.accumulate(values)
-                summary_values[metric_column] = float(
+                summary_values[metric_name] = float(
                     np.sum(cumulative_max_per_round)
                 ) / len(self.rounds)
             elif rule == "max_overall":
-                summary_values[metric_column] = float(np.max(values))
+                summary_values[metric_name] = float(np.max(values))
             else:
                 raise ValueError(
-                    f"Unknown summary metric rule '{rule}' for {metric_column}"
+                    f"Unknown summary metric rule '{rule}' for {metric_name}"
                 )
         return summary_values
 
