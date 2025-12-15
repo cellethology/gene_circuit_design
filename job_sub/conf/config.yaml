@@ -38,7 +38,7 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: random, kmeans, core_set, density_core_set
+      initial_selection_strategy: kmeans, core_set, density_core_set
       query_strategy: topk
       predictor: rf_regressor, mlp_regressor, gaussian_regressor
       embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32
