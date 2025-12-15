@@ -1,0 +1,4 @@
+_target_: core.initial_selection_strategies.CoreSetInitialSelection
+seed: ${al_settings.seed}
+starting_batch_size: ${al_settings.starting_batch_size}
+metric: cosine
