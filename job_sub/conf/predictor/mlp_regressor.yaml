@@ -2,6 +2,5 @@
 _target_: sklearn.neural_network.MLPRegressor
 hidden_layer_sizes:
   - 100
-  - 50
-max_iter: 50
+max_iter: 500
 random_state: ${al_settings.seed}
