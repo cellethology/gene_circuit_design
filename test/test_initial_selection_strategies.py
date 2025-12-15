@@ -75,6 +75,42 @@ def test_core_set_initial_selection_prefers_dense_seed():
     assert len(set(indices)) == 2
 
 
+def test_core_set_initial_selection_handles_empty_dataset():
+    dataset = Dataset(sample_ids=[], labels=np.array([]), embeddings=np.empty((0, 2)))
+    strategy = CoreSetInitialSelection(seed=0, starting_batch_size=3)
+
+    indices = strategy.select(dataset)
+
+    assert indices == []
+
+
+def test_core_set_initial_selection_handles_density_none(monkeypatch):
+    embeddings = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 1.0],
+            [1.0, 0.0],
+            [5.0, 5.0],
+        ]
+    )
+    dataset = _dataset_from_embeddings(embeddings)
+    strategy = CoreSetInitialSelection(
+        seed=0, starting_batch_size=2, density_neighbors=1
+    )
+
+    class DummyRNG:
+        def integers(self, low, high=None, size=None, dtype=None):
+            return low + 1
+
+    strategy._rng = DummyRNG()
+
+    indices = strategy.select(dataset)
+
+    assert indices[0] == 1
+    assert len(indices) == 2
+    assert len(set(indices)) == 2
+
+
 def test_density_weighted_core_set_applies_weights(monkeypatch):
     embeddings = np.array(
         [
@@ -110,3 +146,46 @@ def test_density_weighted_core_set_applies_weights(monkeypatch):
     indices = strategy.select(dataset=dataset)
 
     assert indices == [0, 1]
+
+
+def test_density_weighted_core_set_runs_multiple_steps():
+    embeddings = np.array(
+        [
+            [0.0, 0.0],
+            [0.0, 0.5],
+            [1.0, 0.0],
+            [1.0, 1.0],
+        ],
+        dtype=float,
+    )
+    dataset = _dataset_from_embeddings(embeddings)
+    strategy = DensityWeightedCoreSetInitialSelection(
+        seed=0, starting_batch_size=2, density_scale=0.5
+    )
+
+    indices = strategy.select(dataset)
+
+    assert len(indices) == 2
+    assert len(set(indices)) == 2
+
+
+def test_density_weighted_build_density_weights_handles_zero_scale():
+    strategy = DensityWeightedCoreSetInitialSelection(
+        seed=0, starting_batch_size=2, density_scale=0.0
+    )
+    weights = strategy._build_density_weights(
+        density_scores=np.array([0.5, 0.2]), num_samples=2
+    )
+    assert np.allclose(weights, np.ones(2))
+
+
+def test_density_weighted_build_density_weights_scales_inverse_density():
+    strategy = DensityWeightedCoreSetInitialSelection(
+        seed=0, starting_batch_size=2, density_scale=2.0
+    )
+    weights = strategy._build_density_weights(
+        density_scores=np.array([0.5, 1.0]), num_samples=2
+    )
+    assert weights[0] > weights[1]
+    expected = 1.0 + strategy.density_scale * np.array([1.0, 0.5])
+    assert np.allclose(weights, expected)
