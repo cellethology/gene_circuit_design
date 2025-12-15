@@ -9,7 +9,6 @@ import numpy as np
 from core.query_strategies import (
     PredStdHybrid,
     Random,
-    TopLogLikelihood,
     TopPredictions,
 )
 
@@ -90,41 +89,6 @@ class TestTopPredictionsStrategy:
         )
 
         assert TopPredictions().select(exp) == unlabeled
-
-
-class TestTopLogLikelihoodStrategy:
-    def test_returns_empty_when_no_log_likelihoods(self, caplog):
-        exp = DummyExperiment(
-            unlabeled_indices=[0, 1], batch_size=2, log_likelihoods=None
-        )
-        selected = TopLogLikelihood().select(exp)
-        assert selected == []
-        assert "No log likelihood data available" in caplog.text
-
-    def test_returns_empty_when_no_valid_entries(self, caplog):
-        log_likelihoods = np.array([np.nan, np.nan, np.nan, 0.3])
-        exp = DummyExperiment(
-            unlabeled_indices=[0, 1, 2],
-            batch_size=2,
-            log_likelihoods=log_likelihoods,
-        )
-        selected = TopLogLikelihood().select(exp)
-        assert selected == []
-        assert "No valid log likelihood values" in caplog.text
-
-    def test_selects_highest_log_likelihood(self):
-        unlabeled = [0, 1, 2, 3]
-        log_likelihoods = np.array([0.1, np.nan, 0.9, 0.5])
-        labels = np.array([10.0, 11.0, 12.0, 13.0])
-        exp = DummyExperiment(
-            unlabeled_indices=unlabeled,
-            batch_size=2,
-            labels=labels,
-            log_likelihoods=log_likelihoods,
-        )
-
-        selected = TopLogLikelihood().select(exp)
-        assert sorted(selected) == [2, 3]
 
 
 class TestPredStdHybridStrategy:
