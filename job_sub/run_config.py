@@ -33,6 +33,7 @@ _MULTIRUN_BASE = _SCRIPT_PATH.parent / "multirun"
 _DATASET_ENV = "AL_DATASET_NAME"
 _METADATA_ENV = "AL_METADATA_PATH"
 _EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
+_SUBSET_ENV = "AL_SUBSET_IDS_PATH"
 # Deprecated but kept for compatibility
 _EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
@@ -47,6 +48,7 @@ seed_env_from_datasets(
     dataset_env=_DATASET_ENV,
     metadata_env=_METADATA_ENV,
     embedding_env=_EMBED_DIR_ENV,
+    subset_env=_SUBSET_ENV,
 )
 
 
@@ -70,6 +72,10 @@ def main():
         env[_DATASET_ENV] = dataset.name
         env[_METADATA_ENV] = dataset.metadata_path
         env[_EMBED_DIR_ENV] = dataset.embedding_dir
+        if dataset.subset_ids_path:
+            env[_SUBSET_ENV] = dataset.subset_ids_path
+        elif _SUBSET_ENV in env:
+            env.pop(_SUBSET_ENV, None)
         existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
         failure = None
         try:

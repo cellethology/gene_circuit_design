@@ -13,10 +13,10 @@ metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
 embedding_model: enformer_pca32
 embedding_path: ${embedding_dir}/${embedding_model}.npz
-subset_ids_path: null
+subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 100
+num_seeds_per_job: 96
 parallelize_seeds: true
 
 # active learning settings
