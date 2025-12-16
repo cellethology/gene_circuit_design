@@ -77,39 +77,19 @@ def main():
         elif _SUBSET_ENV in env:
             env.pop(_SUBSET_ENV, None)
         existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
-        failure = None
-        try:
-            subprocess.run(
-                [
-                    sys.executable,
-                    str(_SCRIPT_PATH),
-                    "-m",
-                    *user_overrides,
-                ],
-                check=True,
-                env=env,
-            )
-        except subprocess.CalledProcessError as exc:
-            failure = exc
-            print(
-                f"WARNING: Hydra sweep for dataset '{dataset.name}' failed with exit "
-                f"code {exc.returncode}. Still attempting to combine available summaries."
-            )
+        subprocess.run(
+            [
+                sys.executable,
+                str(_SCRIPT_PATH),
+                "-m",
+                *user_overrides,
+            ],
+            check=True,
+            env=env,
+        )
         new_sweeps = list_sweep_dirs(_MULTIRUN_BASE) - existing_sweeps
-        if failure:
-            if new_sweeps:
-                print("Sweeps to inspect for failed jobs:")
-                for sweep_dir in sorted(new_sweeps):
-                    print(f"  - {sweep_dir}")
-            else:
-                print(
-                    "No new sweep directories detected despite the failure. "
-                    "Nothing to combine."
-                )
         for sweep_dir in sorted(new_sweeps):
             combine_summaries(sweep_dir, dataset_name=dataset.name)
-        if failure:
-            raise failure
 
 
 if __name__ == "__main__":

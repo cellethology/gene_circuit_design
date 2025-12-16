@@ -3,6 +3,7 @@ from sklearn.base import RegressorMixin
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.linear_model import BayesianRidge
 from sklearn.pipeline import Pipeline
 
 
@@ -35,6 +36,18 @@ class UncertaintyWrapper(RegressorMixin):
 
         # ----- GaussianProcessRegressor: uses built-in std -----
         if isinstance(base_estimator, GaussianProcessRegressor):
+            means, std = base_estimator.predict(X_transformed, return_std=True)
+            if target_transformer is None:
+                return std
+            approx_bounds = np.stack([means - std, means + std], axis=0)
+            approx_bounds = self._inverse_transform_targets(
+                approx_bounds,
+                target_transformer,
+            )
+            return 0.5 * np.abs(approx_bounds[1] - approx_bounds[0])
+
+        # ----- BayesianRidge: use built-in std -----
+        if isinstance(base_estimator, BayesianRidge):
             means, std = base_estimator.predict(X_transformed, return_std=True)
             if target_transformer is None:
                 return std
