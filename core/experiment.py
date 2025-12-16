@@ -45,6 +45,7 @@ class ActiveLearningExperiment:
         target_transforms: Optional[List[Tuple[str, Any]]] = None,
         starting_batch_size: Optional[int] = None,
         label_key: Optional[str] = None,
+        subset_ids_path: Optional[str] = None,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -60,6 +61,7 @@ class ActiveLearningExperiment:
             target_transforms: List of (name, transformer) steps to apply to the *targets*
             label_key: Column name in the metadata CSV containing target values
             starting_batch_size: Number of samples to sample initially. If None, will be set to batch_size.
+            subset_ids_path: Optional path to a newline-delimited list of sample IDs to keep.
         """
         # Store configuration
         if label_key is None:
@@ -72,6 +74,7 @@ class ActiveLearningExperiment:
         self.random_seed = random_seed
         self.label_key = label_key
         self.initial_selection_strategy = initial_selection_strategy
+        self.subset_ids_path = subset_ids_path
         self.feature_transforms = feature_transforms
         self.target_transforms = target_transforms
         if starting_batch_size is None:
@@ -88,6 +91,7 @@ class ActiveLearningExperiment:
             embeddings_path=embeddings_path,
             metadata_path=metadata_path,
             label_key=label_key,
+            subset_ids_path=subset_ids_path,
         )
 
         # Load data

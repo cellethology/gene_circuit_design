@@ -62,7 +62,7 @@ class MetricsCalculator:
         }
 
     def n_selected_in_top(
-        self, selected_indices: np.ndarray, top_p: float = 0.1
+        self, selected_indices: np.ndarray, top_p: float = 0.01
     ) -> int:
         """
         Calculate how many selected samples fall into the top performers.

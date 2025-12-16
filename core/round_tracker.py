@@ -12,6 +12,14 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+SUMMARY_METRIC_RULES = {
+    "auc_true": ("max_accumulate", "normalized_true"),
+    "auc_pred": ("max_accumulate", "normalized_pred"),
+    "avg_top": ("top_mean", "n_selected_in_top"),
+    "overall_true": ("max_overall", "normalized_true"),
+}
+
+
 class RoundTracker:
     """
     Tracks selected samples across active learning rounds.
@@ -58,39 +66,47 @@ class RoundTracker:
         )
         self.round_num += 1
 
-    def compute_auc(self, metric_columns: List[str]) -> Dict[str, float]:
+    def compute_summary_metrics(self) -> Dict[str, float]:
         """
-        Compute the AUC across all rounds.
-        The AUC is computed by summing up the maximum value of the metric column up to that round.
+        Compute summary metrics defined by `SUMMARY_METRIC_RULES`.
         """
         if not self.rounds:
-            raise ValueError("Cannot compute AUC: no rounds have been tracked yet")
+            raise ValueError(
+                "Cannot compute summary metrics: no rounds have been tracked yet"
+            )
 
-        aucs = {}
         cumulative_selected = np.sum(
             np.cumsum(
                 np.array([len(round["selected_sample_ids"]) for round in self.rounds])
             )
         )
 
-        for metric_column in metric_columns:
-            if metric_column not in self.rounds[0].keys():
-                raise ValueError(f"Metric column {metric_column} not found in rounds")
+        summary_values: Dict[str, float] = {}
+
+        for metric_name, (rule, metric_column) in SUMMARY_METRIC_RULES.items():
+            if metric_column not in self.rounds[0]:
+                raise ValueError(f"Metric column {metric_name} not found in rounds")
 
             values = np.array([round[metric_column] for round in self.rounds])
-            if metric_column == "n_selected_in_top":
+            if rule == "top_mean":
                 cumulative_sum = np.cumsum(values)
-                aucs[metric_column] = (
+                summary_values[metric_name] = (
                     float(np.sum(cumulative_sum)) / cumulative_selected
                     if cumulative_selected > 0
                     else 0.0
                 )
-            else:
+            elif rule == "max_accumulate":
                 cumulative_max_per_round = np.maximum.accumulate(values)
-                aucs[metric_column] = float(np.sum(cumulative_max_per_round)) / len(
-                    self.rounds
+                summary_values[metric_name] = float(
+                    np.sum(cumulative_max_per_round)
+                ) / len(self.rounds)
+            elif rule == "max_overall":
+                summary_values[metric_name] = float(np.max(values))
+            else:
+                raise ValueError(
+                    f"Unknown summary metric rule '{rule}' for {metric_name}"
                 )
-        return aucs
+        return summary_values
 
     def save_to_csv(self, output_path: Path) -> None:
         """

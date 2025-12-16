@@ -39,6 +39,7 @@ def run_one_experiment(
     dataset_name = getattr(cfg, "dataset_name", "")
     embedding_model_name = getattr(cfg, "embedding_model", "")
     metadata_path = cfg.metadata_path
+    subset_ids_path = getattr(cfg, "subset_ids_path", None)
     al_settings = cfg.al_settings
     batch_size = al_settings.get("batch_size", 8)
     starting_batch_size = al_settings.get("starting_batch_size", batch_size)
@@ -66,6 +67,7 @@ def run_one_experiment(
         target_transforms=target_transforms,
         label_key=label_key,
         initial_selection_strategy=initial_selection_strategy,
+        subset_ids_path=subset_ids_path,
     )
 
     # Resolve and create output directory
@@ -80,10 +82,8 @@ def run_one_experiment(
     # Save individual results
     experiment.save_results(output_path=output_dir_path / "results.csv")
 
-    # Compute AUC
-    aucs = experiment.round_tracker.compute_auc(
-        metric_columns=["normalized_true", "normalized_pred", "n_selected_in_top"]
-    )
+    # Compute summary metrics
+    summary_metrics = experiment.round_tracker.compute_summary_metrics()
 
     # Summarize results
     feature_transforms_names = (
@@ -105,9 +105,10 @@ def run_one_experiment(
         "feature_transforms": feature_transforms_names,
         "target_transforms": target_transforms_names,
         "seed": seed,
-        "auc_normalized_true": aucs["normalized_true"],
-        "auc_normalized_pred": aucs["normalized_pred"],
-        "auc_n_selected_in_top": aucs["n_selected_in_top"],
+        "auc_true": summary_metrics["auc_true"],
+        "auc_pred": summary_metrics["auc_pred"],
+        "avg_top": summary_metrics["avg_top"],
+        "overall_true": summary_metrics["overall_true"],
     }
 
     # Persist summary for downstream aggregation

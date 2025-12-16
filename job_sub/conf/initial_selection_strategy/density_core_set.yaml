@@ -1,0 +1,6 @@
+_target_: core.initial_selection_strategies.DensityWeightedCoreSetInitialSelection
+seed: ${al_settings.seed}
+starting_batch_size: ${al_settings.starting_batch_size}
+metric: cosine
+density_neighbors: 32
+density_scale: 1.0

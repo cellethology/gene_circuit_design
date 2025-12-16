@@ -40,32 +40,57 @@ class TestRoundTracker:
         with pytest.raises(IndexError):
             tracker.track_round(selected_indices=[3], metrics=DUMMY_METRICS)
 
-    def test_compute_auc_with_no_rounds(self):
+    def test_compute_summary_metrics_with_no_rounds(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
 
         with pytest.raises(
-            ValueError, match="Cannot compute AUC: no rounds have been tracked yet"
+            ValueError,
+            match="Cannot compute summary metrics: no rounds have been tracked yet",
         ):
-            tracker.compute_auc(["normalized_true"])
+            tracker.compute_summary_metrics()
 
-    def test_compute_auc_and_missing_metric(self):
+    def test_compute_summary_metrics_returns_expected_values(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
         tracker.track_round(
-            selected_indices=[0], metrics={"normalized_true": 0.2, "best_true": 0.1}
+            selected_indices=[0],
+            metrics={
+                "normalized_true": 0.2,
+                "normalized_pred": 0.1,
+                "n_selected_in_top": 1,
+            },
         )
         tracker.track_round(
-            selected_indices=[1], metrics={"normalized_true": 0.4, "best_true": 0.3}
+            selected_indices=[1],
+            metrics={
+                "normalized_true": 0.4,
+                "normalized_pred": 0.6,
+                "n_selected_in_top": 0,
+            },
         )
         tracker.track_round(
-            selected_indices=[2], metrics={"normalized_true": 0.3, "best_true": 0.1}
+            selected_indices=[2],
+            metrics={
+                "normalized_true": 0.3,
+                "normalized_pred": 0.2,
+                "n_selected_in_top": 1,
+            },
         )
 
-        aucs = tracker.compute_auc(["normalized_true", "best_true"])
-        assert pytest.approx(1.0 / 3, rel=1e-6) == aucs["normalized_true"]
-        assert pytest.approx(0.7 / 3, rel=1e-6) == aucs["best_true"]
+        metrics = tracker.compute_summary_metrics()
+        assert pytest.approx(1.0 / 3, rel=1e-6) == metrics["auc_true"]
+        assert pytest.approx(13.0 / 30.0, rel=1e-6) == metrics["auc_pred"]
+        assert pytest.approx(2.0 / 3.0, rel=1e-6) == metrics["avg_top"]
+        assert pytest.approx(0.4, rel=1e-6) == metrics["overall_true"]
 
-        with pytest.raises(ValueError):
-            tracker.compute_auc(["missing_metric"])
+    def test_compute_summary_metrics_missing_required_column(self):
+        tracker = RoundTracker(sample_ids=np.array([0, 1]))
+        tracker.track_round(
+            selected_indices=[0],
+            metrics={"normalized_true": 0.2, "normalized_pred": 0.1},
+        )
+
+        with pytest.raises(ValueError, match="Metric column"):
+            tracker.compute_summary_metrics()
 
     def test_save_to_csv(self, tmp_path):
         tracker = RoundTracker(sample_ids=np.array([0, 1]))

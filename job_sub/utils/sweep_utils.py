@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional, Set
 
 import pandas as pd
+from tqdm import tqdm
 
 
 def collect_user_overrides(argv: List[str]) -> List[str]:
@@ -36,7 +37,7 @@ def combine_summaries(sweep_dir: Path, dataset_name: Optional[str] = None) -> No
         return
 
     rows = []
-    for path in summary_files:
+    for path in tqdm(summary_files):
         try:
             data = json.loads(path.read_text())
             data["summary_path"] = str(path)

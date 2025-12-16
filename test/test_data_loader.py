@@ -150,3 +150,40 @@ class TestDataLoader:
 
         with pytest.raises(IndexError):
             loader.load()
+
+    def test_subset_ids_filters_embeddings_and_labels(self, tmp_path):
+        emb_path, embeddings = self._create_embeddings_file(tmp_path, n_samples=6)
+        csv_path, data = self._create_metadata_csv(tmp_path, n_samples=6)
+        subset_ids = [1, 4, 5]
+        subset_path = tmp_path / "subset.txt"
+        subset_path.write_text("\n".join(str(i) for i in subset_ids))
+
+        loader = DataLoader(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            label_key="Expression",
+            subset_ids_path=str(subset_path),
+        )
+
+        dataset = loader.load()
+
+        np.testing.assert_array_equal(dataset.sample_ids, np.array(subset_ids))
+        assert dataset.embeddings.shape[0] == len(subset_ids)
+        expected_labels = np.array(data["Expression"])[subset_ids]
+        assert np.allclose(dataset.labels, expected_labels)
+
+    def test_subset_ids_with_no_overlap_errors(self, tmp_path):
+        emb_path, _ = self._create_embeddings_file(tmp_path, n_samples=3)
+        csv_path, _ = self._create_metadata_csv(tmp_path, n_samples=3)
+        subset_path = tmp_path / "subset.txt"
+        subset_path.write_text("10\n11\n")
+
+        loader = DataLoader(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            label_key="Expression",
+            subset_ids_path=str(subset_path),
+        )
+
+        with pytest.raises(ValueError, match="Subset id filtering removed all samples"):
+            loader.load()

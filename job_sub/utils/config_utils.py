@@ -3,7 +3,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from omegaconf import OmegaConf
 
@@ -20,6 +20,7 @@ class DatasetConfig:
     name: str
     metadata_path: str
     embedding_dir: str
+    subset_ids_path: Optional[str] = None
 
 
 def ensure_resolvers() -> None:
@@ -75,11 +76,20 @@ def load_dataset_configs() -> List[DatasetConfig]:
                 f"Embedding directory '{embedding_dir_path}' for dataset '{name}' does not exist"
             )
 
+        subset_ids_path = dataset.get("subset_ids_path")
+        subset_ids_str = None
+        if subset_ids_path:
+            subset_path = Path(str(subset_ids_path)).expanduser()
+            if not subset_path.is_absolute():
+                subset_path = (_DATASETS_FILE.parent / subset_path).resolve()
+            subset_ids_str = str(subset_path)
+
         dataset_configs.append(
             DatasetConfig(
                 name=name,
                 metadata_path=metadata_path,
                 embedding_dir=str(embedding_dir_path),
+                subset_ids_path=subset_ids_str,
             )
         )
 
@@ -92,6 +102,7 @@ def seed_env_from_datasets(
     dataset_env: str = "AL_DATASET_NAME",
     metadata_env: str = "AL_METADATA_PATH",
     embedding_env: str = "AL_EMBEDDING_ROOT",
+    subset_env: str = "AL_SUBSET_IDS_PATH",
 ) -> None:
     """Seed dataset env vars when invoked outside the Hydra child."""
     if os.environ.get(hydra_child_env) == "1":
@@ -104,3 +115,5 @@ def seed_env_from_datasets(
     os.environ.setdefault(dataset_env, dataset.name)
     os.environ.setdefault(metadata_env, dataset.metadata_path)
     os.environ.setdefault(embedding_env, dataset.embedding_dir)
+    if dataset.subset_ids_path:
+        os.environ.setdefault(subset_env, dataset.subset_ids_path)
