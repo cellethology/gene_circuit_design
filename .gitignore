@@ -107,6 +107,7 @@ multirun
 logs_experiments
 log_test/*
 logs_test/*
+slurm_logs/*
 # job_sub/
 
 
