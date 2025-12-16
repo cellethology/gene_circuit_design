@@ -44,9 +44,14 @@ hydra:
         - core_set
       query_strategy:
         - topk
+        - predstdhybrid(alpha=1.0)
         - predstdhybrid(alpha=0.75)
         - predstdhybrid(alpha=0.5)
         - predstdhybrid(alpha=0.25)
+        - predstdhybrid(alpha=-0.25)
+        - predstdhybrid(alpha=-0.5)
+        - predstdhybrid(alpha=-0.75)
+        - predstdhybrid(alpha=-1.0)
       predictor:
         - rf_regressor
         - gaussian_regressor
