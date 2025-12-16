@@ -55,7 +55,6 @@ class TestRoundTracker:
             selected_indices=[0],
             metrics={
                 "normalized_true": 0.2,
-                "best_true": 0.2,
                 "normalized_pred": 0.1,
                 "n_selected_in_top": 1,
             },
@@ -64,7 +63,6 @@ class TestRoundTracker:
             selected_indices=[1],
             metrics={
                 "normalized_true": 0.4,
-                "best_true": 0.5,
                 "normalized_pred": 0.6,
                 "n_selected_in_top": 0,
             },
@@ -73,7 +71,6 @@ class TestRoundTracker:
             selected_indices=[2],
             metrics={
                 "normalized_true": 0.3,
-                "best_true": 0.4,
                 "normalized_pred": 0.2,
                 "n_selected_in_top": 1,
             },
@@ -83,7 +80,7 @@ class TestRoundTracker:
         assert pytest.approx(1.0 / 3, rel=1e-6) == metrics["auc_true"]
         assert pytest.approx(13.0 / 30.0, rel=1e-6) == metrics["auc_pred"]
         assert pytest.approx(2.0 / 3.0, rel=1e-6) == metrics["avg_top"]
-        assert pytest.approx(0.5, rel=1e-6) == metrics["overall_true"]
+        assert pytest.approx(0.4, rel=1e-6) == metrics["overall_true"]
 
     def test_compute_summary_metrics_missing_required_column(self):
         tracker = RoundTracker(sample_ids=np.array([0, 1]))

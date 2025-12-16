@@ -16,7 +16,7 @@ SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
     "auc_pred": ("max_accumulate", "normalized_pred"),
     "avg_top": ("top_mean", "n_selected_in_top"),
-    "overall_true": ("max_overall", "best_true"),
+    "overall_true": ("max_overall", "normalized_true"),
 }
 
 
