@@ -235,3 +235,6 @@ class DensityWeightedCoreSetInitialSelection(CoreSetInitialSelection):
         if max_val > 0:
             inv_density = inv_density / max_val
         return 1.0 + self.density_scale * inv_density
+
+
+# TODO: implement a strategy where we first do hierarchical clustering on the embeddings, then select the centroids of the clusters as the initial samples. (may need to use minibatchkmeans since we have so many points)
