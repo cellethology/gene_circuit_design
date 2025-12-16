@@ -2,4 +2,4 @@ datasets:
   - name: "Rai_2024_166k"
     metadata_path: "/home/wangzitongLab/wangzitong/gene_circuit_design/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
     embedding_dir: "/home/wangzitongLab/wangzitong/gene_circuit_design/data_new/Rai_2024_166k"
-    subset_ids_path: "/home/wangzitongLab/wangzitong/gene_circuit_design/job_sub/166k_subset_ids.txt"
+    subset_ids_path: "/home/wangzitongLab/wangzitong/gene_circuit_design/job_sub/datasets/166k_subset_ids.txt"

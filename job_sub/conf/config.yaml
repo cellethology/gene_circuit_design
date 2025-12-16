@@ -42,7 +42,7 @@ hydra:
       initial_selection_strategy: kmeans, core_set, density_core_set
       query_strategy: topk
       predictor: rf_regressor, mlp_regressor, gaussian_regressor
-      embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32
+      embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32, evo2_meanpool_block18_pca32
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
