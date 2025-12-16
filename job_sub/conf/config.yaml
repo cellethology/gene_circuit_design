@@ -43,15 +43,17 @@ hydra:
         - kmeans
         - core_set
       query_strategy:
-        - topk
-        - predstdhybrid(alpha=1.0)
-        - predstdhybrid(alpha=0.75)
-        - predstdhybrid(alpha=0.5)
-        - predstdhybrid(alpha=0.25)
-        - predstdhybrid(alpha=-0.25)
-        - predstdhybrid(alpha=-0.5)
-        - predstdhybrid(alpha=-0.75)
-        - predstdhybrid(alpha=-1.0)
+        - predstdhybrid
+      query_strategy.alpha:
+        - 1.0
+        - 0.75
+        - 0.5
+        - 0.25
+        - 0.0
+        - -0.25
+        - -0.5
+        - -0.75
+        - -1.0
       predictor:
         - rf_regressor
         - gaussian_regressor
