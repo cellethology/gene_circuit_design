@@ -8,7 +8,7 @@ from typing import List, Optional
 from omegaconf import OmegaConf
 
 _MODULE_PATH = Path(__file__).resolve()
-_DATASETS_FILE = _MODULE_PATH.parents[1] / "datasets.yaml"
+_DATASETS_FILE = _MODULE_PATH.parents[1] / "datasets" / "datasets.yaml"
 
 _resolvers_registered = False
 

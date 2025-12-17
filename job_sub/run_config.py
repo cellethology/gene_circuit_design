@@ -2,7 +2,7 @@
 Minimal wrapper that runs the Hydra multirun entrypoint once per dataset.
 
 Run the script (`python job_sub/run_config.py`) to sweep across the
-datasets defined in datasets.yaml.
+datasets defined in datasets/datasets.yaml.
 """
 
 import os
@@ -39,7 +39,7 @@ _EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
 DATASETS: List[DatasetConfig] = load_dataset_configs()
 if not DATASETS:
-    raise RuntimeError("No datasets configured in job_sub/datasets.yaml")
+    raise RuntimeError("No datasets configured in job_sub/datasets/datasets.yaml")
 
 
 seed_env_from_datasets(
