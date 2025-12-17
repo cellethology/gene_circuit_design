@@ -79,7 +79,7 @@ def main():
                 "-m",
                 *user_overrides,
             ],
-            check=True,
+            check=False,
             env=env,
         )
 
