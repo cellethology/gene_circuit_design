@@ -1,5 +1,5 @@
 defaults:
-  - predictor: ridge_regressor
+  - predictor: gaussian_regressor
   - query_strategy: topk
   - initial_selection_strategy: random
   - transforms@feature_transforms: standardize
