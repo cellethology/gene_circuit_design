@@ -100,8 +100,6 @@ def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
                 f"[WARN] SubmitIt reported unfinished jobs for dataset '{dataset_name}'. Continuing.",
                 file=sys.stderr,
             )
-            if stderr:
-                print(stderr, file=sys.stderr)
             return
         raise
 
