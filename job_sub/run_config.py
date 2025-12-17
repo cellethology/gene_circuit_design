@@ -2,7 +2,7 @@
 Minimal wrapper that runs the Hydra multirun entrypoint once per dataset.
 
 Run the script (`python job_sub/run_config.py`) to sweep across the
-datasets defined in datasets.yaml.
+datasets defined in datasets/datasets.yaml.
 """
 
 import os
@@ -21,11 +21,7 @@ from job_sub.utils.config_utils import (
     seed_env_from_datasets,
 )
 from job_sub.utils.seed_jobs import run_seed_jobs
-from job_sub.utils.sweep_utils import (
-    collect_user_overrides,
-    combine_summaries,
-    list_sweep_dirs,
-)
+from job_sub.utils.sweep_utils import collect_user_overrides
 
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
@@ -39,7 +35,7 @@ _EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
 ensure_resolvers()
 DATASETS: List[DatasetConfig] = load_dataset_configs()
 if not DATASETS:
-    raise RuntimeError("No datasets configured in job_sub/datasets.yaml")
+    raise RuntimeError("No datasets configured in job_sub/datasets/datasets.yaml")
 
 
 seed_env_from_datasets(
@@ -76,20 +72,36 @@ def main():
             env[_SUBSET_ENV] = dataset.subset_ids_path
         elif _SUBSET_ENV in env:
             env.pop(_SUBSET_ENV, None)
-        existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
+        cmd = [
+            sys.executable,
+            str(_SCRIPT_PATH),
+            "-m",
+            *user_overrides,
+        ]
+        _run_dataset_sweep(cmd, env, dataset.name)
+
+
+def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
+    """
+    Launch a Hydra multirun for a single dataset, suppressing transient SubmitIt errors.
+    """
+    try:
         subprocess.run(
-            [
-                sys.executable,
-                str(_SCRIPT_PATH),
-                "-m",
-                *user_overrides,
-            ],
+            cmd,
             check=True,
             env=env,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        new_sweeps = list_sweep_dirs(_MULTIRUN_BASE) - existing_sweeps
-        for sweep_dir in sorted(new_sweeps):
-            combine_summaries(sweep_dir, dataset_name=dataset.name)
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr or ""
+        if "submitit.core.utils.UncompletedJobError" in stderr:
+            print(
+                f"[WARN] SubmitIt reported unfinished jobs for dataset '{dataset_name}'. Continuing.",
+                file=sys.stderr,
+            )
+            return
+        raise
 
 
 if __name__ == "__main__":
