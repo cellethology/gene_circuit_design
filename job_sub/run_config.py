@@ -72,16 +72,38 @@ def main():
             env[_SUBSET_ENV] = dataset.subset_ids_path
         elif _SUBSET_ENV in env:
             env.pop(_SUBSET_ENV, None)
+        cmd = [
+            sys.executable,
+            str(_SCRIPT_PATH),
+            "-m",
+            *user_overrides,
+        ]
+        _run_dataset_sweep(cmd, env, dataset.name)
+
+
+def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
+    """
+    Launch a Hydra multirun for a single dataset, suppressing transient SubmitIt errors.
+    """
+    try:
         subprocess.run(
-            [
-                sys.executable,
-                str(_SCRIPT_PATH),
-                "-m",
-                *user_overrides,
-            ],
-            check=False,
+            cmd,
+            check=True,
             env=env,
+            stderr=subprocess.PIPE,
+            text=True,
         )
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr or ""
+        if "submitit.core.utils.UncompletedJobError" in stderr:
+            print(
+                f"[WARN] SubmitIt reported unfinished jobs for dataset '{dataset_name}'. Continuing.",
+                file=sys.stderr,
+            )
+            if stderr:
+                print(stderr, file=sys.stderr)
+            return
+        raise
 
 
 if __name__ == "__main__":
