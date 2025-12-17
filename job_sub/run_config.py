@@ -79,25 +79,18 @@ def main():
                 "-m",
                 *user_overrides,
             ],
-            check=True,
+            check=False,
             env=env,
         )
 
 
 if __name__ == "__main__":
-    in_launched_job = bool(
-        os.environ.get(_HYDRA_CHILD_ENV) == "1"
-        or os.environ.get("SUBMITIT_EXECUTOR")
-        or os.environ.get("SUBMITIT_JOB_ID")
-        or os.environ.get("SLURM_JOB_ID")
-        or os.environ.get("SLURM_ARRAY_JOB_ID")
-    )
-
-    if in_launched_job:
-        # Inside SLURM/Submitit: run Hydra entrypoint (single or multirun depending on argv)
+    if os.environ.get(_HYDRA_CHILD_ENV) == "1":
+        # Already inside Hydra child: run once
         run_one_job()
     elif any(flag in sys.argv[1:] for flag in ("-m", "--multirun")):
-        # Top-level: loop datasets and spawn a multirun per dataset
+        # User requested multirun: fan out over data paths via subprocess
         main()
     else:
+        # Single run, no wrapper looping and no sweeps
         run_one_job()
