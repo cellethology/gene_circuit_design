@@ -8,7 +8,7 @@ for every dataset directory under job_sub/multirun.
 import argparse
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional, Sequence, Set
 
 from job_sub.utils.config_utils import ensure_resolvers, load_dataset_configs
 from job_sub.utils.sweep_utils import combine_summaries, list_sweep_dirs
@@ -41,20 +41,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def main() -> None:
-    args = parse_args()
+def aggregate_summaries(
+    sweep_base: Path = _DEFAULT_BASE,
+    datasets: Optional[Sequence[str]] = None,
+    force: bool = False,
+) -> int:
+    """Combine summary.json files for completed sweeps.
+
+    Args:
+        sweep_base: Root directory containing Hydra multirun outputs.
+        datasets: Optional iterable of dataset names to aggregate. If None, defaults to dataset configs.
+        force: Recombine even if marker files exist.
+
+    Returns:
+        Number of dataset directories aggregated.
+    """
     ensure_resolvers()
     dataset_filters: Optional[Set[str]] = None
-    if args.datasets:
-        dataset_filters = {name.strip() for name in args.datasets if name}
-    elif args.datasets is None:
+    if datasets:
+        dataset_filters = {name.strip() for name in datasets if name}
+    elif datasets is None:
         # Default to dataset names from config to avoid accidental aggregation of temporary dirs.
         dataset_filters = {cfg.name for cfg in load_dataset_configs()}
 
-    sweeps = list_sweep_dirs(args.sweep_base)
+    sweeps = list_sweep_dirs(sweep_base)
     if not sweeps:
-        print(f"No sweeps found under {args.sweep_base}")
-        return
+        print(f"No sweeps found under {sweep_base}")
+        return 0
 
     aggregated = 0
     for sweep_dir in sorted(sweeps):
@@ -63,7 +76,7 @@ def main() -> None:
             if dataset_filters and dataset_name not in dataset_filters:
                 continue
             marker_path = dataset_dir / _MARKER_NAME
-            if marker_path.exists() and not args.force:
+            if marker_path.exists() and not force:
                 continue
             combine_summaries(sweep_dir, dataset_name=dataset_name)
             marker_path.write_text(
@@ -75,6 +88,7 @@ def main() -> None:
         print("No new datasets required aggregation.")
     else:
         print(f"Aggregated summaries for {aggregated} dataset(s).")
+    return aggregated
 
 
 def _iter_dataset_dirs(sweep_dir: Path) -> List[Path]:
@@ -87,6 +101,15 @@ def _iter_dataset_dirs(sweep_dir: Path) -> List[Path]:
         if path.is_dir() and not path.name.startswith(".")
     ]
     return dirs
+
+
+def main() -> None:
+    args = parse_args()
+    aggregate_summaries(
+        sweep_base=args.sweep_base,
+        datasets=args.datasets,
+        force=args.force,
+    )
 
 
 if __name__ == "__main__":

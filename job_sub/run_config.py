@@ -21,9 +21,7 @@ from job_sub.utils.config_utils import (
     seed_env_from_datasets,
 )
 from job_sub.utils.seed_jobs import run_seed_jobs
-from job_sub.utils.sweep_utils import (
-    collect_user_overrides,
-)
+from job_sub.utils.sweep_utils import collect_user_overrides
 
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
