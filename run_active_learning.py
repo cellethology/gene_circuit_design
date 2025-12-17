@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
 from omegaconf import ListConfig, OmegaConf
 
@@ -41,9 +42,9 @@ def run_one_experiment(
     metadata_path = cfg.metadata_path
     subset_ids_path = getattr(cfg, "subset_ids_path", None)
     al_settings = cfg.al_settings
-    batch_size = al_settings.get("batch_size", 8)
+    batch_size = al_settings.get("batch_size")
     starting_batch_size = al_settings.get("starting_batch_size", batch_size)
-    max_rounds = al_settings.get("max_rounds", 30)
+    max_rounds = al_settings.get("max_rounds")
     output_dir = al_settings.get("output_dir", None)
     label_key = al_settings.get("label_key", None)
     seed = al_settings.get("seed", 0)
@@ -93,14 +94,24 @@ def run_one_experiment(
         [item[0] for item in target_transforms] if target_transforms else []
     )
     is_random_strategy = query_strategy.name.upper() == "RANDOM"
-    reported_embedding_model = None if is_random_strategy else embedding_model_name
-    reported_predictor = None if is_random_strategy else predictor.__class__.__name__
+    reported_embedding_model = "None" if is_random_strategy else embedding_model_name
+
+    overrides = _collect_hydra_overrides(cfg)
+    override_map = _build_override_map(overrides)
+    strategy_label = _format_component_label(
+        query_strategy.name, "query_strategy", override_map
+    )
+    predictor_label = "None"
+    if not is_random_strategy:
+        predictor_label = _format_component_label(
+            predictor.__class__.__name__, "predictor", override_map
+        )
 
     summary = {
         "dataset_name": dataset_name,
         "embedding_model": reported_embedding_model,
-        "query_strategy": query_strategy.name,
-        "predictor": reported_predictor,
+        "query_strategy": strategy_label,
+        "predictor": predictor_label,
         "initial_selection": initial_selection_strategy.name,
         "feature_transforms": feature_transforms_names,
         "target_transforms": target_transforms_names,
@@ -109,6 +120,7 @@ def run_one_experiment(
         "auc_pred": summary_metrics["auc_pred"],
         "avg_top": summary_metrics["avg_top"],
         "overall_true": summary_metrics["overall_true"],
+        "hydra_overrides": overrides,
     }
 
     # Persist summary for downstream aggregation
@@ -135,3 +147,64 @@ def make_steps(steps_cfg: ListConfig) -> List[Tuple[str, Any]]:
         transformer = instantiate(step_dict)
         steps.append((name, transformer))
     return steps
+
+
+def _collect_hydra_overrides(cfg: Dict[str, Any]) -> List[str]:
+    """Return the Hydra override strings recorded for this task."""
+    stored_overrides = None
+    try:
+        stored_overrides = OmegaConf.select(cfg, "hydra_overrides", default=None)
+    except Exception:  # pragma: no cover - defensive
+        stored_overrides = None
+    if stored_overrides is not None:
+        return _normalize_override_values(stored_overrides)
+    if HydraConfig.initialized():
+        try:
+            task_overrides = HydraConfig.get().overrides.task
+        except Exception:  # pragma: no cover - defensive
+            task_overrides = None
+        if task_overrides:
+            return [str(item) for item in task_overrides]
+    return []
+
+
+def _build_override_map(overrides: List[str]) -> Dict[str, str]:
+    """Create a key/value lookup from override strings."""
+    items: Dict[str, str] = {}
+    for entry in overrides:
+        text = str(entry).strip()
+        if "=" not in text:
+            continue
+        key, value = text.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        items[key] = value.strip()
+    return items
+
+
+def _format_component_label(
+    base_label: str, prefix: str, override_map: Dict[str, str]
+) -> str:
+    """Append override parameters to a label when that component was swept."""
+    prefix_with_dot = f"{prefix}."
+    details: List[str] = []
+    for key in sorted(override_map):
+        if key.startswith(prefix_with_dot):
+            param = key[len(prefix_with_dot) :]
+            details.append(f"{param}={override_map[key]}")
+    if not details:
+        return base_label
+    detail_str = ", ".join(details)
+    return f"{base_label}[{detail_str}]"
+
+
+def _normalize_override_values(value: Any) -> List[str]:
+    """Normalize Hydra override containers to a list of strings."""
+    if value is None:
+        return []
+    if isinstance(value, ListConfig):
+        return [str(item) for item in value]
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    return [str(value)]
