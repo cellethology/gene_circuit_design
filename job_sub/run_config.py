@@ -23,8 +23,6 @@ from job_sub.utils.config_utils import (
 from job_sub.utils.seed_jobs import run_seed_jobs
 from job_sub.utils.sweep_utils import (
     collect_user_overrides,
-    combine_summaries,
-    list_sweep_dirs,
 )
 
 _SCRIPT_PATH = Path(__file__).resolve()
@@ -76,7 +74,6 @@ def main():
             env[_SUBSET_ENV] = dataset.subset_ids_path
         elif _SUBSET_ENV in env:
             env.pop(_SUBSET_ENV, None)
-        existing_sweeps = list_sweep_dirs(_MULTIRUN_BASE)
         subprocess.run(
             [
                 sys.executable,
@@ -87,26 +84,11 @@ def main():
             check=True,
             env=env,
         )
-        new_sweeps = list_sweep_dirs(_MULTIRUN_BASE) - existing_sweeps
-        for sweep_dir in sorted(new_sweeps):
-            combine_summaries(sweep_dir, dataset_name=dataset.name)
 
 
 if __name__ == "__main__":
-    # If we're running inside a SLURM/Submitit job, we must NOT re-enter the
-    # dataset fan-out wrapper (main). Otherwise, we end up recursively spawning
-    # multiruns from within a launched job.
-    in_launched_job = bool(
-        os.environ.get(_HYDRA_CHILD_ENV) == "1"
-        or os.environ.get("SUBMITIT_EXECUTOR")
-        or os.environ.get("SUBMITIT_JOB_ID")
-        or os.environ.get("SLURM_JOB_ID")
-        or os.environ.get("SLURM_ARRAY_JOB_ID")
-    )
-
-    if in_launched_job:
-        # Already inside a launched job: run Hydra entrypoint (single/multirun
-        # depending on CLI flags) but do not wrap over datasets.
+    if os.environ.get(_HYDRA_CHILD_ENV) == "1":
+        # Already inside Hydra child: run once
         run_one_job()
     elif any(flag in sys.argv[1:] for flag in ("-m", "--multirun")):
         # User requested multirun: fan out over data paths via subprocess
