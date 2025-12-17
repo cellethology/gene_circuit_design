@@ -41,9 +41,6 @@ hydra:
     params:
       initial_selection_strategy: kmeans, core_set
       query_strategy: predstdhybrid
-      query_strategy.alpha: 1.0, 0.75, 0.5, 0.25, 0.0, -0.25, -0.5, -0.75, -1.0
-      predictor: rf_regressor, gaussian_regressor, bayes_ridge
-      embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, evo_1p5_pca32, evo2_meanpool_block18_pca32
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
