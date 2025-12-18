@@ -52,7 +52,7 @@ def generate_subsets_yaml(
 
 if __name__ == "__main__":
     subset_dir = (Path(__file__).parent/"subset32").resolve()
-    output_yaml = subset_dir / "subsets39_config.yaml"
+    output_yaml = subset_dir.parent / "subsets39_config.yaml"
     metadata_path = "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
     embedding_dir = "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k"
 
