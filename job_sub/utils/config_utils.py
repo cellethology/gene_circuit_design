@@ -58,6 +58,33 @@ def load_dataset_configs() -> List[DatasetConfig]:
         return []
 
     cfg = OmegaConf.load(_DATASETS_FILE)
+
+    # Support lightweight indirection so we can keep the loader stable while
+    # swapping dataset collections (e.g. different subsets) via a single pointer.
+    #
+    # Supported formats:
+    # 1) Top-level redirect:
+    #    redirect: subsets39_config.yaml
+    # 2) Backward/accidental format (tolerated):
+    #    datasets:
+    #      redirect: subsets39_config.yaml
+    redirect_target = cfg.get("redirect")
+    if not redirect_target:
+        datasets_node = cfg.get("datasets")
+        if isinstance(datasets_node, dict):
+            redirect_target = datasets_node.get("redirect")
+
+    if redirect_target:
+        redirect_path = Path(str(redirect_target)).expanduser()
+        if not redirect_path.is_absolute():
+            redirect_path = (_DATASETS_FILE.parent / redirect_path).resolve()
+        if not redirect_path.exists():
+            raise FileNotFoundError(
+                f"Redirect target '{redirect_path}' referenced by '{_DATASETS_FILE}' does not exist"
+            )
+        cfg = OmegaConf.load(redirect_path)
+
+
     datasets_cfg = cfg.get("datasets") or []
     dataset_configs: List[DatasetConfig] = []
 
