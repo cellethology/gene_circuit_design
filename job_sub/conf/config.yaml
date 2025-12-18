@@ -16,7 +16,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 1
+num_seeds_per_job: 32
 parallelize_seeds: true
 
 # active learning settings
@@ -41,6 +41,7 @@ hydra:
     params:
       initial_selection_strategy: kmeans, core_set
       query_strategy: predstdhybrid
+      predictor: gaussian_regressor, rf_regressor
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
