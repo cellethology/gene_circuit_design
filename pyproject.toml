@@ -67,6 +67,16 @@ run-active-learning = "run_experiments:main"
 [tool.hatch.build.targets.wheel]
 packages = ["utils"]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform == 'linux'" }
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py38"
