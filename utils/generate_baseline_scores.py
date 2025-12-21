@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
-from scipy import stats
 from tqdm import tqdm
 
 DEFAULT_DATASETS_YAML = (
@@ -143,13 +142,16 @@ def get_overall_true_auc_true(
     num_samples_per_round: int = 12,
     rng: np.random.Generator | None = None,
     replace: bool = True,
+    seeds: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    if rng is None:
-        rng = np.random.default_rng()
     if num_rounds <= 0 or num_samples_per_round <= 0 or num_experiments <= 0:
         raise ValueError(
             "num_rounds, num_samples_per_round, and num_experiments must be > 0"
         )
+    if seeds is not None and len(seeds) != num_experiments:
+        raise ValueError("Seeds length must match num_experiments.")
+    if seeds is None and rng is None:
+        rng = np.random.default_rng()
 
     labels = np.asarray(labels)
     max_val = np.max(labels)
@@ -166,7 +168,8 @@ def get_overall_true_auc_true(
     overall_true = np.empty(num_experiments, dtype=np.float64)
     auc_true = np.empty(num_experiments, dtype=np.float64)
     for i in range(num_experiments):
-        samples = rng.choice(
+        sample_rng = rng if seeds is None else np.random.default_rng(int(seeds[i]))
+        samples = sample_rng.choice(
             normalized_labels, size=samples_per_experiment, replace=replace
         )
         samples = samples.reshape(num_rounds, -1).max(axis=1)
@@ -175,10 +178,13 @@ def get_overall_true_auc_true(
     return overall_true, auc_true
 
 
-def compute_statistics(data: np.ndarray) -> tuple[float, float]:
-    median = np.median(data)
-    mad = stats.median_abs_deviation(data)
-    return float(median), float(mad)
+def generate_experiment_seeds(
+    num_experiments: int,
+    base_seed: int | None,
+) -> np.ndarray:
+    rng = np.random.default_rng(base_seed)
+    max_seed = np.iinfo(np.uint32).max
+    return rng.integers(0, max_seed, size=num_experiments, dtype=np.uint32)
 
 
 def parse_args() -> argparse.Namespace:
@@ -242,9 +248,9 @@ def main() -> None:
                 f"Requested datasets not found in {dataset_yaml_path}: {sorted(missing)}"
             )
 
-    rng = np.random.default_rng(args.seed)
     label_cache: dict[tuple[Path, str], np.ndarray] = {}
     subset_cache: dict[Path, np.ndarray] = {}
+    experiment_seeds = generate_experiment_seeds(args.num_experiments, args.seed)
 
     random_states = []
     for dataset in tqdm(datasets):
@@ -254,25 +260,26 @@ def main() -> None:
             num_experiments=args.num_experiments,
             num_rounds=args.num_rounds,
             num_samples_per_round=args.num_samples_per_round,
-            rng=rng,
             replace=args.with_replacement,
+            seeds=experiment_seeds,
         )
-        overall_true_median, overall_true_mad = compute_statistics(overall_true)
-        auc_true_median, auc_true_mad = compute_statistics(auc_true)
-
-        random_states.append(
-            {
-                "dataset_name": dataset.name,
-                "query_strategy": "RANDOM",
-                "predictor": "None",
-                "initial_selection": "RANDOM",
-                "embedding_model": "None",
-                "auc_true_median": auc_true_median,
-                "auc_true_median_abs_deviation": auc_true_mad,
-                "overall_true_median": overall_true_median,
-                "overall_true_median_abs_deviation": overall_true_mad,
-            }
-        )
+        for seed_value, overall_value, auc_value in zip(
+            experiment_seeds, overall_true, auc_true
+        ):
+            random_states.append(
+                {
+                    "dataset_name": dataset.name,
+                    "query_strategy": "RANDOM",
+                    "predictor": "None",
+                    "initial_selection": "RANDOM",
+                    "embedding_model": "None",
+                    "feature_transforms": "None",
+                    "target_transforms": "None",
+                    "seed": int(seed_value),
+                    "overall_true": float(overall_value),
+                    "auc_true": float(auc_value),
+                }
+            )
 
     df = pd.DataFrame(random_states)
     if df.empty:
