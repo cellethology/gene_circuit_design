@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy import stats
+from tqdm import tqdm
 
 DEFAULT_DATASETS_YAML = (
     Path(__file__).resolve().parents[1] / "job_sub" / "datasets" / "datasets.yaml"
@@ -246,7 +247,7 @@ def main() -> None:
     subset_cache: dict[Path, np.ndarray] = {}
 
     random_states = []
-    for dataset in datasets:
+    for dataset in tqdm(datasets):
         labels = load_labels(dataset, args.label_key, label_cache, subset_cache)
         overall_true, auc_true = get_overall_true_auc_true(
             labels=labels,
