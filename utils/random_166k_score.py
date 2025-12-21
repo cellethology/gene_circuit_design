@@ -14,7 +14,7 @@ DEFAULT_DATASETS_YAML = (
 )
 DEFAULT_LABEL_KEY = "Fold Change (Induced/Basal)"
 DEFAULT_OUTPUT_CSV = (
-    Path(__file__).resolve().parents[1] / "results" / "random_166k_score.csv"
+    Path(__file__).resolve().parents[1] / "results" / "baseline_scores.csv"
 )
 
 
