@@ -255,6 +255,7 @@ def main() -> None:
     random_states = []
     for dataset in tqdm(datasets):
         labels = load_labels(dataset, args.label_key, label_cache, subset_cache)
+        dataset_max_label = float(np.max(labels))
         overall_true, auc_true = get_overall_true_auc_true(
             labels=labels,
             num_experiments=args.num_experiments,
@@ -278,6 +279,7 @@ def main() -> None:
                     "seed": int(seed_value),
                     "overall_true": float(overall_value),
                     "auc_true": float(auc_value),
+                    "dataset_max_label": dataset_max_label,
                 }
             )
 
