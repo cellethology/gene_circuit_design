@@ -42,7 +42,7 @@ hydra:
       initial_selection_strategy: kmeans, core_set
       query_strategy: predstdhybrid
   launcher:
-    timeout_min: 720
+    timeout_min: 120
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3
     cpus_per_task: 32
