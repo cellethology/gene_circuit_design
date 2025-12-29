@@ -1,0 +1,3 @@
+_target_: core.query_strategies.BoTorchAcquisition
+acquisition: ei
+maximize: true

@@ -1,0 +1,4 @@
+# BoTorch GP regressor (SingleTaskGP wrapper)
+_target_: core.botorch_models.BoTorchGPRegressor
+device: cpu
+dtype: float64

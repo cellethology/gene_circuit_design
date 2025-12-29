@@ -13,7 +13,7 @@ git clone git@github.com:cellethology/gene_circuit_design.git
 cd gene_circuit_design
 
 # Install all dependencies
-uv sync --python 3.9
+uv sync --python 3.10
 ```
 
 After installing dependencies, set up pre-commit hooks:
