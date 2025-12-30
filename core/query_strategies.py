@@ -5,6 +5,7 @@ This module provides a clean, extensible way to implement different
 selection strategies for active learning experiments.
 """
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
@@ -164,7 +165,7 @@ class BoTorchAcquisition(QueryStrategyBase):
     def _select_batch(
         self, experiment: Any, unlabeled_pool: List[int], batch_size: int
     ) -> List[int]:
-        torch, acq_class = self._resolve_acquisition()
+        torch = self._import_torch()
         model, feature_transformer, target_transformer = self._unwrap_estimator(
             experiment.trainer.get_model()
         )
@@ -176,42 +177,121 @@ class BoTorchAcquisition(QueryStrategyBase):
             X_pool = feature_transformer.transform(X_pool)
         X_pool = np.asarray(X_pool)
 
+        X_train = experiment.dataset.embeddings[experiment.train_indices, :]
+        if feature_transformer is not None:
+            X_train = feature_transformer.transform(X_train)
+        X_train = np.asarray(X_train)
+
         train_labels = experiment.dataset.labels[experiment.train_indices]
         train_labels = self._transform_targets(train_labels, target_transformer)
         best_f = train_labels.max() if self.maximize else train_labels.min()
 
-        acq = acq_class(botorch_model, best_f=float(best_f))
         X_tensor = self._to_model_tensor(torch, botorch_model, X_pool)
-        with torch.no_grad():
-            scores = acq(X_tensor).detach().cpu().numpy().reshape(-1)
+        X_train_tensor = self._to_model_tensor(torch, botorch_model, X_train)
 
-        top_k_local = np.argpartition(-scores, batch_size - 1)[:batch_size]
+        if self.acquisition == "ts":
+            scores = self._thompson_scores(torch, botorch_model, X_tensor)
+        else:
+            acq = self._build_acquisition(
+                torch=torch,
+                model=botorch_model,
+                best_f=float(best_f),
+                train_X=X_train_tensor.squeeze(-2),
+                candidate_set=X_tensor.squeeze(-2),
+            )
+            with torch.no_grad():
+                scores = acq(X_tensor).detach().cpu().numpy().reshape(-1)
+
+        rank_scores = scores if self.maximize else -scores
+        top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
         selected_indices = [unlabeled_pool[i] for i in top_k_local]
         return selected_indices
 
-    def _resolve_acquisition(self):
-        import torch
-        from botorch.acquisition.analytic import (
-            LogExpectedImprovement,
-            ProbabilityOfImprovement,
-            UpperConfidenceBound,
+    def _import_torch(self):
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError(
+                "BoTorchAcquisition requires torch/botorch to be installed."
+            ) from exc
+        return torch
+
+    def _build_acquisition(self, torch, model, best_f, train_X, candidate_set):
+        acq_class = self._resolve_acquisition_class()
+        kwargs = {
+            "model": model,
+            "best_f": best_f,
+            "maximize": self.maximize,
+            "beta": self.beta,
+            "X_baseline": train_X,
+            "candidate_set": candidate_set,
+        }
+        return self._init_acquisition(acq_class, **kwargs)
+
+    def _resolve_acquisition_class(self):
+        if self.acquisition == "ei":
+            from botorch.acquisition.analytic import ExpectedImprovement
+
+            return ExpectedImprovement
+        if self.acquisition == "log_ei":
+            from botorch.acquisition.analytic import LogExpectedImprovement
+
+            return LogExpectedImprovement
+        if self.acquisition == "pi":
+            from botorch.acquisition.analytic import ProbabilityOfImprovement
+
+            return ProbabilityOfImprovement
+        if self.acquisition == "ucb":
+            from botorch.acquisition.analytic import UpperConfidenceBound
+
+            return UpperConfidenceBound
+        if self.acquisition == "qei":
+            from botorch.acquisition.monte_carlo import qExpectedImprovement
+
+            return qExpectedImprovement
+        if self.acquisition == "qucb":
+            from botorch.acquisition.monte_carlo import qUpperConfidenceBound
+
+            return qUpperConfidenceBound
+        if self.acquisition == "qnei":
+            from botorch.acquisition.monte_carlo import qNoisyExpectedImprovement
+
+            return qNoisyExpectedImprovement
+        if self.acquisition == "qlog_ei":
+            try:
+                from botorch.acquisition.logei import qLogExpectedImprovement
+            except ImportError:
+                from botorch.acquisition.monte_carlo import qLogExpectedImprovement
+
+            return qLogExpectedImprovement
+        if self.acquisition == "qlog_nei":
+            try:
+                from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+            except ImportError:
+                from botorch.acquisition.monte_carlo import qLogNoisyExpectedImprovement
+
+            return qLogNoisyExpectedImprovement
+        if self.acquisition in {"mes", "qmes"}:
+            from botorch.acquisition.max_value_entropy_search import qMaxValueEntropy
+
+            return qMaxValueEntropy
+        raise ValueError(
+            f"Unsupported acquisition '{self.acquisition}'. Use one of: "
+            "ei, log_ei, pi, ucb, qei, qlog_ei, qnei, qlog_nei, qucb, ts, mes."
         )
 
-        if self.acquisition == "log_ei":
-            return torch, lambda model, best_f: LogExpectedImprovement(
-                model=model, best_f=best_f, maximize=self.maximize
-            )
-        if self.acquisition == "pi":
-            return torch, lambda model, best_f: ProbabilityOfImprovement(
-                model=model, best_f=best_f, maximize=self.maximize
-            )
-        if self.acquisition == "ucb":
-            return torch, lambda model, best_f: UpperConfidenceBound(
-                model=model, beta=self.beta, maximize=self.maximize
-            )
-        raise ValueError(
-            f"Unsupported acquisition '{self.acquisition}'. Use 'ei', 'pi', or 'ucb'."
-        )
+    def _init_acquisition(self, acq_class, **kwargs):
+        params = inspect.signature(acq_class).parameters
+        filtered = {key: value for key, value in kwargs.items() if key in params}
+        return acq_class(**filtered)
+
+    def _thompson_scores(self, torch, model, X_tensor):
+        with torch.no_grad():
+            posterior = model.posterior(X_tensor)
+            samples = posterior.rsample(sample_shape=torch.Size([1]))
+        scores = samples.squeeze(0)
+        scores = scores.squeeze(-1)
+        return scores.detach().cpu().numpy().reshape(-1)
 
     def _unwrap_estimator(self, estimator: Any):
         if estimator is None:

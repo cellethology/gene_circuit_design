@@ -114,3 +114,6 @@ slurm_logs/*
 
 # hidden directories
 .*
+
+# local data
+test_local.yaml

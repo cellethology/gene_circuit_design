@@ -41,7 +41,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      query_strategy: botorch_log_ei
+      query_strategy: botorch_ei, botorch_log_ei, botorch_mes, botorch_qei, botorch_qlog_ei, botorch_qnei, botorch_qlog_nei, botorch_qucb, botorch_ts
       predictor: botorch_gp
       embedding_model: evo2_meanpool_block28_pca8
   launcher:
