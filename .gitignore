@@ -104,6 +104,7 @@ data_new_deprecated/
 # logs
 logs
 multirun
+outputs
 logs_experiments
 log_test/*
 logs_test/*
