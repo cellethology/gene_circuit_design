@@ -50,5 +50,4 @@ hydra:
     partition: intel-sc3
     cpus_per_task: 32
     mem_per_cpu: 4GB
-    qos: huge
     submitit_folder: slurm_logs
