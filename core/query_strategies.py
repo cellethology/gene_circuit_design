@@ -156,16 +156,22 @@ class BoTorchAcquisition(QueryStrategyBase):
         acquisition: str = "ei",
         beta: float = 2.0,
         maximize: bool = True,
+        seed: Optional[int] = None,
     ) -> None:
         super().__init__(f"BOTORCH_{acquisition.upper()}")
         self.acquisition = acquisition.lower()
         self.beta = beta
         self.maximize = maximize
+        self.seed = seed
 
     def _select_batch(
         self, experiment: Any, unlabeled_pool: List[int], batch_size: int
     ) -> List[int]:
         torch = self._import_torch()
+        seed = self.seed
+        if seed is None:
+            seed = getattr(experiment, "random_seed", None)
+        self._seed_torch(torch, seed)
         model, feature_transformer, target_transformer = self._unwrap_estimator(
             experiment.trainer.get_model()
         )
@@ -215,6 +221,13 @@ class BoTorchAcquisition(QueryStrategyBase):
                 "BoTorchAcquisition requires torch/botorch to be installed."
             ) from exc
         return torch
+
+    def _seed_torch(self, torch, seed: Optional[int]) -> None:
+        if seed is None:
+            return
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
 
     def _build_acquisition(self, torch, model, best_f, train_X, candidate_set):
         acq_class = self._resolve_acquisition_class()
