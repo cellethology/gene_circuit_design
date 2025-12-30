@@ -169,14 +169,14 @@ Generate averaged performance analysis plots with baseline comparisons:
 python plotting/averaged_performance_analysis.py \
     --results-base-path results/166k_2024_regulators_auto_gen \
     --output-dir plots/166k_2024_regulators_summary \
-    --metric avg_pool_r2
+    --metric max_pool_spearman
 ```
 
 Options:
 
 - `--results-base-path`: Base path for results (default: `results/166k_2024_regulators_auto_gen`)
 - `--output-dir`: Output directory for plots (default: `plots/166k_2024_regulators_summary`)
-- `--metric`: Metric to analyze (default: `avg_pool_r2`)
+- `--metric`: Metric to analyze (default: `max_pool_spearman`)
 
 All plots are saved in high-resolution PNG format (300 DPI) suitable for publication.
 

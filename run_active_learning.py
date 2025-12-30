@@ -119,10 +119,8 @@ def run_one_experiment(
         "auc_true": summary_metrics["auc_true"],
         "avg_top": summary_metrics["avg_top"],
         "overall_true": summary_metrics["overall_true"],
-        "avg_train_rmse": summary_metrics["avg_train_rmse"],
-        "avg_pool_rmse": summary_metrics["avg_pool_rmse"],
-        "avg_train_r2": summary_metrics["avg_train_r2"],
-        "avg_pool_r2": summary_metrics["avg_pool_r2"],
+        "max_train_spearman": summary_metrics["max_train_spearman"],
+        "max_pool_spearman": summary_metrics["max_pool_spearman"],
         "hydra_overrides": overrides,
     }
 

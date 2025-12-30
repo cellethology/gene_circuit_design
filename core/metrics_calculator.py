@@ -6,7 +6,7 @@ import logging
 from typing import Dict, List
 
 import numpy as np
-from sklearn.metrics import r2_score, root_mean_squared_error
+from scipy.stats import spearmanr
 
 logger = logging.getLogger(__name__)
 
@@ -56,26 +56,28 @@ class MetricsCalculator:
         best_value_true = np.max(self.labels[selected_indices])
         normalized_true_values = best_value_true / np.max(self.labels)
 
-        train_rmse, train_r2 = self._compute_performance_metrics(
+        train_spearman = self._compute_spearman(
             indices=train_indices,
             predictions=train_predictions,
         )
-        pool_rmse, pool_r2 = self._compute_performance_metrics(
+        pool_spearman = self._compute_spearman(
             indices=pool_indices,
             predictions=pool_predictions,
         )
-        if not np.isnan(train_r2):
-            pool_text = f"{pool_r2:.3f}" if not np.isnan(pool_r2) else "n/a"
-            logger.info("Train R²: %.3f, Pool R²: %s", train_r2, pool_text)
+        if not np.isnan(train_spearman):
+            pool_text = f"{pool_spearman:.3f}" if not np.isnan(pool_spearman) else "n/a"
+            logger.info(
+                "Train Spearman: %.3f, Pool Spearman: %s",
+                train_spearman,
+                pool_text,
+            )
 
         return {
             "n_top": n_top,
             "best_true": self._round_metric(best_value_true),
             "normalized_true": self._round_metric(normalized_true_values),
-            "train_rmse": self._round_metric(train_rmse),
-            "train_r2": self._round_metric(train_r2),
-            "pool_rmse": self._round_metric(pool_rmse),
-            "pool_r2": self._round_metric(pool_r2),
+            "train_spearman": self._round_metric(train_spearman),
+            "pool_spearman": self._round_metric(pool_spearman),
         }
 
     def n_selected_in_top(
@@ -95,16 +97,17 @@ class MetricsCalculator:
         top_labels = np.argsort(self.labels)[-num_top:]
         return int(len(np.intersect1d(selected_indices, top_labels)))
 
-    def _compute_performance_metrics(
+    def _compute_spearman(
         self, indices: np.ndarray, predictions: np.ndarray | None
-    ) -> tuple[float, float]:
-        if predictions is None or len(indices) == 0:
-            return float("nan"), float("nan")
+    ) -> float:
+        if predictions is None or len(indices) < 2:
+            return float("nan")
         labels = np.asarray(self.labels)[indices]
         preds = np.asarray(predictions)
-        rmse = root_mean_squared_error(labels, preds)
-        r2 = r2_score(labels, preds)
-        return float(rmse), float(r2)
+        corr = spearmanr(labels, preds).correlation
+        if corr is None:
+            return float("nan")
+        return float(corr)
 
     def _round_metric(self, value: float, digits: int = 6) -> float:
         if np.isnan(value):

@@ -90,10 +90,8 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
         "auc_true",
         "avg_top",
         "overall_true",
-        "avg_train_rmse",
-        "avg_pool_rmse",
-        "avg_train_r2",
-        "avg_pool_r2",
+        "max_train_spearman",
+        "max_pool_spearman",
     ):
         assert key in saved_summary
 
