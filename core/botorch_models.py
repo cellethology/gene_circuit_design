@@ -28,7 +28,7 @@ class BoTorchGPRegressor(RegressorMixin):
         self.dtype = dtype
         self.model_: SingleTaskGP | None = None
 
-    def get_params(self) -> dict[str, Any]:
+    def get_params(self, deep: bool = True) -> dict[str, Any]:
         return {
             "device": self.device,
             "dtype": self.dtype,

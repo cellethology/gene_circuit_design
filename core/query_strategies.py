@@ -190,20 +190,15 @@ class BoTorchAcquisition(QueryStrategyBase):
         return selected_indices
 
     def _resolve_acquisition(self):
-        try:
-            import torch
-            from botorch.acquisition.analytic import (
-                ExpectedImprovement,
-                ProbabilityOfImprovement,
-                UpperConfidenceBound,
-            )
-        except ImportError as exc:
-            raise ImportError(
-                "BoTorchAcquisition requires botorch to be installed."
-            ) from exc
+        import torch
+        from botorch.acquisition.analytic import (
+            LogExpectedImprovement,
+            ProbabilityOfImprovement,
+            UpperConfidenceBound,
+        )
 
-        if self.acquisition == "ei":
-            return torch, lambda model, best_f: ExpectedImprovement(
+        if self.acquisition == "log_ei":
+            return torch, lambda model, best_f: LogExpectedImprovement(
                 model=model, best_f=best_f, maximize=self.maximize
             )
         if self.acquisition == "pi":
@@ -215,8 +210,7 @@ class BoTorchAcquisition(QueryStrategyBase):
                 model=model, beta=self.beta, maximize=self.maximize
             )
         raise ValueError(
-            f"Unsupported acquisition '{self.acquisition}'. "
-            "Use 'ei', 'pi', or 'ucb'."
+            f"Unsupported acquisition '{self.acquisition}'. Use 'ei', 'pi', or 'ucb'."
         )
 
     def _unwrap_estimator(self, estimator: Any):
@@ -254,7 +248,10 @@ class BoTorchAcquisition(QueryStrategyBase):
             train_input = model.train_inputs[0]
         device = train_input.device if train_input is not None else torch.device("cpu")
         dtype = train_input.dtype if train_input is not None else torch.double
-        return torch.as_tensor(X, device=device, dtype=dtype)
+        X_tensor = torch.as_tensor(X, device=device, dtype=dtype)
+        if X_tensor.ndim == 2:
+            X_tensor = X_tensor.unsqueeze(-2)
+        return X_tensor
 
     def _transform_targets(self, targets: np.ndarray, transformer: Any) -> np.ndarray:
         if transformer is None:
