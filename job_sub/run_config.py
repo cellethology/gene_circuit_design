@@ -2,15 +2,12 @@
 Minimal wrapper that runs the Hydra multirun entrypoint once per dataset.
 
 Run the script (`python job_sub/run_config.py`) to sweep across the
-datasets defined in datasets/datasets.yaml.
+datasets defined in config yaml file.
 """
 
-import getpass
 import os
-import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import List
 
@@ -18,12 +15,11 @@ import hydra
 from omegaconf import OmegaConf
 
 from job_sub.utils.config_utils import (
-    DatasetConfig,
-    ensure_resolvers,
-    load_dataset_configs,
+    load_datasets_or_raise,
     seed_env_from_datasets,
 )
 from job_sub.utils.seed_jobs import run_seed_jobs
+from job_sub.utils.slurm_utils import wait_for_slurm_jobs
 from job_sub.utils.sweep_utils import collect_user_overrides
 
 _SCRIPT_PATH = Path(__file__).resolve()
@@ -32,15 +28,8 @@ _DATASET_ENV = "AL_DATASET_NAME"
 _METADATA_ENV = "AL_METADATA_PATH"
 _EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
 _SUBSET_ENV = "AL_SUBSET_IDS_PATH"
-_SQUEUE_WAIT_ENV = "AL_DISABLE_SQUEUE_WAIT"
-_SQUEUE_INTERVAL_ENV = "AL_SQUEUE_POLL_SECONDS"
-_DEFAULT_POLL_SECONDS = 60.0
-# Deprecated but kept for compatibility
-_EMBED_MODEL_ENV = "AL_EMBEDDING_MODEL"
-ensure_resolvers()
-DATASETS: List[DatasetConfig] = load_dataset_configs()
-if not DATASETS:
-    raise RuntimeError("No datasets configured in job_sub/datasets/datasets.yaml")
+_CONFIG_PATH = _SCRIPT_PATH.parent / "conf" / "config.yaml"
+DATASETS, _ = load_datasets_or_raise(sys.argv[1:], _CONFIG_PATH)
 
 
 seed_env_from_datasets(
@@ -84,7 +73,7 @@ def main():
             *user_overrides,
         ]
         _run_dataset_sweep(cmd, env, dataset.name)
-        _wait_for_slurm_jobs(dataset.name)
+        wait_for_slurm_jobs(dataset.name)
 
 
 def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
@@ -108,65 +97,6 @@ def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
             )
             return
         raise
-
-
-def _wait_for_slurm_jobs(dataset_name: str) -> None:
-    """Poll `squeue` until no active jobs remain for the current user."""
-    if os.environ.get(_SQUEUE_WAIT_ENV):
-        return
-    if not shutil.which("squeue"):
-        print(
-            "[INFO] `squeue` not available; skipping queue wait before next dataset.",
-            file=sys.stderr,
-        )
-        return
-    user = (
-        os.environ.get("USER")
-        or os.environ.get("LOGNAME")
-        or os.environ.get("SLURM_JOB_USER")
-        or getpass.getuser()
-    )
-    if not user:
-        print(
-            "[WARN] Could not determine user for `squeue`; skipping queue wait.",
-            file=sys.stderr,
-        )
-        return
-    try:
-        poll_seconds = float(
-            os.environ.get(_SQUEUE_INTERVAL_ENV, _DEFAULT_POLL_SECONDS)
-        )
-    except ValueError:
-        poll_seconds = _DEFAULT_POLL_SECONDS
-
-    print(
-        f"[INFO] Waiting for Slurm jobs to finish before starting the next dataset "
-        f"(current: {dataset_name})."
-    )
-    while True:
-        try:
-            result = subprocess.run(
-                ["squeue", "-h", "-u", user],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as exc:
-            print(
-                f"[WARN] Failed to query `squeue` ({exc.stderr.strip()}), "
-                "skipping queue wait.",
-                file=sys.stderr,
-            )
-            return
-        lines = [line for line in result.stdout.splitlines() if line.strip()]
-        if not lines:
-            print("[INFO] Slurm queue is empty; continuing to next dataset.")
-            return
-        print(
-            f"[INFO] {len(lines)} Slurm job(s) still active. "
-            f"Polling again in {poll_seconds:.0f} seconds..."
-        )
-        time.sleep(max(1.0, poll_seconds))
 
 
 if __name__ == "__main__":

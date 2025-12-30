@@ -3,12 +3,13 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from omegaconf import OmegaConf
 
 _MODULE_PATH = Path(__file__).resolve()
-_DATASETS_FILE = _MODULE_PATH.parents[1] / "datasets" / "datasets.yaml"
+_JOB_SUB_PATH = _MODULE_PATH.parents[1]
+_DEFAULT_DATASETS_FILE = _JOB_SUB_PATH / "datasets" / "datasets.yaml"
 
 _resolvers_registered = False
 
@@ -51,13 +52,19 @@ def ensure_resolvers() -> None:
     _resolvers_registered = True
 
 
-def load_dataset_configs() -> List[DatasetConfig]:
+def load_dataset_configs(datasets_file: Optional[Path] = None) -> List[DatasetConfig]:
     """Load dataset definitions with metadata and available embedding models."""
     ensure_resolvers()
-    if not _DATASETS_FILE.exists():
+    datasets_path = Path(str(datasets_file)).expanduser() if datasets_file else None
+    if datasets_path is None:
+        datasets_path = _DEFAULT_DATASETS_FILE
+    elif not datasets_path.is_absolute():
+        datasets_path = (_JOB_SUB_PATH / datasets_path).resolve()
+
+    if not datasets_path.exists():
         return []
 
-    cfg = OmegaConf.load(_DATASETS_FILE)
+    cfg = OmegaConf.load(datasets_path)
     datasets_cfg = cfg.get("datasets") or []
     dataset_configs: List[DatasetConfig] = []
 
@@ -81,7 +88,7 @@ def load_dataset_configs() -> List[DatasetConfig]:
         if subset_ids_path:
             subset_path = Path(str(subset_ids_path)).expanduser()
             if not subset_path.is_absolute():
-                subset_path = (_DATASETS_FILE.parent / subset_path).resolve()
+                subset_path = (datasets_path.parent / subset_path).resolve()
             subset_ids_str = str(subset_path)
 
         dataset_configs.append(
@@ -94,6 +101,43 @@ def load_dataset_configs() -> List[DatasetConfig]:
         )
 
     return dataset_configs
+
+
+def parse_override_value(argv: List[str], key: str) -> Optional[str]:
+    """Extract a Hydra-style override value (key= or +key=) from argv."""
+    prefix = f"{key}="
+    alt_prefix = f"+{key}="
+    for arg in argv:
+        if arg.startswith(prefix):
+            return arg[len(prefix) :]
+        if arg.startswith(alt_prefix):
+            return arg[len(alt_prefix) :]
+    return None
+
+
+def get_datasets_file_setting(argv: List[str], config_path: Path) -> Optional[str]:
+    """Resolve datasets_file from CLI overrides or the base config."""
+    override = parse_override_value(argv, "datasets_file")
+    if override:
+        return override
+    if not config_path.exists():
+        return None
+    cfg = OmegaConf.load(config_path)
+    return cfg.get("datasets_file")
+
+
+def load_datasets_or_raise(
+    argv: List[str], config_path: Path
+) -> Tuple[List[DatasetConfig], Optional[str]]:
+    """Load datasets based on config/CLI, raising when no datasets are configured."""
+    ensure_resolvers()
+    datasets_file_setting = get_datasets_file_setting(argv, config_path)
+    datasets = load_dataset_configs(datasets_file_setting)
+    if not datasets:
+        if datasets_file_setting:
+            raise RuntimeError(f"No datasets configured in {datasets_file_setting}")
+        raise RuntimeError("No datasets configured in job_sub/datasets/datasets.yaml")
+    return datasets, datasets_file_setting
 
 
 def seed_env_from_datasets(
