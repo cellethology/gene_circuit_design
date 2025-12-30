@@ -1,0 +1,12 @@
+_target_: core.initial_selection_strategies.ProbCoverInitialSelection
+seed: ${al_settings.seed}
+starting_batch_size: ${al_settings.starting_batch_size}
+delta: null
+batch_size: 512
+device: cpu
+auto_delta: true
+alpha: 0.95
+kmeans_clusters: 10
+delta_candidates: 25
+delta_sample_size: 1000
+pair_sample_size: 20000

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from typing import List, Optional
 
 import numpy as np
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.metrics import pairwise_distances, pairwise_distances_argmin_min
 from sklearn.neighbors import NearestNeighbors
 
@@ -237,4 +237,237 @@ class DensityWeightedCoreSetInitialSelection(CoreSetInitialSelection):
         return 1.0 + self.density_scale * inv_density
 
 
-# TODO: implement a strategy where we first do hierarchical clustering on the embeddings, then select the centroids of the clusters as the initial samples. (may need to use minibatchkmeans since we have so many points)
+class ProbCoverInitialSelection(InitialSelectionStrategy):
+    """Select initial samples via ProbCover (delta-neighborhood cover)."""
+
+    def __init__(
+        self,
+        seed: int,
+        starting_batch_size: int,
+        delta: Optional[float] = None,
+        batch_size: int = 512,
+        device: str = "cpu",
+        auto_delta: bool = False,
+        alpha: float = 0.95,
+        kmeans_clusters: Optional[int] = None,
+        delta_candidates: int = 25,
+        delta_sample_size: int = 1000,
+        pair_sample_size: int = 20000,
+    ) -> None:
+        super().__init__("PROBCOVER", starting_batch_size=starting_batch_size)
+        self.seed = seed
+        self.delta = delta
+        self.batch_size = max(1, batch_size)
+        self.device = device
+        self.auto_delta = auto_delta
+        self.alpha = alpha
+        self.kmeans_clusters = kmeans_clusters
+        self.delta_candidates = max(5, delta_candidates)
+        self.delta_sample_size = max(50, delta_sample_size)
+        self.pair_sample_size = max(1000, pair_sample_size)
+        self._rng = np.random.default_rng(seed)
+
+    def select(self, dataset: Dataset) -> List[int]:
+        embeddings = np.asarray(dataset.embeddings)
+        num_samples = embeddings.shape[0]
+        target = min(self.starting_batch_size, num_samples)
+        if target == 0:
+            return []
+
+        if self.auto_delta or self.delta is None:
+            self.delta = self._estimate_delta(embeddings)
+            logger.info("PROBCOVER: auto-selected delta=%.4f", self.delta)
+
+        x_edges, y_edges = self._construct_graph(embeddings)
+        selected = self._greedy_cover(x_edges, y_edges, num_samples, target)
+
+        labels = dataset.labels[selected]
+        logger.info(
+            "%s_INITIAL: selected %d sequences. Labels: [%s]",
+            self.name.upper(),
+            len(selected),
+            ", ".join(f"{val:.3f}" for val in labels),
+        )
+        return selected
+
+    def _estimate_delta(self, embeddings: np.ndarray) -> float:
+        num_samples = embeddings.shape[0]
+        num_clusters = self._resolve_kmeans_clusters(num_samples)
+        pseudo_labels = self._compute_pseudo_labels(embeddings, num_clusters)
+
+        sample_size = min(self.delta_sample_size, num_samples)
+        sample_idx = self._rng.choice(num_samples, size=sample_size, replace=False)
+        sample_emb = embeddings[sample_idx]
+        sample_labels = pseudo_labels[sample_idx]
+
+        candidates = self._candidate_deltas(embeddings)
+        if not candidates.size:
+            return float(self.delta) if self.delta is not None else 0.5
+        max_delta = float(candidates[-1])
+
+        nn = NearestNeighbors(radius=max_delta, metric="euclidean")
+        nn.fit(embeddings)
+        distances, neighbors = nn.radius_neighbors(sample_emb, return_distance=True)
+
+        purity_scores = []
+        for delta in candidates:
+            purity_sum = 0.0
+            count = 0
+            for dist, idx, label in zip(distances, neighbors, sample_labels):
+                if dist.size == 0:
+                    continue
+                within = dist <= delta
+                if not np.any(within):
+                    continue
+                labels = pseudo_labels[idx[within]]
+                purity_sum += float(np.mean(labels == label))
+                count += 1
+            avg_purity = purity_sum / count if count > 0 else 0.0
+            purity_scores.append(avg_purity)
+
+        best_delta = None
+        for delta, purity in zip(candidates, purity_scores):
+            if purity >= self.alpha:
+                best_delta = float(delta)
+        if best_delta is None:
+            best_delta = float(candidates[0])
+        return best_delta
+
+    def _resolve_kmeans_clusters(self, num_samples: int) -> int:
+        if self.kmeans_clusters is not None:
+            return max(2, min(self.kmeans_clusters, num_samples))
+        return max(2, min(10, num_samples))
+
+    def _compute_pseudo_labels(
+        self, embeddings: np.ndarray, num_clusters: int
+    ) -> np.ndarray:
+        kmeans = MiniBatchKMeans(
+            n_clusters=num_clusters,
+            random_state=self.seed,
+            batch_size=1024,
+        )
+        return kmeans.fit_predict(embeddings)
+
+    def _candidate_deltas(self, embeddings: np.ndarray) -> np.ndarray:
+        num_samples = embeddings.shape[0]
+        pair_count = min(self.pair_sample_size, num_samples * num_samples)
+        idx1 = self._rng.integers(0, num_samples, size=pair_count)
+        idx2 = self._rng.integers(0, num_samples, size=pair_count)
+        mask = idx1 != idx2
+        if not np.any(mask):
+            return np.array([], dtype=float)
+        diffs = embeddings[idx1[mask]] - embeddings[idx2[mask]]
+        distances = np.linalg.norm(diffs, axis=1)
+        quantiles = np.linspace(0.1, 0.99, self.delta_candidates)
+        candidates = np.unique(np.quantile(distances, quantiles))
+        candidates = candidates[candidates > 0]
+        return candidates
+
+    def _construct_graph(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        num_samples = embeddings.shape[0]
+        xs: List[np.ndarray] = []
+        ys: List[np.ndarray] = []
+        logger.info(
+            "PROBCOVER: constructing graph with delta=%.4f (n=%d, batch=%d)",
+            self.delta,
+            num_samples,
+            self.batch_size,
+        )
+
+        if self.device != "cpu":
+            try:
+                import torch
+            except ImportError:
+                logger.warning("Torch not available; falling back to CPU distances.")
+                return self._construct_graph_cpu(embeddings)
+            device = self._resolve_torch_device(torch)
+            feats = torch.as_tensor(embeddings, device=device, dtype=torch.float32)
+            for start in range(0, num_samples, self.batch_size):
+                end = min(start + self.batch_size, num_samples)
+                cur = feats[start:end]
+                dist = torch.cdist(cur, feats)
+                mask = dist < self.delta
+                x_idx, y_idx = mask.nonzero(as_tuple=True)
+                xs.append((x_idx + start).cpu().numpy())
+                ys.append(y_idx.cpu().numpy())
+        else:
+            return self._construct_graph_cpu(embeddings)
+
+        x_edges = np.concatenate(xs) if xs else np.array([], dtype=int)
+        y_edges = np.concatenate(ys) if ys else np.array([], dtype=int)
+        logger.info("PROBCOVER: graph has %d edges", len(x_edges))
+        return x_edges, y_edges
+
+    def _construct_graph_cpu(
+        self, embeddings: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        num_samples = embeddings.shape[0]
+        xs: List[np.ndarray] = []
+        ys: List[np.ndarray] = []
+        for start in range(0, num_samples, self.batch_size):
+            end = min(start + self.batch_size, num_samples)
+            cur = embeddings[start:end]
+            dist = pairwise_distances(cur, embeddings, metric="euclidean")
+            mask = dist < self.delta
+            x_idx, y_idx = np.nonzero(mask)
+            xs.append(x_idx + start)
+            ys.append(y_idx)
+        x_edges = np.concatenate(xs) if xs else np.array([], dtype=int)
+        y_edges = np.concatenate(ys) if ys else np.array([], dtype=int)
+        logger.info("PROBCOVER: graph has %d edges", len(x_edges))
+        return x_edges, y_edges
+
+    def _resolve_torch_device(self, torch):
+        if self.device == "auto":
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        return torch.device(self.device)
+
+    def _greedy_cover(
+        self,
+        x_edges: np.ndarray,
+        y_edges: np.ndarray,
+        num_samples: int,
+        target: int,
+    ) -> List[int]:
+        selected: List[int] = []
+        covered = np.zeros(num_samples, dtype=bool)
+        cur_x = x_edges
+        cur_y = y_edges
+
+        for i in range(target):
+            if cur_x.size == 0:
+                break
+            degrees = np.bincount(cur_x, minlength=num_samples)
+            cur = int(degrees.argmax())
+            selected.append(cur)
+            new_covered = cur_y[cur_x == cur]
+            covered[new_covered] = True
+            keep = ~covered[cur_y]
+            cur_x = cur_x[keep]
+            cur_y = cur_y[keep]
+            coverage = float(np.mean(covered)) if covered.size else 0.0
+            logger.info(
+                "PROBCOVER: iter=%d edges=%d max_degree=%d coverage=%.3f",
+                i,
+                len(cur_x),
+                int(degrees.max()) if degrees.size else 0,
+                coverage,
+            )
+
+        if len(selected) < target:
+            remaining = np.setdiff1d(
+                np.arange(num_samples), np.asarray(selected), assume_unique=False
+            )
+            if remaining.size:
+                need = target - len(selected)
+                extra = (
+                    self._rng.choice(
+                        remaining,
+                        size=min(need, remaining.size),
+                        replace=False,
+                    )
+                    if remaining.size > need
+                    else remaining
+                )
+                selected.extend(int(idx) for idx in extra)
+        return selected
