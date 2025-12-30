@@ -117,9 +117,12 @@ def run_one_experiment(
         "target_transforms": target_transforms_names,
         "seed": seed,
         "auc_true": summary_metrics["auc_true"],
-        "auc_pred": summary_metrics["auc_pred"],
         "avg_top": summary_metrics["avg_top"],
         "overall_true": summary_metrics["overall_true"],
+        "avg_train_rmse": summary_metrics["avg_train_rmse"],
+        "avg_pool_rmse": summary_metrics["avg_pool_rmse"],
+        "avg_train_r2": summary_metrics["avg_train_r2"],
+        "avg_pool_r2": summary_metrics["avg_pool_r2"],
         "hydra_overrides": overrides,
     }
 
