@@ -19,6 +19,20 @@ class UncertaintyWrapper(RegressorMixin):
         base_estimator, feature_pipeline, target_transformer = self._unwrap_estimator()
         X_transformed = self._transform_features(feature_pipeline, X)
 
+        # ----- Estimators that expose predict_with_std (e.g., BoTorch wrappers) -----
+        if hasattr(base_estimator, "predict_with_std"):
+            means, std = base_estimator.predict_with_std(X_transformed)
+            means = np.asarray(means)
+            std = np.asarray(std)
+            if target_transformer is None:
+                return std
+            approx_bounds = np.stack([means - std, means + std], axis=0)
+            approx_bounds = self._inverse_transform_targets(
+                approx_bounds,
+                target_transformer,
+            )
+            return 0.5 * np.abs(approx_bounds[1] - approx_bounds[0])
+
         # ----- RandomForest and bagging-style ensembles -----
         if isinstance(base_estimator, RandomForestRegressor):
             return self._std_from_member_estimators(

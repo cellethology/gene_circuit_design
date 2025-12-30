@@ -86,7 +86,15 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
     assert summary_path.exists()
     saved_summary = json.loads(summary_path.read_text())
     assert saved_summary["query_strategy"] == summary["query_strategy"]
-    for key in ("auc_true", "auc_pred", "avg_top", "overall_true"):
+    for key in (
+        "auc_true",
+        "avg_top",
+        "overall_true",
+        "avg_train_rmse",
+        "avg_pool_rmse",
+        "avg_train_r2",
+        "avg_pool_r2",
+    ):
         assert key in saved_summary
 
 

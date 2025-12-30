@@ -13,7 +13,7 @@ git clone git@github.com:cellethology/gene_circuit_design.git
 cd gene_circuit_design
 
 # Install all dependencies
-uv sync --python 3.9
+uv sync --python 3.10
 ```
 
 After installing dependencies, set up pre-commit hooks:
@@ -169,14 +169,14 @@ Generate averaged performance analysis plots with baseline comparisons:
 python plotting/averaged_performance_analysis.py \
     --results-base-path results/166k_2024_regulators_auto_gen \
     --output-dir plots/166k_2024_regulators_summary \
-    --metric auc_normalized_pred
+    --metric avg_pool_r2
 ```
 
 Options:
 
 - `--results-base-path`: Base path for results (default: `results/166k_2024_regulators_auto_gen`)
 - `--output-dir`: Output directory for plots (default: `plots/166k_2024_regulators_summary`)
-- `--metric`: Metric to analyze (default: `auc_normalized_pred`)
+- `--metric`: Metric to analyze (default: `avg_pool_r2`)
 
 All plots are saved in high-resolution PNG format (300 DPI) suitable for publication.
 

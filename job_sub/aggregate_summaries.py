@@ -27,6 +27,14 @@ def parse_args() -> argparse.Namespace:
         help="Root directory containing Hydra multirun outputs (default: job_sub/multirun).",
     )
     parser.add_argument(
+        "--sweep-dir",
+        type=Path,
+        help=(
+            "Optional path to a specific sweep timestamp directory "
+            "(e.g., job_sub/multirun/2025-12-30/15-30-03)."
+        ),
+    )
+    parser.add_argument(
         "--dataset",
         action="append",
         dest="datasets",
@@ -43,6 +51,7 @@ def parse_args() -> argparse.Namespace:
 
 def aggregate_summaries(
     sweep_base: Path = _DEFAULT_BASE,
+    sweep_dir: Optional[Path] = None,
     datasets: Optional[Sequence[str]] = None,
     force: bool = False,
 ) -> int:
@@ -50,6 +59,7 @@ def aggregate_summaries(
 
     Args:
         sweep_base: Root directory containing Hydra multirun outputs.
+        sweep_dir: Optional path to a specific sweep timestamp directory.
         datasets: Optional iterable of dataset names to aggregate. If None, defaults to dataset configs.
         force: Recombine even if marker files exist.
 
@@ -62,9 +72,23 @@ def aggregate_summaries(
         dataset_filters = {name.strip() for name in datasets if name}
     elif datasets is None:
         # Default to dataset names from config to avoid accidental aggregation of temporary dirs.
-        dataset_filters = {cfg.name for cfg in load_dataset_configs()}
+        try:
+            dataset_filters = {cfg.name for cfg in load_dataset_configs()}
+        except Exception as exc:
+            print(
+                f"[WARN] Failed to load dataset configs ({exc}); "
+                "aggregating all datasets found."
+            )
+            dataset_filters = None
 
-    sweeps = list_sweep_dirs(sweep_base)
+    if sweep_dir is not None:
+        sweep_dir = sweep_dir.expanduser().resolve()
+        if not sweep_dir.exists():
+            print(f"Sweep directory not found: {sweep_dir}")
+            return 0
+        sweeps = {sweep_dir}
+    else:
+        sweeps = list_sweep_dirs(sweep_base)
     if not sweeps:
         print(f"No sweeps found under {sweep_base}")
         return 0
@@ -107,6 +131,7 @@ def main() -> None:
     args = parse_args()
     aggregate_summaries(
         sweep_base=args.sweep_base,
+        sweep_dir=args.sweep_dir,
         datasets=args.datasets,
         force=args.force,
     )

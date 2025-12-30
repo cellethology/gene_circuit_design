@@ -104,6 +104,7 @@ data_new_deprecated/
 # logs
 logs
 multirun
+outputs
 logs_experiments
 log_test/*
 logs_test/*
@@ -113,3 +114,6 @@ slurm_logs/*
 
 # hidden directories
 .*
+
+# local data
+**/test_local.yaml

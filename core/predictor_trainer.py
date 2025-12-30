@@ -8,7 +8,6 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from sklearn.base import RegressorMixin, clone
 from sklearn.compose import TransformedTargetRegressor
-from sklearn.metrics import r2_score, root_mean_squared_error
 from sklearn.pipeline import Pipeline
 
 from core.uncertainty import UncertaintyWrapper
@@ -109,12 +108,6 @@ class PredictorTrainer:
         )
         estimator.fit(X_train, y_train)
         self.model_ = estimator
-
-        train_pred = self.model_.predict(X_train)
-        train_rmse = root_mean_squared_error(y_train, train_pred)
-        train_r2 = r2_score(y_train, train_pred)
-
-        logger.info(f"Train RMSE: {train_rmse:.2f}, R²: {train_r2:.3f}")
 
     def predict(self, X: np.ndarray, return_std: bool = False):
         """

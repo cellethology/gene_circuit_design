@@ -14,9 +14,12 @@ logger = logging.getLogger(__name__)
 
 SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
-    "auc_pred": ("max_accumulate", "normalized_pred"),
-    "avg_top": ("top_mean", "n_selected_in_top"),
+    "avg_top": ("top_mean", "n_top"),
     "overall_true": ("max_overall", "normalized_true"),
+    "avg_train_rmse": ("mean", "train_rmse"),
+    "avg_pool_rmse": ("mean", "pool_rmse"),
+    "avg_train_r2": ("mean", "train_r2"),
+    "avg_pool_r2": ("mean", "pool_r2"),
 }
 
 
@@ -59,9 +62,9 @@ class RoundTracker:
             {
                 "round": self.round_num,
                 "train_size": train_size,
-                "unlabeled_pool_size": unlabeled_pool_size,
-                "selected_sample_ids": selected_ids,
                 **metrics,
+                "selected_sample_ids": selected_ids,
+                "unlabeled_pool_size": unlabeled_pool_size,
             }
         )
         self.round_num += 1
@@ -95,6 +98,8 @@ class RoundTracker:
                     if cumulative_selected > 0
                     else 0.0
                 )
+            elif rule == "mean":
+                summary_values[metric_name] = float(np.nanmean(values))
             elif rule == "max_accumulate":
                 cumulative_max_per_round = np.maximum.accumulate(values)
                 summary_values[metric_name] = float(

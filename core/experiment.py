@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from sklearn.base import RegressorMixin
+from sklearn.pipeline import Pipeline
 
 from core.data_loader import DataLoader, Dataset
 from core.initial_selection_strategies import (
@@ -100,10 +101,24 @@ class ActiveLearningExperiment:
         # Initialize training pool
         self.train_indices = self._select_starting_batch()
 
+        # Apply feature transforms globally (fit on all embeddings) to keep scaling consistent.
+        feature_transforms_for_trainer = feature_transforms
+        if feature_transforms:
+            feature_pipeline = Pipeline(feature_transforms)
+            self.dataset.embeddings = feature_pipeline.fit_transform(
+                self.dataset.embeddings
+            )
+            self.feature_transformer_ = feature_pipeline
+            feature_transforms_for_trainer = None
+            logger.info(
+                "Applied global feature transforms to all embeddings; "
+                "skipping per-round feature fitting."
+            )
+
         # Initialize trainer
         self.trainer = PredictorTrainer(
             predictor,
-            feature_transform=feature_transforms,
+            feature_transform=feature_transforms_for_trainer,
             target_transform=target_transforms,
         )
 
@@ -158,39 +173,63 @@ class ActiveLearningExperiment:
         self,
         indices: List[int],
         top_p: float = 0.1,
-        predictions_override: Optional[np.ndarray] = None,
+        train_indices: Optional[np.ndarray] = None,
+        train_predictions: Optional[np.ndarray] = None,
+        pool_indices: Optional[np.ndarray] = None,
+        pool_predictions: Optional[np.ndarray] = None,
     ) -> Dict[str, float]:
         """
         Evaluate and track the performance of the model on the given indices.
-        When `predictions_override` is provided (e.g., for model-free strategies),
-        those predictions are used instead of calling the trainer.
 
         Args:
             indices: Indices of the samples to evaluate
             top_p: Percentage of top labels to consider
+            train_indices: Indices used to train the model
+            train_predictions: Model predictions for the training set
+            pool_indices: Indices remaining in the unlabeled pool
+            pool_predictions: Model predictions for the pool set
         Returns:
             Metrics for the round
         """
-
-        if predictions_override is not None:
-            predictions = predictions_override
-        else:
-            predictions = self.trainer.predict(self.dataset.embeddings[indices, :])
         round_metrics = self.metrics_calculator.compute_metrics_for_round(
-            selected_indices=indices,
-            predictions=predictions,
+            selected_indices=np.asarray(indices),
+            train_indices=np.asarray(train_indices)
+            if train_indices is not None
+            else np.array([]),
+            train_predictions=train_predictions,
+            pool_indices=np.asarray(pool_indices)
+            if pool_indices is not None
+            else np.array([]),
+            pool_predictions=pool_predictions,
             top_p=top_p,
         )
         self.round_tracker.track_round(selected_indices=indices, metrics=round_metrics)
         return round_metrics
+
+    def _get_round_predictions(
+        self, requires_model: bool
+    ) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray, Optional[np.ndarray]]:
+        train_indices = np.asarray(self.train_indices)
+        pool_indices = np.asarray(self.unlabeled_indices)
+        if requires_model:
+            train_predictions = self.trainer.predict(
+                self.dataset.embeddings[train_indices, :]
+            )
+            pool_predictions = (
+                self.trainer.predict(self.dataset.embeddings[pool_indices, :])
+                if len(pool_indices) > 0
+                else np.array([])
+            )
+        else:
+            train_predictions = None
+            pool_predictions = None
+        return train_indices, train_predictions, pool_indices, pool_predictions
 
     def run_experiment(
         self, max_rounds: int = 30, top_p: float = 0.1
     ) -> List[Dict[str, Any]]:
         """
         Run the active learning experiment.
-        Uses zero-valued prediction overrides when the query strategy skips model training
-        so downstream metrics/round tracking continue to work.
 
         Args:
             max_rounds: Maximum number of active learning rounds
@@ -205,6 +244,12 @@ class ActiveLearningExperiment:
         for round_num in range(max_rounds):
             logger.info(f"\n--- Round {round_num} ---")
 
+            if round_num == 0:  # log initial selection
+                self._evaluate_and_track(
+                    indices=self.train_indices,
+                    top_p=top_p,
+                )
+
             if requires_model:
                 X_train = self.dataset.embeddings[self.train_indices, :]
                 y_train = self.dataset.labels[self.train_indices]
@@ -214,24 +259,23 @@ class ActiveLearningExperiment:
                     "Skipping model training because query strategy does not require a predictor."
                 )
 
-            initial_predictions = (
-                None if requires_model else np.zeros(len(self.train_indices))
-            )
-            if round_num == 0:
-                self._evaluate_and_track(
-                    indices=self.train_indices,
-                    top_p=top_p,
-                    predictions_override=initial_predictions,
-                )
+            (
+                train_indices,
+                train_predictions,
+                pool_indices,
+                pool_predictions,
+            ) = self._get_round_predictions(requires_model)
 
             # Select next batch
             next_batch = self._select_next_batch()
 
-            next_predictions = None if requires_model else np.zeros(len(next_batch))
             self._evaluate_and_track(
                 indices=next_batch,
                 top_p=top_p,
-                predictions_override=next_predictions,
+                train_indices=train_indices,
+                train_predictions=train_predictions,
+                pool_indices=pool_indices,
+                pool_predictions=pool_predictions,
             )
 
             # Update training set

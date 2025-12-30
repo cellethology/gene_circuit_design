@@ -5,11 +5,14 @@ This module provides a clean, extensible way to implement different
 selection strategies for active learning experiments.
 """
 
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
 import numpy as np
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.pipeline import Pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +146,209 @@ class PredStdHybrid(QueryStrategyBase):
         top_k_local = np.argpartition(-weighted_preds, batch_size - 1)[:batch_size]
         selected_indices = [unlabeled_pool[i] for i in top_k_local]
         return selected_indices
+
+
+class BoTorchAcquisition(QueryStrategyBase):
+    """Select samples by maximizing a BoTorch acquisition over the unlabeled pool."""
+
+    def __init__(
+        self,
+        acquisition: str = "ei",
+        beta: float = 2.0,
+        maximize: bool = True,
+        seed: Optional[int] = None,
+    ) -> None:
+        super().__init__(f"BOTORCH_{acquisition.upper()}")
+        self.acquisition = acquisition.lower()
+        self.beta = beta
+        self.maximize = maximize
+        self.seed = seed
+
+    def _select_batch(
+        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
+    ) -> List[int]:
+        torch = self._import_torch()
+        seed = self.seed
+        if seed is None:
+            seed = getattr(experiment, "random_seed", None)
+        self._seed_torch(torch, seed)
+        model, feature_transformer, target_transformer = self._unwrap_estimator(
+            experiment.trainer.get_model()
+        )
+
+        botorch_model = self._as_botorch_model(model)
+
+        X_pool = experiment.dataset.embeddings[unlabeled_pool, :]
+        if feature_transformer is not None:
+            X_pool = feature_transformer.transform(X_pool)
+        X_pool = np.asarray(X_pool)
+
+        X_train = experiment.dataset.embeddings[experiment.train_indices, :]
+        if feature_transformer is not None:
+            X_train = feature_transformer.transform(X_train)
+        X_train = np.asarray(X_train)
+
+        train_labels = experiment.dataset.labels[experiment.train_indices]
+        train_labels = self._transform_targets(train_labels, target_transformer)
+        best_f = train_labels.max() if self.maximize else train_labels.min()
+
+        X_tensor = self._to_model_tensor(torch, botorch_model, X_pool)
+        X_train_tensor = self._to_model_tensor(torch, botorch_model, X_train)
+
+        if self.acquisition == "ts":
+            scores = self._thompson_scores(torch, botorch_model, X_tensor)
+        else:
+            acq = self._build_acquisition(
+                torch=torch,
+                model=botorch_model,
+                best_f=float(best_f),
+                train_X=X_train_tensor.squeeze(-2),
+                candidate_set=X_tensor.squeeze(-2),
+            )
+            with torch.no_grad():
+                scores = acq(X_tensor).detach().cpu().numpy().reshape(-1)
+
+        rank_scores = scores if self.maximize else -scores
+        top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
+        selected_indices = [unlabeled_pool[i] for i in top_k_local]
+        return selected_indices
+
+    def _import_torch(self):
+        try:
+            import torch
+        except ImportError as exc:
+            raise ImportError(
+                "BoTorchAcquisition requires torch/botorch to be installed."
+            ) from exc
+        return torch
+
+    def _seed_torch(self, torch, seed: Optional[int]) -> None:
+        if seed is None:
+            return
+        torch.manual_seed(int(seed))
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(int(seed))
+
+    def _build_acquisition(self, torch, model, best_f, train_X, candidate_set):
+        acq_class = self._resolve_acquisition_class()
+        kwargs = {
+            "model": model,
+            "best_f": best_f,
+            "maximize": self.maximize,
+            "beta": self.beta,
+            "X_baseline": train_X,
+            "candidate_set": candidate_set,
+        }
+        return self._init_acquisition(acq_class, **kwargs)
+
+    def _resolve_acquisition_class(self):
+        if self.acquisition == "ei":
+            from botorch.acquisition.analytic import ExpectedImprovement
+
+            return ExpectedImprovement
+        if self.acquisition == "log_ei":
+            from botorch.acquisition.analytic import LogExpectedImprovement
+
+            return LogExpectedImprovement
+        if self.acquisition == "pi":
+            from botorch.acquisition.analytic import ProbabilityOfImprovement
+
+            return ProbabilityOfImprovement
+        if self.acquisition == "ucb":
+            from botorch.acquisition.analytic import UpperConfidenceBound
+
+            return UpperConfidenceBound
+        if self.acquisition == "qei":
+            from botorch.acquisition.monte_carlo import qExpectedImprovement
+
+            return qExpectedImprovement
+        if self.acquisition == "qucb":
+            from botorch.acquisition.monte_carlo import qUpperConfidenceBound
+
+            return qUpperConfidenceBound
+        if self.acquisition == "qnei":
+            from botorch.acquisition.monte_carlo import qNoisyExpectedImprovement
+
+            return qNoisyExpectedImprovement
+        if self.acquisition == "qlog_ei":
+            try:
+                from botorch.acquisition.logei import qLogExpectedImprovement
+            except ImportError:
+                from botorch.acquisition.monte_carlo import qLogExpectedImprovement
+
+            return qLogExpectedImprovement
+        if self.acquisition == "qlog_nei":
+            try:
+                from botorch.acquisition.logei import qLogNoisyExpectedImprovement
+            except ImportError:
+                from botorch.acquisition.monte_carlo import qLogNoisyExpectedImprovement
+
+            return qLogNoisyExpectedImprovement
+        if self.acquisition in {"mes", "qmes"}:
+            from botorch.acquisition.max_value_entropy_search import qMaxValueEntropy
+
+            return qMaxValueEntropy
+        raise ValueError(
+            f"Unsupported acquisition '{self.acquisition}'. Use one of: "
+            "ei, log_ei, pi, ucb, qei, qlog_ei, qnei, qlog_nei, qucb, ts, mes."
+        )
+
+    def _init_acquisition(self, acq_class, **kwargs):
+        params = inspect.signature(acq_class).parameters
+        filtered = {key: value for key, value in kwargs.items() if key in params}
+        return acq_class(**filtered)
+
+    def _thompson_scores(self, torch, model, X_tensor):
+        with torch.no_grad():
+            posterior = model.posterior(X_tensor)
+            samples = posterior.rsample(sample_shape=torch.Size([1]))
+        scores = samples.squeeze(0)
+        scores = scores.squeeze(-1)
+        return scores.detach().cpu().numpy().reshape(-1)
+
+    def _unwrap_estimator(self, estimator: Any):
+        if estimator is None:
+            raise ValueError("PredictorTrainer.train must be called before select.")
+
+        target_transformer = None
+        if isinstance(estimator, TransformedTargetRegressor):
+            target_transformer = estimator.transformer_
+            estimator = estimator.regressor_
+
+        feature_transformer = None
+        if isinstance(estimator, Pipeline):
+            if len(estimator.steps) == 0:
+                raise ValueError("Pipeline has no steps to unwrap.")
+            if len(estimator.steps) > 1:
+                feature_transformer = Pipeline(estimator.steps[:-1])
+            estimator = estimator.steps[-1][1]
+
+        return estimator, feature_transformer, target_transformer
+
+    def _as_botorch_model(self, estimator: Any):
+        if hasattr(estimator, "get_botorch_model"):
+            return estimator.get_botorch_model()
+        if hasattr(estimator, "posterior"):
+            return estimator
+        raise ValueError(
+            "Predictor does not expose a BoTorch model. "
+            "Use BoTorchGPRegressor or a compatible BoTorch model."
+        )
+
+    def _to_model_tensor(self, torch, model: Any, X: np.ndarray):
+        train_input = None
+        if hasattr(model, "train_inputs") and model.train_inputs:
+            train_input = model.train_inputs[0]
+        device = train_input.device if train_input is not None else torch.device("cpu")
+        dtype = train_input.dtype if train_input is not None else torch.double
+        X_tensor = torch.as_tensor(X, device=device, dtype=dtype)
+        if X_tensor.ndim == 2:
+            X_tensor = X_tensor.unsqueeze(-2)
+        return X_tensor
+
+    def _transform_targets(self, targets: np.ndarray, transformer: Any) -> np.ndarray:
+        if transformer is None:
+            return np.asarray(targets)
+        values = np.asarray(targets).reshape(-1, 1)
+        transformed = transformer.transform(values)
+        return np.asarray(transformed).reshape(-1)

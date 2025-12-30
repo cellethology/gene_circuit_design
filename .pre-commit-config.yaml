@@ -1,6 +1,9 @@
 # Pre-commit configuration for gene circuit design project
 # See https://pre-commit.com for more information
 
+default_language_version:
+  python: python3.10
+
 repos:
   # Ruff for linting and formatting
   # Using official hook with version compatible with ruff 0.6.9
