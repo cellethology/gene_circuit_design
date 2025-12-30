@@ -447,9 +447,8 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
             cur_y = cur_y[keep]
             coverage = float(np.mean(covered)) if covered.size else 0.0
             logger.info(
-                "PROBCOVER: iter=%d edges=%d max_degree=%d coverage=%.3f",
+                "PROBCOVER: iter=%d max_degree=%d coverage=%.3f",
                 i,
-                len(cur_x),
                 int(degrees.max()) if degrees.size else 0,
                 coverage,
             )

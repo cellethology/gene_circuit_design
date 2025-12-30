@@ -214,12 +214,8 @@ class BoTorchAcquisition(QueryStrategyBase):
         return selected_indices
 
     def _import_torch(self):
-        try:
-            import torch
-        except ImportError as exc:
-            raise ImportError(
-                "BoTorchAcquisition requires torch/botorch to be installed."
-            ) from exc
+        import torch
+
         return torch
 
     def _seed_torch(self, torch, seed: Optional[int]) -> None:
@@ -242,46 +238,20 @@ class BoTorchAcquisition(QueryStrategyBase):
         return self._init_acquisition(acq_class, **kwargs)
 
     def _resolve_acquisition_class(self):
-        if self.acquisition == "ei":
-            from botorch.acquisition.analytic import ExpectedImprovement
-
-            return ExpectedImprovement
         if self.acquisition == "log_ei":
             from botorch.acquisition.analytic import LogExpectedImprovement
 
             return LogExpectedImprovement
-        if self.acquisition == "pi":
-            from botorch.acquisition.analytic import ProbabilityOfImprovement
+        if self.acquisition == "log_pi":
+            from botorch.acquisition.analytic import LogProbabilityOfImprovement
 
-            return ProbabilityOfImprovement
+            return LogProbabilityOfImprovement
         if self.acquisition == "ucb":
             from botorch.acquisition.analytic import UpperConfidenceBound
 
             return UpperConfidenceBound
-        if self.acquisition == "qei":
-            from botorch.acquisition.monte_carlo import qExpectedImprovement
-
-            return qExpectedImprovement
-        if self.acquisition == "qucb":
-            from botorch.acquisition.monte_carlo import qUpperConfidenceBound
-
-            return qUpperConfidenceBound
-        if self.acquisition == "qnei":
-            from botorch.acquisition.monte_carlo import qNoisyExpectedImprovement
-
-            return qNoisyExpectedImprovement
-        if self.acquisition == "qlog_ei":
-            try:
-                from botorch.acquisition.logei import qLogExpectedImprovement
-            except ImportError:
-                from botorch.acquisition.monte_carlo import qLogExpectedImprovement
-
-            return qLogExpectedImprovement
-        if self.acquisition == "qlog_nei":
-            try:
-                from botorch.acquisition.logei import qLogNoisyExpectedImprovement
-            except ImportError:
-                from botorch.acquisition.monte_carlo import qLogNoisyExpectedImprovement
+        if self.acquisition in {"log_nei", "qlog_nei"}:
+            from botorch.acquisition.logei import qLogNoisyExpectedImprovement
 
             return qLogNoisyExpectedImprovement
         if self.acquisition in {"mes", "qmes"}:
@@ -290,7 +260,7 @@ class BoTorchAcquisition(QueryStrategyBase):
             return qMaxValueEntropy
         raise ValueError(
             f"Unsupported acquisition '{self.acquisition}'. Use one of: "
-            "ei, log_ei, pi, ucb, qei, qlog_ei, qnei, qlog_nei, qucb, ts, mes."
+            "log_ei, log_pi, qlog_nei, ucb, ts, mes."
         )
 
     def _init_acquisition(self, acq_class, **kwargs):
