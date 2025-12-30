@@ -10,7 +10,11 @@ import numpy as np
 import torch
 from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
+from gpytorch.constraints import GreaterThan
+from gpytorch.kernels import RBFKernel, ScaleKernel
+from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
+from gpytorch.priors import GammaPrior
 from sklearn.base import RegressorMixin
 
 
@@ -23,15 +27,24 @@ class BoTorchGPRegressor(RegressorMixin):
         self,
         device: str = "cpu",
         dtype: str = "float64",
+        ard: bool = False,
+        noise_constraint: float | None = None,
+        noise_prior: tuple[float, float] | None = None,
     ) -> None:
         self.device = device
         self.dtype = dtype
+        self.ard = ard
+        self.noise_constraint = noise_constraint
+        self.noise_prior = noise_prior
         self.model_: SingleTaskGP | None = None
 
     def get_params(self, deep: bool = True) -> dict[str, Any]:
         return {
             "device": self.device,
             "dtype": self.dtype,
+            "ard": self.ard,
+            "noise_constraint": self.noise_constraint,
+            "noise_prior": self.noise_prior,
         }
 
     def set_params(self, **params: Any) -> BoTorchGPRegressor:
@@ -43,9 +56,15 @@ class BoTorchGPRegressor(RegressorMixin):
         X_tensor = self._to_tensor(X)
         y_tensor = self._to_tensor(y).view(-1, 1)
 
+        ard_dims = X_tensor.shape[-1] if self.ard else None
+        covar_module = ScaleKernel(RBFKernel(ard_num_dims=ard_dims))
+        likelihood = self._build_likelihood()
+
         self.model_ = SingleTaskGP(
             X_tensor,
             y_tensor,
+            covar_module=covar_module.to(device=X_tensor.device, dtype=X_tensor.dtype),
+            likelihood=likelihood.to(device=X_tensor.device, dtype=X_tensor.dtype),
         )
         self.model_.train()
         mll = ExactMarginalLogLikelihood(self.model_.likelihood, self.model_)
@@ -89,6 +108,26 @@ class BoTorchGPRegressor(RegressorMixin):
         if text in {"float32", "float", "torch.float32"}:
             return torch.float
         raise ValueError(f"Unsupported dtype '{self.dtype}'.")
+
+    def _build_likelihood(self) -> GaussianLikelihood:
+        constraint = (
+            GreaterThan(self.noise_constraint)
+            if self.noise_constraint is not None
+            else None
+        )
+        likelihood = (
+            GaussianLikelihood(noise_constraint=constraint)
+            if constraint is not None
+            else GaussianLikelihood()
+        )
+        if self.noise_prior is not None:
+            concentration, rate = self.noise_prior
+            likelihood.noise_covar.register_prior(
+                "noise_prior",
+                GammaPrior(concentration, rate),
+                "noise",
+            )
+        return likelihood
 
     def _to_tensor(self, array: np.ndarray) -> torch.Tensor:
         device = self._resolve_device()

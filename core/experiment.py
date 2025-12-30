@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from sklearn.base import RegressorMixin
+from sklearn.pipeline import Pipeline
 
 from core.data_loader import DataLoader, Dataset
 from core.initial_selection_strategies import (
@@ -100,10 +101,24 @@ class ActiveLearningExperiment:
         # Initialize training pool
         self.train_indices = self._select_starting_batch()
 
+        # Apply feature transforms globally (fit on all embeddings) to keep scaling consistent.
+        feature_transforms_for_trainer = feature_transforms
+        if feature_transforms:
+            feature_pipeline = Pipeline(feature_transforms)
+            self.dataset.embeddings = feature_pipeline.fit_transform(
+                self.dataset.embeddings
+            )
+            self.feature_transformer_ = feature_pipeline
+            feature_transforms_for_trainer = None
+            logger.info(
+                "Applied global feature transforms to all embeddings; "
+                "skipping per-round feature fitting."
+            )
+
         # Initialize trainer
         self.trainer = PredictorTrainer(
             predictor,
-            feature_transform=feature_transforms,
+            feature_transform=feature_transforms_for_trainer,
             target_transform=target_transforms,
         )
 

@@ -70,12 +70,12 @@ class MetricsCalculator:
 
         return {
             "n_top": n_top,
-            "best_true": best_value_true,
-            "normalized_true": normalized_true_values,
-            "train_rmse": train_rmse,
-            "train_r2": train_r2,
-            "pool_rmse": pool_rmse,
-            "pool_r2": pool_r2,
+            "best_true": self._round_metric(best_value_true),
+            "normalized_true": self._round_metric(normalized_true_values),
+            "train_rmse": self._round_metric(train_rmse),
+            "train_r2": self._round_metric(train_r2),
+            "pool_rmse": self._round_metric(pool_rmse),
+            "pool_r2": self._round_metric(pool_r2),
         }
 
     def n_selected_in_top(
@@ -105,3 +105,8 @@ class MetricsCalculator:
         rmse = root_mean_squared_error(labels, preds)
         r2 = r2_score(labels, preds)
         return float(rmse), float(r2)
+
+    def _round_metric(self, value: float, digits: int = 6) -> float:
+        if np.isnan(value):
+            return value
+        return round(float(value), digits)
