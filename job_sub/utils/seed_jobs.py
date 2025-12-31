@@ -39,9 +39,10 @@ def materialize_seed_cfgs(cfg) -> List[Dict[str, Any]]:
 
 def max_seed_workers(cfg, num_tasks: int) -> int:
     """Decide max workers based on config flag and available CPUs."""
+    available = os.cpu_count() or 1
+    print(f"[seed_jobs] cpu_count={available}")
     if not OmegaConf.select(cfg, "parallelize_seeds", default=True):
         return 1
-    available = os.cpu_count() or 1
     return max(1, min(available, num_tasks))
 
 
