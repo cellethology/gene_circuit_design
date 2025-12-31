@@ -96,6 +96,11 @@ def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
                 file=sys.stderr,
             )
             return
+        if stderr:
+            print(
+                f"[ERROR] Hydra sweep failed for dataset '{dataset_name}'. stderr:\n{stderr}",
+                file=sys.stderr,
+            )
         raise
 
 
