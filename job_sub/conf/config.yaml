@@ -18,7 +18,7 @@ subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
 num_seeds_per_job: 32
-parallelize_seeds: true
+parallelize_seeds: false
 
 # active learning settings
 al_settings:
@@ -50,5 +50,5 @@ hydra:
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 8
     qos: huge
-    mem_per_cpu: 8GB
+    mem_per_cpu: 4GB
     submitit_folder: slurm_logs
