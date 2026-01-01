@@ -50,5 +50,5 @@ hydra:
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 8
     qos: huge
-    mem_per_cpu: 4GB
+    mem_per_cpu: 8GB
     submitit_folder: slurm_logs
