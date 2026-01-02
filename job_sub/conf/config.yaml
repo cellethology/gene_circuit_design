@@ -5,7 +5,7 @@ defaults:
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
   - _self_
-  - override hydra/launcher: submitit_local
+  - override hydra/launcher: submitit_slurm
 
 # data paths
 datasets_file: datasets/datasets.yaml
