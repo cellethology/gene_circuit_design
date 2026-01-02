@@ -1,11 +1,11 @@
 defaults:
   - predictor: botorch_gp
-  - query_strategy: botorch_log_ei
+  - query_strategy: botorch_log_pi
   - initial_selection_strategy: core_set
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
   - _self_
-  - override hydra/launcher: submitit_slurm
+  - override hydra/launcher: submitit_local
 
 # data paths
 datasets_file: datasets/datasets.yaml
@@ -18,13 +18,13 @@ subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
 num_seeds_per_job: 32
-parallelize_seeds: true
+parallelize_seeds: false
 
 # active learning settings
 al_settings:
-  batch_size: 12
-  starting_batch_size: 12
-  max_rounds: 9 # not including the initial selection
+  batch_size: 0
+  starting_batch_size: 120
+  max_rounds: 0 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -41,8 +41,6 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set, probcover
-      query_strategy: botorch_log_ei, botorch_log_pi, botorch_qlog_nei, botorch_ucb, botorch_mes, botorch_ts, topk
-      predictor: botorch_gp
       embedding_model: enformer_evo2_concat, enformer_pca32, evo2_meanpool_block28_pca8, generanno_meanpool_pca, generanno_bos_pca
   launcher:
     timeout_min: 160

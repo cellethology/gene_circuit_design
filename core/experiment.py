@@ -232,7 +232,7 @@ class ActiveLearningExperiment:
         Run the active learning experiment.
 
         Args:
-            max_rounds: Maximum number of active learning rounds
+            max_rounds: Maximum number of active learning rounds after the initial selection
             top_p: Percentage of top labels to consider
         Returns:
             List of results for each round
@@ -241,14 +241,26 @@ class ActiveLearningExperiment:
 
         requires_model = getattr(self.query_strategy, "requires_model", True)
 
-        for round_num in range(max_rounds):
-            logger.info(f"\n--- Round {round_num} ---")
+        logger.info("--- Initial selection ---")
+        self._evaluate_and_track(
+            indices=self.train_indices,
+            top_p=top_p,
+        )
 
-            if round_num == 0:  # log initial selection
-                self._evaluate_and_track(
-                    indices=self.train_indices,
-                    top_p=top_p,
-                )
+        if not self.unlabeled_indices:
+            logger.info("All samples have been selected. Stopping.")
+            return
+
+        if max_rounds <= 0:
+            logger.info("max_rounds <= 0; skipping active learning rounds.")
+            return
+
+        if self.batch_size <= 0:
+            logger.info("batch_size <= 0; skipping active learning rounds.")
+            return
+
+        for round_num in range(max_rounds):
+            logger.info(f"--- Round {round_num + 1} ---")
 
             if requires_model:
                 X_train = self.dataset.embeddings[self.train_indices, :]
@@ -266,8 +278,10 @@ class ActiveLearningExperiment:
                 pool_predictions,
             ) = self._get_round_predictions(requires_model)
 
-            # Select next batch
             next_batch = self._select_next_batch()
+            if not next_batch:
+                logger.info("No new samples selected. Stopping.")
+                break
 
             self._evaluate_and_track(
                 indices=next_batch,
@@ -278,10 +292,8 @@ class ActiveLearningExperiment:
                 pool_predictions=pool_predictions,
             )
 
-            # Update training set
             self.train_indices.extend(next_batch)
 
-            # Stop if all samples have been selected
             if len(self.train_indices) == len(self.dataset.sample_ids):
                 logger.info("All samples have been selected. Stopping.")
                 break
