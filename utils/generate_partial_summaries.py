@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+from tqdm import tqdm
 
 SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
@@ -166,7 +167,8 @@ def main() -> int:
     if args.n:
         explicit_ns = [int(item) for item in args.n.split(",") if item.strip()]
 
-    for results_path in _iter_results(multirun_dir):
+    results_paths = list(_iter_results(multirun_dir))
+    for results_path in tqdm(results_paths, desc="Processing runs", unit="run"):
         run_dir = results_path.parent
         rows = _load_rows(results_path)
         if not rows:
