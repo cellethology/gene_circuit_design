@@ -20,39 +20,47 @@ _MARKER_NAME = ".summaries_combined"
 def combine_summaries(
     sweep_dir: Path,
     dataset_name: Optional[str] = None,
-    summary_name: str = "summary.json",
-) -> None:
-    """Combine all summary files inside the sweep (per dataset)."""
+    summary_names: Optional[Sequence[str]] = None,
+) -> dict[str, int]:
+    """Combine summary files inside the sweep (per dataset) for multiple names."""
     search_dir = sweep_dir / dataset_name if dataset_name else sweep_dir
     if not search_dir.exists():
         search_dir = sweep_dir
-    summary_files = sorted(search_dir.rglob(summary_name))
+    summary_names = summary_names or ["summary.json"]
+    name_set = set(summary_names)
+    summary_files = sorted(search_dir.rglob("*.json"))
     if not summary_files:
-        return
+        return dict.fromkeys(summary_names, 0)
 
-    rows = []
-    for path in tqdm(summary_files, desc=f"Reading {summary_name}"):
+    rows_by_name = dict.fromkeys(summary_names, [])
+    for path in tqdm(summary_files, desc=f"Reading summaries for {dataset_name}"):
+        if path.name not in name_set:
+            continue
         try:
             data = json.loads(path.read_text())
             data["summary_path"] = str(path)
-            rows.append(data)
+            rows_by_name[path.name].append(data)
         except json.JSONDecodeError:
             continue
 
-    if not rows:
-        return
-
-    df = pd.DataFrame(rows)
-    safe_stem = Path(summary_name).name.replace("/", "_")
-    safe_stem = Path(safe_stem).stem
-    output_name = (
-        "combined_summaries.csv"
-        if summary_name == "summary.json"
-        else f"combined_summaries.{safe_stem}.csv"
-    )
-    output_csv = search_dir / output_name
-    df.to_csv(output_csv, index=False)
-    print(f"Combined {len(rows)} summaries into {output_csv}")
+    counts: dict[str, int] = {}
+    for summary_name, rows in rows_by_name.items():
+        if not rows:
+            counts[summary_name] = 0
+            continue
+        df = pd.DataFrame(rows)
+        safe_stem = Path(summary_name).name.replace("/", "_")
+        safe_stem = Path(safe_stem).stem
+        output_name = (
+            "combined_summaries.csv"
+            if summary_name == "summary.json"
+            else f"combined_summaries.{safe_stem}.csv"
+        )
+        output_csv = search_dir / output_name
+        df.to_csv(output_csv, index=False)
+        counts[summary_name] = len(rows)
+        print(f"Combined {len(rows)} summaries into {output_csv}")
+    return counts
 
 
 def parse_args() -> argparse.Namespace:
@@ -135,13 +143,21 @@ def aggregate_summaries(
             dataset_name = dataset_dir.name
             if dataset_filters and dataset_name not in dataset_filters:
                 continue
-            for summary_name in summary_names:
+            pending = [
+                name
+                for name in summary_names
+                if force or not (dataset_dir / marker_names[name]).exists()
+            ]
+            if not pending:
+                continue
+
+            counts = combine_summaries(
+                sweep_dir, dataset_name=dataset_name, summary_names=pending
+            )
+            for summary_name in pending:
                 marker_path = dataset_dir / marker_names[summary_name]
-                if marker_path.exists() and not force:
+                if counts.get(summary_name, 0) == 0 and not force:
                     continue
-                combine_summaries(
-                    sweep_dir, dataset_name=dataset_name, summary_name=summary_name
-                )
                 marker_path.write_text(
                     f"combined at {datetime.now().isoformat(timespec='seconds')}\n"
                 )
