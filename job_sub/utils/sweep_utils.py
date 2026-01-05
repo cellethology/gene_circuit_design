@@ -1,11 +1,7 @@
 """Utility helpers for managing Hydra multirun sweeps."""
 
-import json
 from pathlib import Path
-from typing import List, Optional, Set
-
-import pandas as pd
-from tqdm import tqdm
+from typing import List, Set
 
 
 def collect_user_overrides(argv: List[str]) -> List[str]:
@@ -25,30 +21,3 @@ def list_sweep_dirs(multirun_base: Path) -> Set[Path]:
             if sweep_dir.is_dir():
                 sweeps.add(sweep_dir)
     return sweeps
-
-
-def combine_summaries(sweep_dir: Path, dataset_name: Optional[str] = None) -> None:
-    """Combine all summary.json files inside the sweep (per dataset)."""
-    search_dir = sweep_dir / dataset_name if dataset_name else sweep_dir
-    if not search_dir.exists():
-        search_dir = sweep_dir
-    summary_files = sorted(search_dir.rglob("summary.json"))
-    if not summary_files:
-        return
-
-    rows = []
-    for path in tqdm(summary_files):
-        try:
-            data = json.loads(path.read_text())
-            data["summary_path"] = str(path)
-            rows.append(data)
-        except json.JSONDecodeError:
-            continue
-
-    if not rows:
-        return
-
-    df = pd.DataFrame(rows)
-    output_csv = search_dir / "combined_summaries.csv"
-    df.to_csv(output_csv, index=False)
-    print(f"Combined {len(rows)} summaries into {output_csv}")
