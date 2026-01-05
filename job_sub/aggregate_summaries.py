@@ -70,7 +70,8 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
         help=(
-            "Path to a specific sweep timestamp directory "
+            "Path to a sweep date directory (e.g., job_sub/multirun/2025-12-30) "
+            "or a specific sweep timestamp directory "
             "(e.g., job_sub/multirun/2025-12-30/15-30-03)."
         ),
     )
@@ -85,7 +86,7 @@ def parse_args() -> argparse.Namespace:
         "--summary-name",
         action="append",
         dest="summary_names",
-        default=["summary.json"],
+        default=None,
         help=(
             "Filename to aggregate (default: summary.json). "
             "Repeat to aggregate multiple summary files."
@@ -108,7 +109,7 @@ def aggregate_summaries(
     """Combine summary.json files for completed sweeps.
 
     Args:
-        sweep_dir: Path to a specific sweep timestamp directory.
+        sweep_dir: Path to a sweep date directory or a specific sweep timestamp directory.
         datasets: Optional iterable of dataset names to aggregate. If None, defaults to dataset configs.
         summary_names: Summary filenames to aggregate.
         force: Recombine even if marker files exist.
@@ -135,7 +136,16 @@ def aggregate_summaries(
     if not sweep_dir.exists():
         print(f"Sweep directory not found: {sweep_dir}")
         return 0
-    sweeps = {sweep_dir}
+    sweep_dirs = [
+        path
+        for path in sweep_dir.iterdir()
+        if path.is_dir() and not path.name.startswith(".")
+    ]
+    time_dirs = [path for path in sweep_dirs if _is_time_dir(path.name)]
+    if time_dirs:
+        sweeps = set(time_dirs)
+    else:
+        sweeps = {sweep_dir}
 
     aggregated = 0
     for sweep_dir in sorted(sweeps):
@@ -180,6 +190,13 @@ def _iter_dataset_dirs(sweep_dir: Path) -> List[Path]:
         if path.is_dir() and not path.name.startswith(".")
     ]
     return dirs
+
+
+def _is_time_dir(name: str) -> bool:
+    parts = name.split("-")
+    if len(parts) != 3:
+        return False
+    return all(part.isdigit() and len(part) == 2 for part in parts)
 
 
 def main() -> None:
