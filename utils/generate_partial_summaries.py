@@ -170,6 +170,10 @@ def main() -> int:
     results_paths = list(_iter_results(multirun_dir))
     for results_path in tqdm(results_paths, desc="Processing runs", unit="run"):
         run_dir = results_path.parent
+        if explicit_ns and not args.overwrite:
+            expected = [run_dir / f"summary_{n}.json" for n in explicit_ns if n >= 1]
+            if expected and all(path.exists() for path in expected):
+                continue
         rows = _load_rows(results_path)
         if not rows:
             continue
