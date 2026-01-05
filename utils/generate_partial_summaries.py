@@ -131,7 +131,9 @@ def _resolve_metrics_to_update(_: dict[str, Any]) -> list[str]:
 def _iter_results(root: Path) -> Iterable[Path]:
     max_depth = 4  # root/<time>/<dataset>/<sweep>/seed_*
     root = root.resolve()
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in tqdm(
+        os.walk(root), desc="Scanning directories", unit="dir"
+    ):
         rel_parts = Path(dirpath).relative_to(root).parts
         depth = len(rel_parts)
         if Path(dirpath).name.startswith("seed_"):
