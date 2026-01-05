@@ -75,8 +75,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--summary-name",
-        default="summary.json",
-        help="Filename to aggregate (default: summary.json).",
+        action="append",
+        dest="summary_names",
+        default=["summary.json"],
+        help=(
+            "Filename to aggregate (default: summary.json). "
+            "Repeat to aggregate multiple summary files."
+        ),
     )
     parser.add_argument(
         "--force",
@@ -89,7 +94,7 @@ def parse_args() -> argparse.Namespace:
 def aggregate_summaries(
     sweep_dir: Optional[Path] = None,
     datasets: Optional[Sequence[str]] = None,
-    summary_name: str = "summary.json",
+    summary_names: Optional[Sequence[str]] = None,
     force: bool = False,
 ) -> int:
     """Combine summary.json files for completed sweeps.
@@ -97,7 +102,7 @@ def aggregate_summaries(
     Args:
         sweep_dir: Path to a specific sweep timestamp directory.
         datasets: Optional iterable of dataset names to aggregate. If None, defaults to dataset configs.
-        summary_name: Summary filename to aggregate.
+        summary_names: Summary filenames to aggregate.
         force: Recombine even if marker files exist.
 
     Returns:
@@ -107,10 +112,14 @@ def aggregate_summaries(
     if datasets:
         dataset_filters = {name.strip() for name in datasets if name}
 
-    marker_name = _MARKER_NAME
-    if summary_name != "summary.json":
-        safe_name = summary_name.replace("/", "_")
-        marker_name = f"{_MARKER_NAME}.{safe_name}"
+    summary_names = summary_names or ["summary.json"]
+    marker_names = {}
+    for summary_name in summary_names:
+        if summary_name == "summary.json":
+            marker_names[summary_name] = _MARKER_NAME
+        else:
+            safe_name = summary_name.replace("/", "_")
+            marker_names[summary_name] = f"{_MARKER_NAME}.{safe_name}"
 
     if sweep_dir is None:
         raise ValueError("sweep_dir is required.")
@@ -126,16 +135,17 @@ def aggregate_summaries(
             dataset_name = dataset_dir.name
             if dataset_filters and dataset_name not in dataset_filters:
                 continue
-            marker_path = dataset_dir / marker_name
-            if marker_path.exists() and not force:
-                continue
-            combine_summaries(
-                sweep_dir, dataset_name=dataset_name, summary_name=summary_name
-            )
-            marker_path.write_text(
-                f"combined at {datetime.now().isoformat(timespec='seconds')}\n"
-            )
-            aggregated += 1
+            for summary_name in summary_names:
+                marker_path = dataset_dir / marker_names[summary_name]
+                if marker_path.exists() and not force:
+                    continue
+                combine_summaries(
+                    sweep_dir, dataset_name=dataset_name, summary_name=summary_name
+                )
+                marker_path.write_text(
+                    f"combined at {datetime.now().isoformat(timespec='seconds')}\n"
+                )
+                aggregated += 1
 
     if aggregated == 0:
         print("No new datasets required aggregation.")
@@ -161,7 +171,7 @@ def main() -> None:
     aggregate_summaries(
         sweep_dir=args.sweep_dir,
         datasets=args.datasets,
-        summary_name=args.summary_name,
+        summary_names=args.summary_names,
         force=args.force,
     )
 
