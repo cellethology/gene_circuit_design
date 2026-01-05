@@ -9,6 +9,7 @@ import argparse
 import ast
 import csv
 import json
+import os
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -128,7 +129,18 @@ def _resolve_metrics_to_update(_: dict[str, Any]) -> list[str]:
 
 
 def _iter_results(root: Path) -> Iterable[Path]:
-    return root.rglob("results.csv")
+    max_depth = 4  # root/<time>/<dataset>/<sweep>/seed_*
+    root = root.resolve()
+    for dirpath, dirnames, filenames in os.walk(root):
+        rel_parts = Path(dirpath).relative_to(root).parts
+        depth = len(rel_parts)
+        if Path(dirpath).name.startswith("seed_"):
+            if "results.csv" in filenames:
+                yield Path(dirpath) / "results.csv"
+            dirnames[:] = []
+            continue
+        if depth >= max_depth:
+            dirnames[:] = []
 
 
 def _write_summary(path: Path, data: dict[str, Any]) -> None:
