@@ -249,15 +249,15 @@ class ActiveLearningExperiment:
 
         if not self.unlabeled_indices:
             logger.info("All samples have been selected. Stopping.")
-            return
+            return self.round_tracker.rounds
 
         if max_rounds <= 0:
             logger.info("max_rounds <= 0; skipping active learning rounds.")
-            return
+            return self.round_tracker.rounds
 
         if self.batch_size <= 0:
             logger.info("batch_size <= 0; skipping active learning rounds.")
-            return
+            return self.round_tracker.rounds
 
         for round_num in range(max_rounds):
             logger.info(f"--- Round {round_num + 1} ---")
@@ -297,6 +297,7 @@ class ActiveLearningExperiment:
             if len(self.train_indices) == len(self.dataset.sample_ids):
                 logger.info("All samples have been selected. Stopping.")
                 break
+        return self.round_tracker.rounds
 
     def save_results(self, output_path: Path) -> None:
         """

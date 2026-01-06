@@ -42,7 +42,7 @@ hydra:
     params:
       initial_selection_strategy: core_set, probcover, probcover_euclidean
       embedding_model: evo2_meanpool_block28_enformer_concat_pca, gLM2_pca
-      query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi
+      query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi, topk
       predictor: botorch_gp
   launcher:
     timeout_min: 160
