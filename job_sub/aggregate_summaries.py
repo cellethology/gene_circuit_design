@@ -32,7 +32,7 @@ def combine_summaries(
     if not summary_files:
         return dict.fromkeys(summary_names, 0)
 
-    rows_by_name = dict.fromkeys(summary_names, [])
+    rows_by_name = {name: [] for name in summary_names}
     for path in tqdm(summary_files, desc=f"Reading summaries for {dataset_name}"):
         if path.name not in name_set:
             continue
