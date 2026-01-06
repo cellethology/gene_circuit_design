@@ -3,6 +3,10 @@ Aggregate summary.json files from Hydra sweeps into combined CSVs.
 
 Run this script after SubmitIt jobs finish to generate combined_summaries.csv
 for every dataset directory under a specific sweep timestamp directory.
+
+Example:
+    python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2025-12-30 \\
+        --summary-names summary.json,summary_2.json,summary_5.json
 """
 
 import argparse
@@ -83,13 +87,12 @@ def parse_args() -> argparse.Namespace:
         help="Limit aggregation to specific dataset names. Repeat for multiple datasets.",
     )
     parser.add_argument(
-        "--summary-name",
-        action="append",
+        "--summary-names",
         dest="summary_names",
         default=None,
         help=(
-            "Filename to aggregate (default: summary.json). "
-            "Repeat to aggregate multiple summary files."
+            "Comma-separated list of summary filenames "
+            "(e.g. summary.json,summary_2.json)."
         ),
     )
     parser.add_argument(
@@ -201,10 +204,15 @@ def _is_time_dir(name: str) -> bool:
 
 def main() -> None:
     args = parse_args()
+    summary_names = None
+    if args.summary_names:
+        summary_names = [
+            name.strip() for name in args.summary_names.split(",") if name.strip()
+        ]
     aggregate_summaries(
         sweep_dir=args.sweep_dir,
         datasets=args.datasets,
-        summary_names=args.summary_names,
+        summary_names=summary_names,
         force=args.force,
     )
 
