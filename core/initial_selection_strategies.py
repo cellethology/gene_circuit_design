@@ -247,6 +247,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         delta: Optional[float] = None,
         batch_size: int = 512,
         device: str = "cpu",
+        metric: str = "cosine",
         auto_delta: bool = False,
         alpha: float = 0.95,
         kmeans_clusters: Optional[int] = None,
@@ -259,6 +260,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         self.delta = delta
         self.batch_size = max(1, batch_size)
         self.device = device
+        self.metric = metric
         self.auto_delta = auto_delta
         self.alpha = alpha
         self.kmeans_clusters = kmeans_clusters
@@ -305,7 +307,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
             return float(self.delta) if self.delta is not None else 0.5
         max_delta = float(candidates[-1])
 
-        nn = NearestNeighbors(radius=max_delta, metric="euclidean")
+        nn = NearestNeighbors(radius=max_delta, metric=self.metric)
         nn.fit(embeddings)
         distances, neighbors = nn.radius_neighbors(sample_emb, return_distance=True)
 
@@ -356,8 +358,17 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         mask = idx1 != idx2
         if not np.any(mask):
             return np.array([], dtype=float)
-        diffs = embeddings[idx1[mask]] - embeddings[idx2[mask]]
-        distances = np.linalg.norm(diffs, axis=1)
+        if self.metric == "cosine":
+            left = embeddings[idx1[mask]]
+            right = embeddings[idx2[mask]]
+            left_norm = np.linalg.norm(left, axis=1, keepdims=True)
+            right_norm = np.linalg.norm(right, axis=1, keepdims=True)
+            left_unit = left / (left_norm + 1e-12)
+            right_unit = right / (right_norm + 1e-12)
+            distances = 1.0 - np.sum(left_unit * right_unit, axis=1)
+        else:
+            diffs = embeddings[idx1[mask]] - embeddings[idx2[mask]]
+            distances = np.linalg.norm(diffs, axis=1)
         quantiles = np.linspace(0.1, 0.99, self.delta_candidates)
         candidates = np.unique(np.quantile(distances, quantiles))
         candidates = candidates[candidates > 0]
@@ -407,7 +418,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         for start in range(0, num_samples, self.batch_size):
             end = min(start + self.batch_size, num_samples)
             cur = embeddings[start:end]
-            dist = pairwise_distances(cur, embeddings, metric="euclidean")
+            dist = pairwise_distances(cur, embeddings, metric=self.metric)
             mask = dist < self.delta
             x_idx, y_idx = np.nonzero(mask)
             xs.append(x_idx + start)

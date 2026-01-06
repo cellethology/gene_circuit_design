@@ -41,14 +41,14 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set, probcover
-      embedding_model: evo2_finaltoken_block28_pca8__enformer_pca32_concat_pca95
+      embedding_model: evo2_meanpool_block28_enformer_concat_pca, gLM2_pca
       query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi
       predictor: botorch_gp
   launcher:
     timeout_min: 160
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 6
+    cpus_per_task: 16
     qos: huge
-    mem_per_cpu: 16GB
+    mem_per_cpu: 8GB
     submitit_folder: slurm_logs
