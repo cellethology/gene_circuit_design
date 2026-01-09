@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Generate summary_n.json files for partial runs based on results.csv.
+
+Example:
+  python utils/generate_partial_summaries.py job_sub/multirun/2026-01-01
+  python utils/generate_partial_summaries.py job_sub/multirun/2026-01-01 --n 3,5 --overwrite
 """
 
 from __future__ import annotations
