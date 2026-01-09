@@ -10,6 +10,7 @@ Example:
 """
 
 import argparse
+import ast
 import json
 from collections.abc import Sequence
 from datetime import datetime
@@ -42,6 +43,7 @@ def combine_summaries(
             continue
         try:
             data = json.loads(path.read_text())
+            _apply_overrides_to_summary(data)
             data["summary_path"] = str(path)
             rows_by_name[path.name].append(data)
         except json.JSONDecodeError:
@@ -200,6 +202,70 @@ def _is_time_dir(name: str) -> bool:
     if len(parts) != 3:
         return False
     return all(part.isdigit() and len(part) == 2 for part in parts)
+
+
+def _apply_overrides_to_summary(summary: dict[str, object]) -> None:
+    override_map = _build_override_map(summary.get("hydra_overrides"))
+    if not override_map:
+        return
+    column_overrides = [
+        ("query_strategy", "query_strategy"),
+        ("predictor", "predictor"),
+        ("initial_selection_strategy", "initial_selection"),
+        ("embedding_model", "embedding_model"),
+    ]
+    for override_key, column in column_overrides:
+        override_value = override_map.get(override_key)
+        if override_value:
+            summary[column] = override_value
+
+
+def _build_override_map(raw_overrides: object) -> dict[str, str]:
+    overrides: list[str] = []
+    if raw_overrides is None:
+        return {}
+    if isinstance(raw_overrides, str):
+        parsed = _parse_override_string(raw_overrides)
+        overrides.extend(parsed)
+    elif isinstance(raw_overrides, Sequence):
+        overrides.extend([str(item) for item in raw_overrides])
+    else:
+        overrides.append(str(raw_overrides))
+
+    items: dict[str, str] = {}
+    for entry in overrides:
+        text = str(entry).strip()
+        if text.startswith("+"):
+            text = text[1:].strip()
+        if "=" not in text:
+            continue
+        key, value = text.split("=", 1)
+        key = key.strip()
+        if not key:
+            continue
+        items[key] = _strip_quotes(value.strip())
+    return items
+
+
+def _parse_override_string(raw: str) -> list[str]:
+    text = raw.strip()
+    if text.startswith("[") and text.endswith("]"):
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            return [raw]
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+        return [str(parsed)]
+    if not text:
+        return []
+    return [raw]
+
+
+def _strip_quotes(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
 
 
 def main() -> None:
