@@ -40,7 +40,7 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set
+      initial_selection_strategy: core_set, probcover, probcover_euclidean
       embedding_model: evo2_meanpool_block28_enformer_concat_pca, gLM2_pca, ntv3_pca
       query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi, topk
       predictor: botorch_gp
@@ -48,7 +48,7 @@ hydra:
     timeout_min: 160
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 4
+    cpus_per_task: 8
     qos: huge
     mem_per_cpu: 8GB
     submitit_folder: slurm_logs

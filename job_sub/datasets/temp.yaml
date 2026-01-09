@@ -15,6 +15,10 @@ datasets:
     metadata_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
     embedding_dir: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
     subset_ids_path: /home/wangzitongLab/wangzitong/gene_circuit_design/job_sub/datasets/166k_subsets/SynTF_Term_&_Sp_part8_indices.txt
+  - name: SynTF_Term_&_Sp_part9_indices
+    metadata_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+    embedding_dir: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
+    subset_ids_path: /home/wangzitongLab/wangzitong/gene_circuit_design/job_sub/datasets/166k_subsets/SynTF_Term_&_Sp_part9_indices.txt
   - name: pMin_part1_indices
     metadata_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
     embedding_dir: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
