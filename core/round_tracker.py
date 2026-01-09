@@ -4,7 +4,7 @@ Variant tracking utilities for active learning experiments.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -34,13 +34,13 @@ class RoundTracker:
             sample_ids: Identifiers for each sample in the dataset
         """
         self.sample_ids = sample_ids
-        self.rounds: List[Dict[str, Any]] = []
+        self.rounds: list[dict[str, Any]] = []
         self.round_num = 0
 
     def track_round(
         self,
-        selected_indices: List[int],
-        metrics: Dict[str, float],
+        selected_indices: list[int],
+        metrics: dict[str, float],
     ) -> None:
         """
         Track samples selected in a round.
@@ -67,7 +67,7 @@ class RoundTracker:
         )
         self.round_num += 1
 
-    def compute_summary_metrics(self) -> Dict[str, float]:
+    def compute_summary_metrics(self) -> dict[str, float]:
         """
         Compute summary metrics defined by `SUMMARY_METRIC_RULES`.
         """
@@ -82,7 +82,7 @@ class RoundTracker:
             )
         )
 
-        summary_values: Dict[str, float] = {}
+        summary_values: dict[str, float] = {}
 
         for metric_name, (rule, metric_column) in SUMMARY_METRIC_RULES.items():
             if metric_column not in self.rounds[0]:

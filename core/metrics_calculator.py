@@ -3,7 +3,6 @@ Custom metrics calculation for active learning experiments.
 """
 
 import logging
-from typing import Dict, List
 
 import numpy as np
 from scipy.stats import spearmanr
@@ -24,7 +23,7 @@ class MetricsCalculator:
             labels: Array of all target values in the dataset
         """
         self.labels = labels
-        self.cumulative_metrics: List[Dict[str, float]] = []
+        self.cumulative_metrics: list[dict[str, float]] = []
 
     def compute_metrics_for_round(
         self,
@@ -34,7 +33,7 @@ class MetricsCalculator:
         pool_indices: np.ndarray,
         pool_predictions: np.ndarray | None,
         top_p: float = 0.1,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Compute metrics for a single round.
 

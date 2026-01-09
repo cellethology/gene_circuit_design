@@ -6,7 +6,7 @@ This script implements an active learning approach to design circuit with specif
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from hydra.core.hydra_config import HydraConfig
 from hydra.utils import instantiate
@@ -16,8 +16,8 @@ from core.experiment import ActiveLearningExperiment
 
 
 def run_one_experiment(
-    cfg: Dict[str, Any],
-) -> Dict[str, Any]:
+    cfg: dict[str, Any],
+) -> dict[str, Any]:
     """
     Run a single experiment with given configuration.
 
@@ -131,7 +131,7 @@ def run_one_experiment(
     return summary
 
 
-def make_steps(steps_cfg: ListConfig) -> List[Tuple[str, Any]]:
+def make_steps(steps_cfg: ListConfig) -> list[tuple[str, Any]]:
     """
     Make a list of (name, transformer) steps from a list of step configurations.
 
@@ -141,7 +141,7 @@ def make_steps(steps_cfg: ListConfig) -> List[Tuple[str, Any]]:
     Returns:
         List of (name, transformer) steps
     """
-    steps: List[Tuple[str, Any]] = []
+    steps: list[tuple[str, Any]] = []
     for step_cfg in steps_cfg:
         step_dict = OmegaConf.to_container(step_cfg, resolve=True)
         name = step_dict.pop("id")
@@ -150,7 +150,7 @@ def make_steps(steps_cfg: ListConfig) -> List[Tuple[str, Any]]:
     return steps
 
 
-def _collect_hydra_overrides(cfg: Dict[str, Any]) -> List[str]:
+def _collect_hydra_overrides(cfg: dict[str, Any]) -> list[str]:
     """Return the Hydra override strings recorded for this task."""
     stored_overrides = None
     try:
@@ -169,9 +169,9 @@ def _collect_hydra_overrides(cfg: Dict[str, Any]) -> List[str]:
     return []
 
 
-def _build_override_map(overrides: List[str]) -> Dict[str, str]:
+def _build_override_map(overrides: list[str]) -> dict[str, str]:
     """Create a key/value lookup from override strings."""
-    items: Dict[str, str] = {}
+    items: dict[str, str] = {}
     for entry in overrides:
         text = str(entry).strip()
         if "=" not in text:
@@ -185,11 +185,11 @@ def _build_override_map(overrides: List[str]) -> Dict[str, str]:
 
 
 def _format_component_label(
-    base_label: str, prefix: str, override_map: Dict[str, str]
+    base_label: str, prefix: str, override_map: dict[str, str]
 ) -> str:
     """Append override parameters to a label when that component was swept."""
     prefix_with_dot = f"{prefix}."
-    details: List[str] = []
+    details: list[str] = []
     for key in sorted(override_map):
         if key.startswith(prefix_with_dot):
             param = key[len(prefix_with_dot) :]
@@ -200,7 +200,7 @@ def _format_component_label(
     return f"{base_label}[{detail_str}]"
 
 
-def _normalize_override_values(value: Any) -> List[str]:
+def _normalize_override_values(value: Any) -> list[str]:
     """Normalize Hydra override containers to a list of strings."""
     if value is None:
         return []

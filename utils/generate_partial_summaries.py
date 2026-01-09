@@ -10,8 +10,9 @@ import ast
 import csv
 import json
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
 from tqdm import tqdm
@@ -28,7 +29,7 @@ SUMMARY_METRIC_RULES = {
 def _parse_float(value: Any) -> float:
     if value is None:
         return float("nan")
-    if isinstance(value, (int, float)):
+    if isinstance(value, int | float):
         return float(value)
     text = str(value).strip()
     if not text:

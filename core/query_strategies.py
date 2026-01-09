@@ -8,7 +8,7 @@ selection strategies for active learning experiments.
 import inspect
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from typing import Any
 
 import numpy as np
 from sklearn.compose import TransformedTargetRegressor
@@ -27,10 +27,10 @@ class QueryStrategyBase(ABC):
 
     requires_model: bool = True
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: str | None = None):
         self.name = name or self.__class__.__name__
 
-    def select(self, experiment: Any) -> List[int]:
+    def select(self, experiment: Any) -> list[int]:
         """
         Select the next batch of samples (template method).
 
@@ -54,8 +54,8 @@ class QueryStrategyBase(ABC):
 
     @abstractmethod
     def _select_batch(
-        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
-    ) -> List[int]:
+        self, experiment: Any, unlabeled_pool: list[int], batch_size: int
+    ) -> list[int]:
         """
         Strategy-specific batch selection logic.
 
@@ -71,8 +71,8 @@ class QueryStrategyBase(ABC):
 
     def _log_round(
         self,
-        selected_indices: List[int],
-        extra_info: Optional[str] = None,
+        selected_indices: list[int],
+        extra_info: str | None = None,
     ) -> None:
         """
         Log information about the round.
@@ -96,8 +96,8 @@ class Random(QueryStrategyBase):
         self.requires_model = False
 
     def _select_batch(
-        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
-    ) -> List[int]:
+        self, experiment: Any, unlabeled_pool: list[int], batch_size: int
+    ) -> list[int]:
         rng = np.random.default_rng(self.seed)
         selected_indices = rng.choice(
             unlabeled_pool, batch_size, replace=False
@@ -112,8 +112,8 @@ class TopPredictions(QueryStrategyBase):
         super().__init__("TOP_K_PRED")
 
     def _select_batch(
-        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
-    ) -> List[int]:
+        self, experiment: Any, unlabeled_pool: list[int], batch_size: int
+    ) -> list[int]:
         preds = experiment.trainer.predict(
             experiment.dataset.embeddings[unlabeled_pool, :]
         )
@@ -134,8 +134,8 @@ class PredStdHybrid(QueryStrategyBase):
         self.alpha = alpha
 
     def _select_batch(
-        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
-    ) -> List[int]:
+        self, experiment: Any, unlabeled_pool: list[int], batch_size: int
+    ) -> list[int]:
         # get weighted sum of prediction and standard deviation of prediction
         preds, stds = experiment.trainer.predict(
             experiment.dataset.embeddings[unlabeled_pool, :],
@@ -156,7 +156,7 @@ class BoTorchAcquisition(QueryStrategyBase):
         acquisition: str = "ei",
         beta: float = 2.0,
         maximize: bool = True,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> None:
         super().__init__(f"BOTORCH_{acquisition.upper()}")
         self.acquisition = acquisition.lower()
@@ -165,8 +165,8 @@ class BoTorchAcquisition(QueryStrategyBase):
         self.seed = seed
 
     def _select_batch(
-        self, experiment: Any, unlabeled_pool: List[int], batch_size: int
-    ) -> List[int]:
+        self, experiment: Any, unlabeled_pool: list[int], batch_size: int
+    ) -> list[int]:
         torch = self._import_torch()
         seed = self.seed
         if seed is None:
@@ -218,7 +218,7 @@ class BoTorchAcquisition(QueryStrategyBase):
 
         return torch
 
-    def _seed_torch(self, torch, seed: Optional[int]) -> None:
+    def _seed_torch(self, torch, seed: int | None) -> None:
         if seed is None:
             return
         torch.manual_seed(int(seed))

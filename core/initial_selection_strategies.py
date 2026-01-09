@@ -4,7 +4,6 @@ Initial selection strategies for choosing the seed batch.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 import numpy as np
 from sklearn.cluster import KMeans, MiniBatchKMeans
@@ -19,9 +18,7 @@ logger = logging.getLogger(__name__)
 class InitialSelectionStrategy(ABC):
     """Interface for selecting the initial labeled pool."""
 
-    def __init__(
-        self, name: Optional[str] = None, starting_batch_size: int = 8
-    ) -> None:
+    def __init__(self, name: str | None = None, starting_batch_size: int = 8) -> None:
         self.name = name or self.__class__.__name__
         self.starting_batch_size = starting_batch_size
 
@@ -29,7 +26,7 @@ class InitialSelectionStrategy(ABC):
     def select(
         self,
         dataset: Dataset,
-    ) -> List[int]:
+    ) -> list[int]:
         """Return indices for the initial training pool."""
 
 
@@ -43,7 +40,7 @@ class RandomInitialSelection(InitialSelectionStrategy):
     def select(
         self,
         dataset: Dataset,
-    ) -> List[int]:
+    ) -> list[int]:
         rng = np.random.default_rng(self.seed)
         return rng.choice(
             len(dataset.sample_ids), self.starting_batch_size, replace=False
@@ -60,7 +57,7 @@ class KMeansInitialSelection(InitialSelectionStrategy):
     def select(
         self,
         dataset: Dataset,
-    ) -> List[int]:
+    ) -> list[int]:
         selected = self.kmeans_initial_selection(embeddings=dataset.embeddings)
 
         labels = dataset.labels[selected]
@@ -75,7 +72,7 @@ class KMeansInitialSelection(InitialSelectionStrategy):
     def kmeans_initial_selection(
         self,
         embeddings: np.ndarray,
-    ) -> List[int]:
+    ) -> list[int]:
         kmeans = KMeans(
             n_clusters=self.starting_batch_size, random_state=self.seed
         ).fit(embeddings)
@@ -104,7 +101,7 @@ class CoreSetInitialSelection(InitialSelectionStrategy):
     def select(
         self,
         dataset: Dataset,
-    ) -> List[int]:
+    ) -> list[int]:
         selected = self.k_center_greedy(dataset.embeddings)
 
         labels = dataset.labels[selected]
@@ -117,7 +114,7 @@ class CoreSetInitialSelection(InitialSelectionStrategy):
 
         return selected
 
-    def k_center_greedy(self, embeddings: np.ndarray) -> List[int]:
+    def k_center_greedy(self, embeddings: np.ndarray) -> list[int]:
         num_samples = embeddings.shape[0]
         if num_samples == 0 or self.starting_batch_size == 0:
             return []
@@ -143,7 +140,7 @@ class CoreSetInitialSelection(InitialSelectionStrategy):
 
         return selected
 
-    def _estimate_density_scores(self, embeddings: np.ndarray) -> Optional[np.ndarray]:
+    def _estimate_density_scores(self, embeddings: np.ndarray) -> np.ndarray | None:
         """Estimate local density via average distance to k nearest neighbors."""
         num_samples = embeddings.shape[0]
         if num_samples <= 1 or self.density_neighbors <= 1:
@@ -168,7 +165,7 @@ class CoreSetInitialSelection(InitialSelectionStrategy):
         return local_density
 
     def _select_initial_index(
-        self, num_samples: int, density_scores: Optional[np.ndarray]
+        self, num_samples: int, density_scores: np.ndarray | None
     ) -> int:
         if density_scores is None or not np.all(np.isfinite(density_scores)):
             return int(self._rng.integers(0, num_samples))
@@ -195,7 +192,7 @@ class DensityWeightedCoreSetInitialSelection(CoreSetInitialSelection):
         self.name = "CORESET_DENSITY"
         self.density_scale = max(0.0, density_scale)
 
-    def k_center_greedy(self, embeddings: np.ndarray) -> List[int]:
+    def k_center_greedy(self, embeddings: np.ndarray) -> list[int]:
         num_samples = embeddings.shape[0]
         if num_samples == 0 or self.starting_batch_size == 0:
             return []
@@ -224,7 +221,7 @@ class DensityWeightedCoreSetInitialSelection(CoreSetInitialSelection):
         return selected
 
     def _build_density_weights(
-        self, density_scores: Optional[np.ndarray], num_samples: int
+        self, density_scores: np.ndarray | None, num_samples: int
     ) -> np.ndarray:
         if density_scores is None or self.density_scale == 0.0:
             return np.ones(num_samples)
@@ -244,13 +241,13 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         self,
         seed: int,
         starting_batch_size: int,
-        delta: Optional[float] = None,
+        delta: float | None = None,
         batch_size: int = 512,
         device: str = "cpu",
         metric: str = "cosine",
         auto_delta: bool = False,
         alpha: float = 0.95,
-        kmeans_clusters: Optional[int] = None,
+        kmeans_clusters: int | None = None,
         delta_candidates: int = 25,
         delta_sample_size: int = 1000,
         pair_sample_size: int = 20000,
@@ -269,7 +266,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         self.pair_sample_size = max(1000, pair_sample_size)
         self._rng = np.random.default_rng(seed)
 
-    def select(self, dataset: Dataset) -> List[int]:
+    def select(self, dataset: Dataset) -> list[int]:
         embeddings = np.asarray(dataset.embeddings)
         num_samples = embeddings.shape[0]
         target = min(self.starting_batch_size, num_samples)
@@ -315,7 +312,9 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         for delta in candidates:
             purity_sum = 0.0
             count = 0
-            for dist, idx, label in zip(distances, neighbors, sample_labels):
+            for dist, idx, label in zip(
+                distances, neighbors, sample_labels, strict=False
+            ):
                 if dist.size == 0:
                     continue
                 within = dist <= delta
@@ -328,7 +327,7 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
             purity_scores.append(avg_purity)
 
         best_delta = None
-        for delta, purity in zip(candidates, purity_scores):
+        for delta, purity in zip(candidates, purity_scores, strict=False):
             if purity >= self.alpha:
                 best_delta = float(delta)
         if best_delta is None:
@@ -376,8 +375,8 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
 
     def _construct_graph(self, embeddings: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         num_samples = embeddings.shape[0]
-        xs: List[np.ndarray] = []
-        ys: List[np.ndarray] = []
+        xs: list[np.ndarray] = []
+        ys: list[np.ndarray] = []
         logger.info(
             "PROBCOVER: constructing graph with delta=%.4f (n=%d, batch=%d)",
             self.delta,
@@ -413,8 +412,8 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         self, embeddings: np.ndarray
     ) -> tuple[np.ndarray, np.ndarray]:
         num_samples = embeddings.shape[0]
-        xs: List[np.ndarray] = []
-        ys: List[np.ndarray] = []
+        xs: list[np.ndarray] = []
+        ys: list[np.ndarray] = []
         for start in range(0, num_samples, self.batch_size):
             end = min(start + self.batch_size, num_samples)
             cur = embeddings[start:end]
@@ -439,8 +438,8 @@ class ProbCoverInitialSelection(InitialSelectionStrategy):
         y_edges: np.ndarray,
         num_samples: int,
         target: int,
-    ) -> List[int]:
-        selected: List[int] = []
+    ) -> list[int]:
+        selected: list[int] = []
         covered = np.zeros(num_samples, dtype=bool)
         cur_x = x_edges
         cur_y = y_edges

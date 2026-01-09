@@ -11,9 +11,9 @@ Example:
 
 import argparse
 import json
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Sequence, Set
 
 import pandas as pd
 from tqdm import tqdm
@@ -23,8 +23,8 @@ _MARKER_NAME = ".summaries_combined"
 
 def combine_summaries(
     sweep_dir: Path,
-    dataset_name: Optional[str] = None,
-    summary_names: Optional[Sequence[str]] = None,
+    dataset_name: str | None = None,
+    summary_names: Sequence[str] | None = None,
 ) -> dict[str, int]:
     """Combine summary files inside the sweep (per dataset) for multiple names."""
     search_dir = sweep_dir / dataset_name if dataset_name else sweep_dir
@@ -104,9 +104,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def aggregate_summaries(
-    sweep_dir: Optional[Path] = None,
-    datasets: Optional[Sequence[str]] = None,
-    summary_names: Optional[Sequence[str]] = None,
+    sweep_dir: Path | None = None,
+    datasets: Sequence[str] | None = None,
+    summary_names: Sequence[str] | None = None,
     force: bool = False,
 ) -> int:
     """Combine summary.json files for completed sweeps.
@@ -120,7 +120,7 @@ def aggregate_summaries(
     Returns:
         Number of dataset directories aggregated.
     """
-    dataset_filters: Optional[Set[str]] = None
+    dataset_filters: set[str] | None = None
     if datasets:
         dataset_filters = {name.strip() for name in datasets if name}
 
@@ -183,7 +183,7 @@ def aggregate_summaries(
     return aggregated
 
 
-def _iter_dataset_dirs(sweep_dir: Path) -> List[Path]:
+def _iter_dataset_dirs(sweep_dir: Path) -> list[Path]:
     """Return dataset directories under the given sweep timestamp directory."""
     if not sweep_dir.exists():
         return []

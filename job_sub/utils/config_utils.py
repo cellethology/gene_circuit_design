@@ -3,7 +3,6 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 from omegaconf import OmegaConf
 
@@ -21,7 +20,7 @@ class DatasetConfig:
     name: str
     metadata_path: str
     embedding_dir: str
-    subset_ids_path: Optional[str] = None
+    subset_ids_path: str | None = None
 
 
 def ensure_resolvers() -> None:
@@ -52,7 +51,7 @@ def ensure_resolvers() -> None:
     _resolvers_registered = True
 
 
-def load_dataset_configs(datasets_file: Optional[Path] = None) -> List[DatasetConfig]:
+def load_dataset_configs(datasets_file: Path | None = None) -> list[DatasetConfig]:
     """Load dataset definitions with metadata and available embedding models."""
     ensure_resolvers()
     datasets_path = Path(str(datasets_file)).expanduser() if datasets_file else None
@@ -66,7 +65,7 @@ def load_dataset_configs(datasets_file: Optional[Path] = None) -> List[DatasetCo
 
     cfg = OmegaConf.load(datasets_path)
     datasets_cfg = cfg.get("datasets") or []
-    dataset_configs: List[DatasetConfig] = []
+    dataset_configs: list[DatasetConfig] = []
 
     for dataset in datasets_cfg:
         name = str(dataset.get("name"))
@@ -103,7 +102,7 @@ def load_dataset_configs(datasets_file: Optional[Path] = None) -> List[DatasetCo
     return dataset_configs
 
 
-def parse_override_value(argv: List[str], key: str) -> Optional[str]:
+def parse_override_value(argv: list[str], key: str) -> str | None:
     """Extract a Hydra-style override value (key= or +key=) from argv."""
     prefix = f"{key}="
     alt_prefix = f"+{key}="
@@ -115,7 +114,7 @@ def parse_override_value(argv: List[str], key: str) -> Optional[str]:
     return None
 
 
-def get_datasets_file_setting(argv: List[str], config_path: Path) -> Optional[str]:
+def get_datasets_file_setting(argv: list[str], config_path: Path) -> str | None:
     """Resolve datasets_file from CLI overrides or the base config."""
     override = parse_override_value(argv, "datasets_file")
     if override:
@@ -127,8 +126,8 @@ def get_datasets_file_setting(argv: List[str], config_path: Path) -> Optional[st
 
 
 def load_datasets_or_raise(
-    argv: List[str], config_path: Path
-) -> Tuple[List[DatasetConfig], Optional[str]]:
+    argv: list[str], config_path: Path
+) -> tuple[list[DatasetConfig], str | None]:
     """Load datasets based on config/CLI, raising when no datasets are configured."""
     ensure_resolvers()
     datasets_file_setting = get_datasets_file_setting(argv, config_path)
@@ -141,7 +140,7 @@ def load_datasets_or_raise(
 
 
 def seed_env_from_datasets(
-    datasets: List[DatasetConfig],
+    datasets: list[DatasetConfig],
     hydra_child_env: str = "GENE_CIRCUIT_HYDRA_CHILD",
     dataset_env: str = "AL_DATASET_NAME",
     metadata_env: str = "AL_METADATA_PATH",

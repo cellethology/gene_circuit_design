@@ -1,19 +1,18 @@
 """Utility helpers for managing Hydra multirun sweeps."""
 
 from pathlib import Path
-from typing import List, Set
 
 
-def collect_user_overrides(argv: List[str]) -> List[str]:
+def collect_user_overrides(argv: list[str]) -> list[str]:
     """Keep any user overrides other than the multirun flag."""
     return [arg for arg in argv if arg not in ("-m", "--multirun")]
 
 
-def list_sweep_dirs(multirun_base: Path) -> Set[Path]:
+def list_sweep_dirs(multirun_base: Path) -> set[Path]:
     """Return all existing sweep directories under the multirun base."""
     if not multirun_base.exists():
         return set()
-    sweeps: Set[Path] = set()
+    sweeps: set[Path] = set()
     for date_dir in multirun_base.iterdir():
         if not date_dir.is_dir():
             continue

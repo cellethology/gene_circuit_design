@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 import hydra
 from omegaconf import OmegaConf
@@ -89,7 +88,7 @@ def main():
         wait_for_slurm_jobs(dataset.name)
 
 
-def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
+def _run_dataset_sweep(cmd: list[str], env: dict, dataset_name: str) -> None:
     """
     Launch a Hydra multirun for a single dataset, suppressing transient SubmitIt errors.
     """
