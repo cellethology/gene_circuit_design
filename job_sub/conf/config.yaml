@@ -40,7 +40,7 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set, probcover, probcover_euclidean
+      initial_selection_strategy: core_set
       embedding_model: evo2_meanpool_block28_enformer_concat_pca, gLM2_pca, ntv3_pca
       query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi, topk
       predictor: botorch_gp
