@@ -8,7 +8,6 @@ labels (and optional sample identifiers), ensuring row alignment between the two
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -27,7 +26,7 @@ class Dataset:
         embeddings: Pre-computed embeddings (required)
     """
 
-    sample_ids: List[str]
+    sample_ids: list[str]
     labels: np.ndarray
     embeddings: np.ndarray
 
@@ -55,7 +54,7 @@ class DataLoader:
         embeddings_path: str,
         metadata_path: str,
         label_key: str,
-        subset_ids_path: Optional[str] = None,
+        subset_ids_path: str | None = None,
     ) -> None:
         """
         Initialize the data loader.
@@ -70,7 +69,7 @@ class DataLoader:
         self.metadata_path = metadata_path
         self.label_key = label_key
         self.subset_ids_path = subset_ids_path
-        self.dataset: Optional[Dataset] = None
+        self.dataset: Dataset | None = None
 
     def load(self) -> Dataset:
         """
@@ -98,7 +97,7 @@ class DataLoader:
 
         return self.dataset
 
-    def _load_embeddings(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _load_embeddings(self) -> tuple[np.ndarray, np.ndarray]:
         data = np.load(self.embeddings_path, allow_pickle=True)
         if "embeddings" not in data:
             raise ValueError(
@@ -119,7 +118,7 @@ class DataLoader:
 
     def _apply_subset_if_needed(
         self, embeddings: np.ndarray, sample_ids: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         subset_ids = self._load_subset_ids(sample_ids.dtype)
         if subset_ids is None:
             return embeddings, sample_ids
@@ -149,7 +148,7 @@ class DataLoader:
         )
         return filtered_embeddings, filtered_sample_ids
 
-    def _load_subset_ids(self, dtype) -> Optional[np.ndarray]:
+    def _load_subset_ids(self, dtype) -> np.ndarray | None:
         if not self.subset_ids_path:
             return None
         subset_path = Path(self.subset_ids_path)

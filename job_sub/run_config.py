@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List
 
 import hydra
 from omegaconf import OmegaConf
@@ -31,6 +30,17 @@ _SUBSET_ENV = "AL_SUBSET_IDS_PATH"
 _CONFIG_PATH = _SCRIPT_PATH.parent / "conf" / "config.yaml"
 DATASETS, _ = load_datasets_or_raise(sys.argv[1:], _CONFIG_PATH)
 
+_THREAD_ENV_DEFAULTS = {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+}
+
+
+def _ensure_thread_env() -> None:
+    """Cap per-process thread pools to avoid CPU oversubscription."""
+    for key, value in _THREAD_ENV_DEFAULTS.items():
+        os.environ.setdefault(key, value)
+
 
 seed_env_from_datasets(
     DATASETS,
@@ -45,12 +55,14 @@ seed_env_from_datasets(
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def run_one_job(cfg):
     """Run a single experiment with the given configuration (Hydra entrypoint)."""
+    _ensure_thread_env()
     print(OmegaConf.to_yaml(cfg.al_settings))
     run_seed_jobs(cfg)
 
 
 def main():
     """Loop over datasets and launch Hydra multirun for each via subprocess."""
+    _ensure_thread_env()
     user_overrides = collect_user_overrides(sys.argv[1:])
 
     for dataset in DATASETS:
@@ -76,7 +88,7 @@ def main():
         wait_for_slurm_jobs(dataset.name)
 
 
-def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
+def _run_dataset_sweep(cmd: list[str], env: dict, dataset_name: str) -> None:
     """
     Launch a Hydra multirun for a single dataset, suppressing transient SubmitIt errors.
     """
@@ -96,6 +108,11 @@ def _run_dataset_sweep(cmd: List[str], env: dict, dataset_name: str) -> None:
                 file=sys.stderr,
             )
             return
+        if stderr:
+            print(
+                f"[ERROR] Hydra sweep failed for dataset '{dataset_name}'. stderr:\n{stderr}",
+                file=sys.stderr,
+            )
         raise
 
 

@@ -1,4 +1,0 @@
-_target_: core.query_strategies.BoTorchAcquisition
-acquisition: qucb
-beta: 2.0
-maximize: true

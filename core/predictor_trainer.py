@@ -3,7 +3,7 @@ Model training and evaluation utilities for active learning experiments.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from sklearn.base import RegressorMixin, clone
@@ -23,8 +23,8 @@ class PredictorTrainer:
     def __init__(
         self,
         predictor: RegressorMixin,
-        feature_transform: Optional[List[Tuple[str, Any]]] = None,
-        target_transform: Optional[List[Tuple[str, Any]]] = None,
+        feature_transform: list[tuple[str, Any]] | None = None,
+        target_transform: list[tuple[str, Any]] | None = None,
     ) -> None:
         """
         Initialize the predictor trainer.
@@ -37,7 +37,7 @@ class PredictorTrainer:
         self.base_predictor = predictor
         self.feature_transform = feature_transform
         self.target_transform = target_transform
-        self.model_: Optional[Any] = None
+        self.model_: Any | None = None
 
         if feature_transform:
             logger.info(
@@ -50,8 +50,8 @@ class PredictorTrainer:
 
     def _build_estimator(
         self,
-        feature_transform: Optional[List[Tuple[str, Any]]] = None,
-        target_transform: Optional[List[Tuple[str, Any]]] = None,
+        feature_transform: list[tuple[str, Any]] | None = None,
+        target_transform: list[tuple[str, Any]] | None = None,
     ) -> Any:
         """
         Create a fresh estimator with optional feature and target transformers.
@@ -124,6 +124,6 @@ class PredictorTrainer:
         stds = UncertaintyWrapper(self.model_).compute_std(X)
         return preds, stds
 
-    def get_model(self) -> Optional[Any]:
+    def get_model(self) -> Any | None:
         """Return the underlying fitted model (pipeline or estimator)."""
         return self.model_

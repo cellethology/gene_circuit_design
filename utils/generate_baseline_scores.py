@@ -265,7 +265,7 @@ def main() -> None:
             seeds=experiment_seeds,
         )
         for seed_value, overall_value, auc_value in zip(
-            experiment_seeds, overall_true, auc_true
+            experiment_seeds, overall_true, auc_true, strict=False
         ):
             random_states.append(
                 {

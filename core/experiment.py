@@ -7,7 +7,7 @@ This class orchestrates the active learning loop using composed components.
 import logging
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 from sklearn.base import RegressorMixin
@@ -42,11 +42,11 @@ class ActiveLearningExperiment:
         predictor: RegressorMixin,
         batch_size: int = 8,
         random_seed: int = 42,
-        feature_transforms: Optional[List[Tuple[str, Any]]] = None,
-        target_transforms: Optional[List[Tuple[str, Any]]] = None,
-        starting_batch_size: Optional[int] = None,
-        label_key: Optional[str] = None,
-        subset_ids_path: Optional[str] = None,
+        feature_transforms: list[tuple[str, Any]] | None = None,
+        target_transforms: list[tuple[str, Any]] | None = None,
+        starting_batch_size: int | None = None,
+        label_key: str | None = None,
+        subset_ids_path: str | None = None,
     ) -> None:
         """
         Initialize the active learning experiment.
@@ -135,7 +135,7 @@ class ActiveLearningExperiment:
             f"Query strategy random state={getattr(query_strategy, 'random_state', None)}, Predictor random state={getattr(predictor, 'random_state', None)}"
         )
 
-    def _select_starting_batch(self) -> Tuple[List[int], List[int]]:
+    def _select_starting_batch(self) -> tuple[list[int], list[int]]:
         """
         Sample the initial training pool using the configured strategy.
 
@@ -160,7 +160,7 @@ class ActiveLearningExperiment:
 
         return selected_indices
 
-    def _select_next_batch(self) -> List[int]:
+    def _select_next_batch(self) -> list[int]:
         """
         Select next batch of samples based on the configured strategy.
 
@@ -171,13 +171,13 @@ class ActiveLearningExperiment:
 
     def _evaluate_and_track(
         self,
-        indices: List[int],
+        indices: list[int],
         top_p: float = 0.1,
-        train_indices: Optional[np.ndarray] = None,
-        train_predictions: Optional[np.ndarray] = None,
-        pool_indices: Optional[np.ndarray] = None,
-        pool_predictions: Optional[np.ndarray] = None,
-    ) -> Dict[str, float]:
+        train_indices: np.ndarray | None = None,
+        train_predictions: np.ndarray | None = None,
+        pool_indices: np.ndarray | None = None,
+        pool_predictions: np.ndarray | None = None,
+    ) -> dict[str, float]:
         """
         Evaluate and track the performance of the model on the given indices.
 
@@ -208,7 +208,7 @@ class ActiveLearningExperiment:
 
     def _get_round_predictions(
         self, requires_model: bool
-    ) -> Tuple[np.ndarray, Optional[np.ndarray], np.ndarray, Optional[np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray | None, np.ndarray, np.ndarray | None]:
         train_indices = np.asarray(self.train_indices)
         pool_indices = np.asarray(self.unlabeled_indices)
         if requires_model:
@@ -227,12 +227,12 @@ class ActiveLearningExperiment:
 
     def run_experiment(
         self, max_rounds: int = 30, top_p: float = 0.1
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Run the active learning experiment.
 
         Args:
-            max_rounds: Maximum number of active learning rounds
+            max_rounds: Maximum number of active learning rounds after the initial selection
             top_p: Percentage of top labels to consider
         Returns:
             List of results for each round
@@ -241,14 +241,26 @@ class ActiveLearningExperiment:
 
         requires_model = getattr(self.query_strategy, "requires_model", True)
 
-        for round_num in range(max_rounds):
-            logger.info(f"\n--- Round {round_num} ---")
+        logger.info("--- Initial selection ---")
+        self._evaluate_and_track(
+            indices=self.train_indices,
+            top_p=top_p,
+        )
 
-            if round_num == 0:  # log initial selection
-                self._evaluate_and_track(
-                    indices=self.train_indices,
-                    top_p=top_p,
-                )
+        if not self.unlabeled_indices:
+            logger.info("All samples have been selected. Stopping.")
+            return self.round_tracker.rounds
+
+        if max_rounds <= 0:
+            logger.info("max_rounds <= 0; skipping active learning rounds.")
+            return self.round_tracker.rounds
+
+        if self.batch_size <= 0:
+            logger.info("batch_size <= 0; skipping active learning rounds.")
+            return self.round_tracker.rounds
+
+        for round_num in range(max_rounds):
+            logger.info(f"--- Round {round_num + 1} ---")
 
             if requires_model:
                 X_train = self.dataset.embeddings[self.train_indices, :]
@@ -266,8 +278,10 @@ class ActiveLearningExperiment:
                 pool_predictions,
             ) = self._get_round_predictions(requires_model)
 
-            # Select next batch
             next_batch = self._select_next_batch()
+            if not next_batch:
+                logger.info("No new samples selected. Stopping.")
+                break
 
             self._evaluate_and_track(
                 indices=next_batch,
@@ -278,13 +292,12 @@ class ActiveLearningExperiment:
                 pool_predictions=pool_predictions,
             )
 
-            # Update training set
             self.train_indices.extend(next_batch)
 
-            # Stop if all samples have been selected
             if len(self.train_indices) == len(self.dataset.sample_ids):
                 logger.info("All samples have been selected. Stopping.")
                 break
+        return self.round_tracker.rounds
 
     def save_results(self, output_path: Path) -> None:
         """
@@ -296,7 +309,7 @@ class ActiveLearningExperiment:
         self.round_tracker.save_to_csv(output_path=output_path)
 
     @property
-    def unlabeled_indices(self) -> List[int]:
+    def unlabeled_indices(self) -> list[int]:
         """Compute the remaining unlabeled indices."""
         return [
             idx

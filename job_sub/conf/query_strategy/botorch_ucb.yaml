@@ -1,4 +1,4 @@
 _target_: core.query_strategies.BoTorchAcquisition
 acquisition: ucb
-beta: 0.4
+beta: 0.5
 maximize: true
