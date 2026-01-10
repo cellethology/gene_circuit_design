@@ -48,18 +48,16 @@ def generate_subsets_yaml(
 
     output_yaml.parent.mkdir(parents=True, exist_ok=True)
     with open(output_yaml, "w") as f:
-        yaml.dump(doc, f, sort_keys=False)
+        yaml.safe_dump(doc, f, sort_keys=False, allow_unicode=True)
 
     print(f"[OK] Generated {len(datasets)} datasets → {output_yaml}")
 
 
 if __name__ == "__main__":
     subset_dir = Path(__file__).parent.resolve() / "166k_subsets"
-    output_yaml = Path(__file__).parent.resolve() / "subsets39.yaml"
-    metadata_path = "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
-    embedding_dir = (
-        "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k"
-    )
+    output_yaml = Path(__file__).parent.resolve() / "local_166k.yaml"
+    metadata_path = "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/circuits_data/166k_Data/166k_Library_CLASSIC_Data.csv"
+    embedding_dir = "/Users/jerrywang/Library/CloudStorage/OneDrive-西湖大学/research/circuits_data/embeddings/166k_library"
 
     generate_subsets_yaml(
         subset_dir=subset_dir,
