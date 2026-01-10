@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 DEFAULT_LABEL_KEY = "Fold Change (Induced/Basal)"
 DEFAULT_DATASETS_YAML = (
-    Path(__file__).resolve().parents[1] / "job_sub" / "datasets" / "local_166k.yaml"
+    Path(__file__).resolve().parents[1] / "job_sub" / "datasets" / "datasets.yaml"
 )
 
 
@@ -249,7 +249,7 @@ def _iter_results(root: Path) -> list[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Add n_top_1e2 to results.csv files by recomputing top_p=0.01."
+        description="Add n_top to results.csv files by recomputing top_p."
     )
     parser.add_argument(
         "root_dir",
