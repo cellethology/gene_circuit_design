@@ -7,6 +7,7 @@ for every dataset directory under a specific sweep timestamp directory.
 Example:
     python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2025-12-30 \\
         --summary-names summary.json,summary_2.json,summary_5.json
+    python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2025-12-30 --overwrite
 """
 
 import argparse
@@ -98,6 +99,7 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--overwrite",
         "--force",
         action="store_true",
         help="Recombine even if a dataset sweep already has a marker file.",
@@ -109,7 +111,7 @@ def aggregate_summaries(
     sweep_dir: Path | None = None,
     datasets: Sequence[str] | None = None,
     summary_names: Sequence[str] | None = None,
-    force: bool = False,
+    overwrite: bool = False,
 ) -> int:
     """Combine summary.json files for completed sweeps.
 
@@ -117,7 +119,7 @@ def aggregate_summaries(
         sweep_dir: Path to a sweep date directory or a specific sweep timestamp directory.
         datasets: Optional iterable of dataset names to aggregate. If None, defaults to dataset configs.
         summary_names: Summary filenames to aggregate.
-        force: Recombine even if marker files exist.
+        overwrite: Recombine even if marker files exist.
 
     Returns:
         Number of dataset directories aggregated.
@@ -161,7 +163,7 @@ def aggregate_summaries(
             pending = [
                 name
                 for name in summary_names
-                if force or not (dataset_dir / marker_names[name]).exists()
+                if overwrite or not (dataset_dir / marker_names[name]).exists()
             ]
             if not pending:
                 continue
@@ -171,7 +173,7 @@ def aggregate_summaries(
             )
             for summary_name in pending:
                 marker_path = dataset_dir / marker_names[summary_name]
-                if counts.get(summary_name, 0) == 0 and not force:
+                if counts.get(summary_name, 0) == 0 and not overwrite:
                     continue
                 marker_path.write_text(
                     f"combined at {datetime.now().isoformat(timespec='seconds')}\n"
@@ -279,7 +281,7 @@ def main() -> None:
         sweep_dir=args.sweep_dir,
         datasets=args.datasets,
         summary_names=summary_names,
-        force=args.force,
+        overwrite=args.overwrite,
     )
 
 
