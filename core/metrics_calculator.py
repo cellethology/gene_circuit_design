@@ -37,7 +37,7 @@ class MetricsCalculator:
         train_predictions: np.ndarray | None,
         pool_indices: np.ndarray,
         pool_predictions: np.ndarray | None,
-        top_p: float = 0.1,
+        top_p: float = 0.01,
     ) -> dict[str, float]:
         """
         Compute metrics for a single round.
