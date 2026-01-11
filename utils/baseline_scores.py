@@ -1,5 +1,5 @@
 """
-Compute random baseline summary metrics across datasets.
+Compute random baseline summary metrics across datasets, reported per round.
 
 Example:
     python utils/baseline_scores.py \\
@@ -178,14 +178,14 @@ def draw_random_rounds(
     return selections.reshape(num_rounds, num_samples_per_round)
 
 
-def compute_random_summary_metrics(
+def compute_random_summary_metrics_history(
     labels: np.ndarray,
     top_mask: np.ndarray,
     max_label: float,
     num_rounds: int,
     num_samples_per_round: int,
     seed: int,
-) -> dict[str, float]:
+) -> list[dict[str, float]]:
     rng = np.random.default_rng(seed)
     rounds = draw_random_rounds(
         num_samples=len(labels),
@@ -196,24 +196,29 @@ def compute_random_summary_metrics(
     round_labels = labels[rounds]
     normalized_true = round_labels.max(axis=1) / max_label
     n_top = top_mask[rounds].sum(axis=1).astype(np.float64)
-
-    auc_true = float(np.sum(np.maximum.accumulate(normalized_true)) / num_rounds)
-    overall_true = float(np.max(normalized_true))
+    cumulative_max = np.maximum.accumulate(normalized_true)
+    cumulative_max_sum = np.cumsum(cumulative_max)
+    cumulative_n_top = np.cumsum(n_top)
+    cumulative_n_top_sum = np.cumsum(cumulative_n_top)
     selected_per_round = np.full(num_rounds, num_samples_per_round, dtype=np.float64)
-    cumulative_selected = float(np.sum(np.cumsum(selected_per_round)))
-    avg_top = (
-        float(np.sum(np.cumsum(n_top)) / cumulative_selected)
-        if cumulative_selected > 0
-        else 0.0
-    )
+    cumulative_selected = np.cumsum(selected_per_round)
+    cumulative_selected_sum = np.cumsum(cumulative_selected)
 
-    return {
-        "auc_true": auc_true,
-        "avg_top": avg_top,
-        "overall_true": overall_true,
-        "max_train_spearman": float("nan"),
-        "max_pool_spearman": float("nan"),
-    }
+    history: list[dict[str, float]] = []
+    for idx in range(num_rounds):
+        prefix_len = idx + 1
+        denom = float(cumulative_selected_sum[idx])
+        history.append(
+            {
+                "round": idx,
+                "auc_true": float(cumulative_max_sum[idx] / prefix_len),
+                "avg_top": float(cumulative_n_top_sum[idx] / denom) if denom else 0.0,
+                "overall_true": float(cumulative_max[idx]),
+                "max_train_spearman": float("nan"),
+                "max_pool_spearman": float("nan"),
+            }
+        )
+    return history
 
 
 def parse_args() -> argparse.Namespace:
@@ -283,7 +288,7 @@ def main() -> None:
         dataset_max_label = float(np.max(labels))
         top_mask = build_top_mask(labels, args.top_p)
         for seed_value in experiment_seeds:
-            summary_metrics = compute_random_summary_metrics(
+            summary_metrics_history = compute_random_summary_metrics_history(
                 labels=labels,
                 top_mask=top_mask,
                 max_label=dataset_max_label,
@@ -291,24 +296,26 @@ def main() -> None:
                 num_samples_per_round=args.num_samples_per_round,
                 seed=int(seed_value),
             )
-            random_states.append(
-                {
-                    "dataset_name": dataset.name,
-                    "query_strategy": "RANDOM",
-                    "predictor": "NONE",
-                    "initial_selection": "RANDOM",
-                    "embedding_model": "NONE",
-                    "feature_transforms": "NONE",
-                    "target_transforms": "NONE",
-                    "seed": int(seed_value),
-                    "overall_true": summary_metrics["overall_true"],
-                    "auc_true": summary_metrics["auc_true"],
-                    "avg_top": summary_metrics["avg_top"],
-                    "max_train_spearman": summary_metrics["max_train_spearman"],
-                    "max_pool_spearman": summary_metrics["max_pool_spearman"],
-                    "dataset_max_label": dataset_max_label,
-                }
-            )
+            for summary_metrics in summary_metrics_history:
+                random_states.append(
+                    {
+                        "dataset_name": dataset.name,
+                        "query_strategy": "RANDOM",
+                        "predictor": "NONE",
+                        "initial_selection": "RANDOM",
+                        "embedding_model": "NONE",
+                        "feature_transforms": "NONE",
+                        "target_transforms": "NONE",
+                        "seed": int(seed_value),
+                        "round": summary_metrics["round"],
+                        "overall_true": summary_metrics["overall_true"],
+                        "auc_true": summary_metrics["auc_true"],
+                        "avg_top": summary_metrics["avg_top"],
+                        "max_train_spearman": summary_metrics["max_train_spearman"],
+                        "max_pool_spearman": summary_metrics["max_pool_spearman"],
+                        "dataset_max_label": dataset_max_label,
+                    }
+                )
 
     df = pd.DataFrame(random_states)
     if df.empty:
