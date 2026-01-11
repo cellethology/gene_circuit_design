@@ -144,6 +144,9 @@ def _extract_override_value(overrides: list[Any], key: str) -> str | None:
         text = str(entry).strip()
         if not text:
             continue
+        # Strip + prefix used by Hydra for adding new keys
+        if text.startswith("+"):
+            text = text[1:].strip()
         if "=" in text:
             candidate_key, value = text.split("=", 1)
             if candidate_key.strip() == key:
