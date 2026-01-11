@@ -85,6 +85,7 @@ def run_one_experiment(
 
     # Compute summary metrics
     summary_metrics = experiment.round_tracker.compute_summary_metrics()
+    summary_metrics_history = experiment.round_tracker.compute_summary_metrics_history()
 
     # Summarize results
     feature_transforms_names = (
@@ -121,6 +122,7 @@ def run_one_experiment(
         "overall_true": summary_metrics["overall_true"],
         "max_train_spearman": summary_metrics["max_train_spearman"],
         "max_pool_spearman": summary_metrics["max_pool_spearman"],
+        "summary_by_round": summary_metrics_history,
         "hydra_overrides": overrides,
     }
 
