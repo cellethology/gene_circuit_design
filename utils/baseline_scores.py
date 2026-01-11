@@ -155,7 +155,7 @@ def build_top_mask(labels: np.ndarray, top_p: float) -> np.ndarray:
     num_top = max(1, int(len(labels) * top_p))
     if num_top >= len(labels):
         return np.ones(len(labels), dtype=bool)
-    top_indices = np.argpartition(labels, -num_top)[-num_top:]
+    top_indices = np.argsort(labels)[-num_top:]
     top_mask = np.zeros(len(labels), dtype=bool)
     top_mask[top_indices] = True
     return top_mask
