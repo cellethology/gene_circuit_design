@@ -2,9 +2,11 @@
 Aggregate summary.json files from Hydra sweeps into combined CSVs.
 
 Run this script after SubmitIt jobs finish to generate combined_summaries.csv
-for every dataset directory under a specific sweep timestamp directory.
+and combined_summaries.by_round.csv for every dataset directory under a
+specific sweep timestamp directory.
 
 Example:
+    python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2026-01-11 \\
     python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2025-12-30 \\
         --summary-names summary.json,summary_2.json,summary_5.json
     python job_sub/aggregate_summaries.py --sweep-dir job_sub/multirun/2025-12-30 --overwrite
@@ -21,6 +23,7 @@ import pandas as pd
 from tqdm import tqdm
 
 _MARKER_NAME = ".summaries_combined"
+_SUMMARY_BY_ROUND_KEY = "summary_by_round"
 
 
 def combine_summaries(
@@ -39,6 +42,7 @@ def combine_summaries(
         return dict.fromkeys(summary_names, 0)
 
     rows_by_name = {name: [] for name in summary_names}
+    round_rows_by_name = {name: [] for name in summary_names}
     for path in tqdm(summary_files, desc=f"Reading summaries for {dataset_name}"):
         if path.name not in name_set:
             continue
@@ -46,7 +50,23 @@ def combine_summaries(
             data = json.loads(path.read_text())
             _apply_overrides_to_summary(data)
             data["summary_path"] = str(path)
-            rows_by_name[path.name].append(data)
+            summary_by_round = data.get(_SUMMARY_BY_ROUND_KEY)
+            if isinstance(summary_by_round, list):
+                base = {k: v for k, v in data.items() if k != _SUMMARY_BY_ROUND_KEY}
+                for idx, record in enumerate(summary_by_round):
+                    if not isinstance(record, dict):
+                        continue
+                    round_record = dict(record)
+                    round_record.setdefault("round", idx)
+                    round_rows_by_name[path.name].append(
+                        {
+                            **base,
+                            **round_record,
+                        }
+                    )
+            summary_row = dict(data)
+            summary_row.pop(_SUMMARY_BY_ROUND_KEY, None)
+            rows_by_name[path.name].append(summary_row)
         except json.JSONDecodeError:
             continue
 
@@ -67,6 +87,18 @@ def combine_summaries(
         df.to_csv(output_csv, index=False)
         counts[summary_name] = len(rows)
         print(f"Combined {len(rows)} summaries into {output_csv}")
+
+        round_rows = round_rows_by_name.get(summary_name, [])
+        if round_rows:
+            round_df = pd.DataFrame(round_rows)
+            round_output_name = (
+                "combined_summaries.by_round.csv"
+                if summary_name == "summary.json"
+                else f"combined_summaries.{safe_stem}.by_round.csv"
+            )
+            round_output_csv = search_dir / round_output_name
+            round_df.to_csv(round_output_csv, index=False)
+            print(f"Combined {len(round_rows)} round summaries into {round_output_csv}")
     return counts
 
 
