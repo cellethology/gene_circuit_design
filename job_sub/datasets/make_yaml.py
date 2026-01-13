@@ -1,12 +1,11 @@
 """
-generate a YAML file automatically for running experiments over all *_indices.txt files in subset32/
+generate a YAML file automatically for running experiments over all *_indices.txt files in 166k_subsets/
 the yaml file will be like this:
 datasets:
-  - name: "166k_AD_part1_indices"
+  - name: "AD_part1_indices"
     metadata_path: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
     embedding_dir: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k"
-    subset_ids_path: "/home/wangzitongLab/liuxuyin/gene_circuit_design/job_sub/datasets/subset32/166k_AD_part1_indices.txt"
-
+    subset_ids_path: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets/AD_part1_indices.txt"
 """
 
 import argparse
@@ -90,7 +89,7 @@ if __name__ == "__main__":
 
     script_dir = Path(__file__).parent.resolve()
     subset_dir = args.subset_dir or (script_dir / "166k_subsets")
-    output_yaml = args.output_yaml or (script_dir / "local_166k.yaml")
+    output_yaml = args.output_yaml or (script_dir / "166k_datasets.yaml")
 
     generate_subsets_yaml(
         subset_dir=subset_dir,
