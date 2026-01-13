@@ -22,8 +22,13 @@ class MetricsCalculator:
         Args:
             labels: Array of all target values in the dataset
         """
-        self.labels = labels
+        self.labels = np.asarray(labels)
         self.cumulative_metrics: list[dict[str, float]] = []
+        self._max_label = (
+            float(np.max(self.labels)) if self.labels.size else float("nan")
+        )
+        self._sorted_label_indices = np.argsort(self.labels)
+        self._top_cache: dict[float, np.ndarray] = {}
 
     def compute_metrics_for_round(
         self,
@@ -32,7 +37,7 @@ class MetricsCalculator:
         train_predictions: np.ndarray | None,
         pool_indices: np.ndarray,
         pool_predictions: np.ndarray | None,
-        top_p: float = 0.1,
+        top_p: float = 0.01,
     ) -> dict[str, float]:
         """
         Compute metrics for a single round.
@@ -53,7 +58,7 @@ class MetricsCalculator:
 
         # Best value ground truth
         best_value_true = np.max(self.labels[selected_indices])
-        normalized_true_values = best_value_true / np.max(self.labels)
+        normalized_true_values = best_value_true / self._max_label
 
         train_spearman = self._compute_spearman(
             indices=train_indices,
@@ -92,8 +97,11 @@ class MetricsCalculator:
         if not 0.0 < top_p <= 1.0:
             raise ValueError("top_p must be between 0.0 and 1.0")
 
-        num_top = max(1, int(len(self.labels) * top_p))
-        top_labels = np.argsort(self.labels)[-num_top:]
+        top_labels = self._top_cache.get(top_p)
+        if top_labels is None:
+            num_top = max(1, int(len(self.labels) * top_p))
+            top_labels = self._sorted_label_indices[-num_top:]
+            self._top_cache[top_p] = top_labels
         return int(len(np.intersect1d(selected_indices, top_labels)))
 
     def _compute_spearman(

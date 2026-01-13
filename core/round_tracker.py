@@ -71,24 +71,43 @@ class RoundTracker:
         """
         Compute summary metrics defined by `SUMMARY_METRIC_RULES`.
         """
+        return self._compute_summary_metrics_for_rounds(self.rounds)
+
+    def compute_summary_metrics_history(self) -> list[dict[str, float]]:
+        """
+        Compute summary metrics for each round prefix.
+        """
         if not self.rounds:
             raise ValueError(
                 "Cannot compute summary metrics: no rounds have been tracked yet"
             )
 
-        cumulative_selected = np.sum(
-            np.cumsum(
-                np.array([len(round["selected_sample_ids"]) for round in self.rounds])
+        history: list[dict[str, float]] = []
+        for idx in range(len(self.rounds)):
+            summary = self._compute_summary_metrics_for_rounds(self.rounds[: idx + 1])
+            summary["round"] = self.rounds[idx]["round"]
+            history.append(summary)
+        return history
+
+    def _compute_summary_metrics_for_rounds(
+        self, rounds: list[dict[str, Any]]
+    ) -> dict[str, float]:
+        if not rounds:
+            raise ValueError(
+                "Cannot compute summary metrics: no rounds have been tracked yet"
             )
+
+        cumulative_selected = np.sum(
+            np.cumsum(np.array([len(round["selected_sample_ids"]) for round in rounds]))
         )
 
         summary_values: dict[str, float] = {}
 
         for metric_name, (rule, metric_column) in SUMMARY_METRIC_RULES.items():
-            if metric_column not in self.rounds[0]:
+            if metric_column not in rounds[0]:
                 raise ValueError(f"Metric column {metric_name} not found in rounds")
 
-            values = np.array([round[metric_column] for round in self.rounds])
+            values = np.array([round[metric_column] for round in rounds])
             if rule == "top_mean":
                 cumulative_sum = np.cumsum(values)
                 summary_values[metric_name] = (
@@ -102,7 +121,7 @@ class RoundTracker:
                 cumulative_max_per_round = np.maximum.accumulate(values)
                 summary_values[metric_name] = float(
                     np.sum(cumulative_max_per_round)
-                ) / len(self.rounds)
+                ) / len(rounds)
             elif rule == "max_overall":
                 finite = values[np.isfinite(values)]
                 summary_values[metric_name] = (

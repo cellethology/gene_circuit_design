@@ -172,7 +172,7 @@ class ActiveLearningExperiment:
     def _evaluate_and_track(
         self,
         indices: list[int],
-        top_p: float = 0.1,
+        top_p: float = 0.01,
         train_indices: np.ndarray | None = None,
         train_predictions: np.ndarray | None = None,
         pool_indices: np.ndarray | None = None,
@@ -226,7 +226,7 @@ class ActiveLearningExperiment:
         return train_indices, train_predictions, pool_indices, pool_predictions
 
     def run_experiment(
-        self, max_rounds: int = 30, top_p: float = 0.1
+        self, max_rounds: int = 30, top_p: float = 0.01
     ) -> list[dict[str, Any]]:
         """
         Run the active learning experiment.

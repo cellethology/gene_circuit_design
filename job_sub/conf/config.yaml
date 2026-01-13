@@ -17,7 +17,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 32
+num_seeds_per_job: 30
 parallelize_seeds: true
 
 # active learning settings
@@ -40,15 +40,15 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set, probcover, probcover_euclidean
-      embedding_model: evo2_meanpool_block28_enformer_concat_pca, gLM2_pca, ntv3_pca
+      initial_selection_strategy: core_set, probcover
+      embedding_model: enformer_evo2_concat, enformer_pca32, generanno_bos_pca, evo2_meanpool_block28_pca8, 650M-post_pca, 650M-post_after_transformer_pca, 650M-pre_after_transformer_pca
       query_strategy: botorch_log_ei, botorch_mes, botorch_log_pi, topk
       predictor: botorch_gp
   launcher:
     timeout_min: 160
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 4
+    cpus_per_task: 15
     qos: huge
     mem_per_cpu: 8GB
     submitit_folder: slurm_logs

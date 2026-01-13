@@ -35,6 +35,7 @@ dependencies = [
     "safetensors>=0.5.3",
     "scikit-learn>=1.6.0",
     "scipy>=1.7.0",
+    "setuptools>=65.0.0",
     "skorch>=1.0.0",
     "submitit>=1.5.3",
     "torch>=2.5.1,<2.9",
@@ -97,7 +98,9 @@ addopts = [
     "--verbose",
     "--tb=short",
     "--strict-markers",
-    "--cov=experiments",
+    "--cov=core",
+    "--cov=job_sub",
+    "--cov=utils",
     "--cov-report=term-missing",
 ]
 markers = [
@@ -123,8 +126,9 @@ dev = [
 
 [tool.coverage.run]
 source = [
-    "experiments",
+    "core",
     "job_sub",
+    "utils",
 ]
 branch = true
 

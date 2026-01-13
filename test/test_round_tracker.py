@@ -96,6 +96,67 @@ class TestRoundTracker:
         with pytest.raises(ValueError, match="Metric column"):
             tracker.compute_summary_metrics()
 
+    def test_compute_summary_metrics_history_returns_expected_values(self):
+        tracker = RoundTracker(sample_ids=np.array([0, 1, 2]))
+        tracker.track_round(
+            selected_indices=[0],
+            metrics={
+                "normalized_true": 0.2,
+                "n_top": 1,
+                "train_spearman": 0.1,
+                "pool_spearman": 0.2,
+            },
+        )
+        tracker.track_round(
+            selected_indices=[1],
+            metrics={
+                "normalized_true": 0.4,
+                "n_top": 0,
+                "train_spearman": 0.3,
+                "pool_spearman": 0.4,
+            },
+        )
+        tracker.track_round(
+            selected_indices=[2],
+            metrics={
+                "normalized_true": 0.3,
+                "n_top": 1,
+                "train_spearman": 0.2,
+                "pool_spearman": 0.5,
+            },
+        )
+
+        history = tracker.compute_summary_metrics_history()
+        expected = [
+            {
+                "auc_true": 0.2,
+                "avg_top": 1.0,
+                "overall_true": 0.2,
+                "max_train_spearman": 0.1,
+                "max_pool_spearman": 0.2,
+            },
+            {
+                "auc_true": 0.3,
+                "avg_top": 2.0 / 3.0,
+                "overall_true": 0.4,
+                "max_train_spearman": 0.3,
+                "max_pool_spearman": 0.4,
+            },
+            {
+                "auc_true": 1.0 / 3.0,
+                "avg_top": 2.0 / 3.0,
+                "overall_true": 0.4,
+                "max_train_spearman": 0.3,
+                "max_pool_spearman": 0.5,
+            },
+        ]
+
+        assert len(history) == len(expected)
+        for idx, record in enumerate(history):
+            assert record["round"] == idx
+            for metric, value in expected[idx].items():
+                assert pytest.approx(value, rel=1e-6) == record[metric]
+
     def test_save_to_csv(self, tmp_path):
         tracker = RoundTracker(sample_ids=np.array([0, 1]))
         tracker.track_round([0], DUMMY_METRICS)

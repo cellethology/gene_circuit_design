@@ -1,3 +1,15 @@
+"""
+Compute random baseline summary metrics across datasets, reported per round.
+
+Example:
+    python utils/baseline_scores.py \\
+        --datasets-yaml job_sub/datasets/datasets.yaml \\
+        --output-csv results/baseline_scores.csv \\
+        --num-experiments 1000 \\
+        --num-rounds 10 \\
+        --num-samples-per-round 12
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -112,8 +124,9 @@ def load_labels(
     label_key: str,
     label_cache: dict[tuple[Path, str], np.ndarray],
     subset_cache: dict[Path, np.ndarray],
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray]:
     labels = load_label_array(dataset.metadata_path, label_key, label_cache)
+    sample_ids = np.arange(len(labels), dtype=np.int64)
 
     if dataset.subset_ids_path is not None:
         subset_ids_path = dataset.subset_ids_path
@@ -126,65 +139,86 @@ def load_labels(
                 f"{dataset.metadata_path} (len={len(labels)})"
             )
         labels = labels[subset_ids]
+        sample_ids = subset_ids
 
-    labels = labels[np.isfinite(labels)]
+    finite_mask = np.isfinite(labels)
+    labels = labels[finite_mask]
+    sample_ids = sample_ids[finite_mask]
     if labels.size == 0:
         raise ValueError(
             f"No finite labels found for dataset '{dataset.name}' after filtering."
         )
-    return labels
+    return labels, sample_ids
 
 
-def get_overall_true_auc_true(
-    labels: np.ndarray,
-    num_experiments: int,
-    num_rounds: int = 10,
-    num_samples_per_round: int = 12,
-    rng: np.random.Generator | None = None,
-    replace: bool = True,
-    seeds: np.ndarray | None = None,
-) -> tuple[np.ndarray, np.ndarray]:
-    if num_rounds <= 0 or num_samples_per_round <= 0 or num_experiments <= 0:
-        raise ValueError(
-            "num_rounds, num_samples_per_round, and num_experiments must be > 0"
-        )
-    if seeds is not None and len(seeds) != num_experiments:
-        raise ValueError("Seeds length must match num_experiments.")
-    if seeds is None and rng is None:
-        rng = np.random.default_rng()
+def build_top_mask(labels: np.ndarray, top_p: float) -> np.ndarray:
+    num_top = max(1, int(len(labels) * top_p))
+    if num_top >= len(labels):
+        return np.ones(len(labels), dtype=bool)
+    top_indices = np.argsort(labels)[-num_top:]
+    top_mask = np.zeros(len(labels), dtype=bool)
+    top_mask[top_indices] = True
+    return top_mask
 
-    labels = np.asarray(labels)
-    max_val = np.max(labels)
-    if max_val <= 0:
-        raise ValueError("Labels must have a positive max value for normalization.")
 
-    normalized_labels = labels / max_val
-    samples_per_experiment = num_rounds * num_samples_per_round
-    if not replace and samples_per_experiment > len(normalized_labels):
+def draw_random_rounds(
+    num_samples: int,
+    num_rounds: int,
+    num_samples_per_round: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    if num_rounds <= 0 or num_samples_per_round <= 0:
+        raise ValueError("num_rounds and num_samples_per_round must be > 0.")
+    total_samples = num_rounds * num_samples_per_round
+    if total_samples > num_samples:
         raise ValueError(
             "Cannot sample without replacement: requested samples exceed dataset size."
         )
+    selections = rng.choice(num_samples, size=total_samples, replace=False)
+    return selections.reshape(num_rounds, num_samples_per_round)
 
-    overall_true = np.empty(num_experiments, dtype=np.float64)
-    auc_true = np.empty(num_experiments, dtype=np.float64)
-    for i in range(num_experiments):
-        sample_rng = rng if seeds is None else np.random.default_rng(int(seeds[i]))
-        samples = sample_rng.choice(
-            normalized_labels, size=samples_per_experiment, replace=replace
+
+def compute_random_summary_metrics_history(
+    labels: np.ndarray,
+    top_mask: np.ndarray,
+    max_label: float,
+    num_rounds: int,
+    num_samples_per_round: int,
+    seed: int,
+) -> list[dict[str, float]]:
+    rng = np.random.default_rng(seed)
+    rounds = draw_random_rounds(
+        num_samples=len(labels),
+        num_rounds=num_rounds,
+        num_samples_per_round=num_samples_per_round,
+        rng=rng,
+    )
+    round_labels = labels[rounds]
+    normalized_true = round_labels.max(axis=1) / max_label
+    n_top = top_mask[rounds].sum(axis=1).astype(np.float64)
+    cumulative_max = np.maximum.accumulate(normalized_true)
+    cumulative_max_sum = np.cumsum(cumulative_max)
+    cumulative_n_top = np.cumsum(n_top)
+    cumulative_n_top_sum = np.cumsum(cumulative_n_top)
+    selected_per_round = np.full(num_rounds, num_samples_per_round, dtype=np.float64)
+    cumulative_selected = np.cumsum(selected_per_round)
+    cumulative_selected_sum = np.cumsum(cumulative_selected)
+
+    history: list[dict[str, float]] = []
+    for idx in range(num_rounds):
+        prefix_len = idx + 1
+        denom = float(cumulative_selected_sum[idx])
+        history.append(
+            {
+                "round": idx,
+                "auc_true": float(cumulative_max_sum[idx] / prefix_len),
+                "avg_top": float(cumulative_n_top_sum[idx] / denom) if denom else 0.0,
+                "overall_true": float(cumulative_max[idx]),
+                "max_train_spearman": float("nan"),
+                "max_pool_spearman": float("nan"),
+            }
         )
-        samples = samples.reshape(num_rounds, -1).max(axis=1)
-        overall_true[i] = np.max(samples)
-        auc_true[i] = np.sum(np.maximum.accumulate(samples)) / num_rounds
-    return overall_true, auc_true
-
-
-def generate_experiment_seeds(
-    num_experiments: int,
-    base_seed: int | None,
-) -> np.ndarray:
-    rng = np.random.default_rng(base_seed)
-    max_seed = np.iinfo(np.uint32).max
-    return rng.integers(0, max_seed, size=num_experiments, dtype=np.uint32)
+    return history
 
 
 def parse_args() -> argparse.Namespace:
@@ -209,27 +243,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-experiments", type=int, default=10000)
     parser.add_argument("--num-rounds", type=int, default=10)
     parser.add_argument("--num-samples-per-round", type=int, default=12)
-    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument(
+        "--top-p",
+        type=float,
+        default=0.01,
+        help="Top percentage used for avg_top (matches active learning defaults).",
+    )
     parser.add_argument(
         "--dataset",
         action="append",
         default=[],
         help="Dataset name to include (can be repeated).",
     )
-    replacement_group = parser.add_mutually_exclusive_group()
-    replacement_group.add_argument(
-        "--with-replacement",
-        dest="with_replacement",
-        action="store_true",
-        help="Sample with replacement within each experiment.",
-    )
-    replacement_group.add_argument(
-        "--no-replacement",
-        dest="with_replacement",
-        action="store_false",
-        help="Sample without replacement within each experiment (default).",
-    )
-    parser.set_defaults(with_replacement=False)
     return parser.parse_args()
 
 
@@ -237,6 +262,11 @@ def main() -> None:
     args = parse_args()
     dataset_yaml_path = Path(args.datasets_yaml).expanduser()
     output_csv = Path(args.output_csv).expanduser()
+
+    if args.num_experiments <= 0:
+        raise ValueError("num_experiments must be > 0.")
+    if not 0.0 < args.top_p <= 1.0:
+        raise ValueError("top_p must be between 0 and 1.")
 
     datasets = load_dataset_specs(dataset_yaml_path)
     if args.dataset:
@@ -250,38 +280,42 @@ def main() -> None:
 
     label_cache: dict[tuple[Path, str], np.ndarray] = {}
     subset_cache: dict[Path, np.ndarray] = {}
-    experiment_seeds = generate_experiment_seeds(args.num_experiments, args.seed)
+    experiment_seeds = np.arange(args.num_experiments, dtype=np.int64)
 
     random_states = []
     for dataset in tqdm(datasets):
-        labels = load_labels(dataset, args.label_key, label_cache, subset_cache)
+        labels, _ = load_labels(dataset, args.label_key, label_cache, subset_cache)
         dataset_max_label = float(np.max(labels))
-        overall_true, auc_true = get_overall_true_auc_true(
-            labels=labels,
-            num_experiments=args.num_experiments,
-            num_rounds=args.num_rounds,
-            num_samples_per_round=args.num_samples_per_round,
-            replace=args.with_replacement,
-            seeds=experiment_seeds,
-        )
-        for seed_value, overall_value, auc_value in zip(
-            experiment_seeds, overall_true, auc_true, strict=False
-        ):
-            random_states.append(
-                {
-                    "dataset_name": dataset.name,
-                    "query_strategy": "RANDOM",
-                    "predictor": "None",
-                    "initial_selection": "RANDOM",
-                    "embedding_model": "None",
-                    "feature_transforms": "None",
-                    "target_transforms": "None",
-                    "seed": int(seed_value),
-                    "overall_true": float(overall_value),
-                    "auc_true": float(auc_value),
-                    "dataset_max_label": dataset_max_label,
-                }
+        top_mask = build_top_mask(labels, args.top_p)
+        for seed_value in experiment_seeds:
+            summary_metrics_history = compute_random_summary_metrics_history(
+                labels=labels,
+                top_mask=top_mask,
+                max_label=dataset_max_label,
+                num_rounds=args.num_rounds,
+                num_samples_per_round=args.num_samples_per_round,
+                seed=int(seed_value),
             )
+            for summary_metrics in summary_metrics_history:
+                random_states.append(
+                    {
+                        "dataset_name": dataset.name,
+                        "query_strategy": "RANDOM",
+                        "predictor": "NONE",
+                        "initial_selection": "RANDOM",
+                        "embedding_model": "NONE",
+                        "feature_transforms": "NONE",
+                        "target_transforms": "NONE",
+                        "seed": int(seed_value),
+                        "round": summary_metrics["round"],
+                        "overall_true": summary_metrics["overall_true"],
+                        "auc_true": summary_metrics["auc_true"],
+                        "avg_top": summary_metrics["avg_top"],
+                        "max_train_spearman": summary_metrics["max_train_spearman"],
+                        "max_pool_spearman": summary_metrics["max_pool_spearman"],
+                        "dataset_max_label": dataset_max_label,
+                    }
+                )
 
     df = pd.DataFrame(random_states)
     if df.empty:
