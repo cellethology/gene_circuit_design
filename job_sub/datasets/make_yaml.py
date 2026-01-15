@@ -1,11 +1,19 @@
 """
-generate a YAML file automatically for running experiments over all *_indices.txt files in 166k_subsets/
-the yaml file will be like this:
+generate a YAML file automatically for running experiments over all *_indices.txt files in a subset directory
+
+Usage:
+python make_yaml.py --subset-dir /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets --output-yaml 166k_datasets.yaml --metadata-path /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv --embedding-dir /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
+
+This will generate a YAML file like this:
 datasets:
-  - name: "AD_part1_indices"
-    metadata_path: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv"
-    embedding_dir: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k"
-    subset_ids_path: "/storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets/AD_part1_indices.txt"
+  - name: AD_part1_indices
+    metadata_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+    embedding_dir: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
+    subset_ids_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets/AD_part1_indices.txt
+  - name: AD_part2_indices
+    metadata_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+    embedding_dir: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k
+    subset_ids_path: /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets/AD_part2_indices.txt
 """
 
 import argparse
@@ -87,13 +95,9 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    script_dir = Path(__file__).parent.resolve()
-    subset_dir = args.subset_dir or (script_dir / "166k_subsets")
-    output_yaml = args.output_yaml or (script_dir / "166k_datasets.yaml")
-
     generate_subsets_yaml(
-        subset_dir=subset_dir,
-        output_yaml=output_yaml,
+        subset_dir=Path(args.subset_dir),
+        output_yaml=Path(args.output_yaml),
         metadata_path=str(args.metadata_path.expanduser().resolve()),
         embedding_dir=str(args.embedding_dir.expanduser().resolve()),
     )
