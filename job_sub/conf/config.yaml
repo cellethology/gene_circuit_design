@@ -5,10 +5,10 @@ defaults:
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
   - _self_
-  - override hydra/launcher: submitit_local
+  - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/test_local.yaml
+datasets_file: datasets/datasets.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
@@ -17,7 +17,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 1
+num_seeds_per_job: 30
 parallelize_seeds: true
 
 # active learning settings
@@ -42,13 +42,13 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_gibbon, topk
-      predictor: botorch_gp
+      query_strategy: botorch_gibbon, topk, botorch_log_pi, botorch_qlog_nei, botorch_mes_100mv
+      predictor: botorch_gp, botorch_gp_matern_3_2
   launcher:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
-    # partition: intel-sc3,wzt_20250411 # no spacing between names
-    # cpus_per_task: 15
-    # qos: huge
-    # mem_per_cpu: 8GB
-    # submitit_folder: slurm_logs
+    partition: intel-sc3,wzt_20250411 # no spacing between names
+    cpus_per_task: 6
+    qos: huge
+    mem_per_cpu: 16GB
+    submitit_folder: slurm_logs
