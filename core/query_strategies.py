@@ -157,12 +157,23 @@ class BoTorchAcquisition(QueryStrategyBase):
         beta: float = 2.0,
         maximize: bool = True,
         seed: int | None = None,
+        num_mv_samples: int = 10,
+        max_value_sampling: str = "gumbel",
+        num_optima: int = 32,
+        num_samples: int | None = None,
     ) -> None:
         super().__init__(f"BOTORCH_{acquisition.upper()}")
         self.acquisition = acquisition.lower()
         self.beta = beta
         self.maximize = maximize
         self.seed = seed
+        self.num_mv_samples = max(1, int(num_mv_samples))
+        sampling = str(max_value_sampling).lower()
+        if sampling not in {"gumbel", "thompson"}:
+            raise ValueError("max_value_sampling must be 'gumbel' or 'thompson'.")
+        self.use_gumbel = sampling == "gumbel"
+        self.num_optima = max(1, int(num_optima))
+        self.num_samples = max(1, int(num_samples)) if num_samples is not None else None
 
     def _select_batch(
         self, experiment: Any, unlabeled_pool: list[int], batch_size: int
@@ -195,23 +206,20 @@ class BoTorchAcquisition(QueryStrategyBase):
         X_tensor = self._to_model_tensor(torch, botorch_model, X_pool)
         X_train_tensor = self._to_model_tensor(torch, botorch_model, X_train)
 
-        if self.acquisition == "ts":
-            scores = self._thompson_scores(torch, botorch_model, X_tensor)
-        else:
-            acq = self._build_acquisition(
-                torch=torch,
-                model=botorch_model,
-                best_f=float(best_f),
-                train_X=X_train_tensor.squeeze(-2),
-                candidate_set=X_tensor.squeeze(-2),
-            )
-            with torch.no_grad():
-                scores = acq(X_tensor).detach().cpu().numpy().reshape(-1)
-
-        rank_scores = scores if self.maximize else -scores
-        top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
-        selected_indices = [unlabeled_pool[i] for i in top_k_local]
-        return selected_indices
+        acq = self._build_acquisition(
+            torch=torch,
+            model=botorch_model,
+            best_f=float(best_f),
+            train_X=X_train_tensor.squeeze(-2),
+            candidate_set=X_tensor.squeeze(-2),
+        )
+        selected_local = self._optimize_discrete(
+            torch=torch,
+            acq=acq,
+            candidate_set=X_tensor.squeeze(-2),
+            batch_size=batch_size,
+        )
+        return [unlabeled_pool[i] for i in selected_local]
 
     def _import_torch(self):
         import torch
@@ -235,6 +243,21 @@ class BoTorchAcquisition(QueryStrategyBase):
             "X_baseline": train_X,
             "candidate_set": candidate_set,
         }
+        if self.acquisition in {"mes", "gibbon"}:
+            if self.num_mv_samples is not None:
+                kwargs["num_mv_samples"] = self.num_mv_samples
+            kwargs["use_gumbel"] = self.use_gumbel
+        if self.acquisition in {"pes", "jes"}:
+            optimal_inputs, optimal_outputs = self._sample_optima_from_candidates(
+                torch=torch,
+                model=model,
+                candidate_set=candidate_set,
+                num_optima=self.num_optima,
+            )
+            kwargs["optimal_inputs"] = optimal_inputs
+            kwargs["optimal_outputs"] = optimal_outputs
+            if self.num_samples is not None:
+                kwargs["num_samples"] = self.num_samples
         return self._init_acquisition(acq_class, **kwargs)
 
     def _resolve_acquisition_class(self):
@@ -250,17 +273,37 @@ class BoTorchAcquisition(QueryStrategyBase):
             from botorch.acquisition.analytic import UpperConfidenceBound
 
             return UpperConfidenceBound
+        if self.acquisition == "ts":
+            from botorch.acquisition.thompson_sampling import PathwiseThompsonSampling
+
+            return PathwiseThompsonSampling
         if self.acquisition in {"log_nei", "qlog_nei"}:
             from botorch.acquisition.logei import qLogNoisyExpectedImprovement
 
             return qLogNoisyExpectedImprovement
-        if self.acquisition in {"mes", "qmes"}:
+        if self.acquisition == "mes":
             from botorch.acquisition.max_value_entropy_search import qMaxValueEntropy
 
             return qMaxValueEntropy
+        if self.acquisition == "gibbon":
+            from botorch.acquisition.max_value_entropy_search import (
+                qLowerBoundMaxValueEntropy,
+            )
+
+            return qLowerBoundMaxValueEntropy
+        if self.acquisition == "pes":
+            from botorch.acquisition.predictive_entropy_search import (
+                qPredictiveEntropySearch,
+            )
+
+            return qPredictiveEntropySearch
+        if self.acquisition == "jes":
+            from botorch.acquisition.joint_entropy_search import qJointEntropySearch
+
+            return qJointEntropySearch
         raise ValueError(
             f"Unsupported acquisition '{self.acquisition}'. Use one of: "
-            "log_ei, log_pi, qlog_nei, ucb, ts, mes."
+            "log_ei, log_pi, qlog_nei, ucb, ts, mes, gibbon, pes, jes."
         )
 
     def _init_acquisition(self, acq_class, **kwargs):
@@ -268,13 +311,46 @@ class BoTorchAcquisition(QueryStrategyBase):
         filtered = {key: value for key, value in kwargs.items() if key in params}
         return acq_class(**filtered)
 
-    def _thompson_scores(self, torch, model, X_tensor):
+    def _optimize_discrete(self, torch, acq, candidate_set, batch_size: int):
+        from botorch.optim import optimize_acqf_discrete
+
+        candidates, _ = optimize_acqf_discrete(
+            acq_function=acq,
+            choices=candidate_set,
+            q=batch_size,
+            unique=True,
+        )
+        return self._map_candidates_to_indices(torch, candidate_set, candidates)
+
+    def _map_candidates_to_indices(self, torch, candidate_set, candidates):
+        indices: list[int] = []
+        for cand in candidates:
+            matches = (candidate_set == cand).all(dim=-1)
+            if matches.any():
+                indices.append(int(matches.nonzero(as_tuple=True)[0][0]))
+            else:
+                distances = torch.cdist(cand.unsqueeze(0), candidate_set)
+                indices.append(int(distances.argmin(dim=1)[0]))
+        return indices
+
+    def _sample_optima_from_candidates(
+        self, torch, model, candidate_set, num_optima: int
+    ):
+        candidate = (
+            candidate_set.squeeze(-2) if candidate_set.ndim == 3 else candidate_set
+        )
         with torch.no_grad():
-            posterior = model.posterior(X_tensor)
-            samples = posterior.rsample(sample_shape=torch.Size([1]))
-        scores = samples.squeeze(0)
-        scores = scores.squeeze(-1)
-        return scores.detach().cpu().numpy().reshape(-1)
+            posterior = model.posterior(candidate)
+            samples = posterior.rsample(sample_shape=torch.Size([num_optima]))
+        values = samples.squeeze(-1)
+        if self.maximize:
+            best_idx = values.argmax(dim=1)
+        else:
+            best_idx = values.argmin(dim=1)
+        optimal_inputs = candidate.index_select(0, best_idx)
+        row_idx = torch.arange(num_optima, device=best_idx.device)
+        optimal_outputs = values[row_idx, best_idx].unsqueeze(-1)
+        return optimal_inputs, optimal_outputs
 
     def _unwrap_estimator(self, estimator: Any):
         if estimator is None:
