@@ -4,3 +4,4 @@ maximize: true
 seed: null
 num_optima: 32
 num_samples: 64
+discrete_optimizer: exact

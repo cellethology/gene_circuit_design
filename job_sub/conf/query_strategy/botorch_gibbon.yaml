@@ -4,3 +4,4 @@ maximize: true
 seed: null
 num_mv_samples: 10
 max_value_sampling: gumbel
+discrete_optimizer: exact

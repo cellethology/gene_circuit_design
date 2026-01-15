@@ -161,6 +161,7 @@ class BoTorchAcquisition(QueryStrategyBase):
         max_value_sampling: str = "gumbel",
         num_optima: int = 32,
         num_samples: int | None = None,
+        discrete_optimizer: str = "exact",
     ) -> None:
         super().__init__(f"BOTORCH_{acquisition.upper()}")
         self.acquisition = acquisition.lower()
@@ -174,6 +175,12 @@ class BoTorchAcquisition(QueryStrategyBase):
         self.use_gumbel = sampling == "gumbel"
         self.num_optima = max(1, int(num_optima))
         self.num_samples = max(1, int(num_samples)) if num_samples is not None else None
+        optimizer = str(discrete_optimizer).lower()
+        if optimizer not in {"exact", "local", "greedy"}:
+            raise ValueError(
+                "discrete_optimizer must be 'exact', 'local', or 'greedy'."
+            )
+        self.discrete_optimizer = optimizer
 
     def _select_batch(
         self, experiment: Any, unlabeled_pool: list[int], batch_size: int
@@ -213,6 +220,17 @@ class BoTorchAcquisition(QueryStrategyBase):
             train_X=X_train_tensor.squeeze(-2),
             candidate_set=X_tensor.squeeze(-2),
         )
+        if self.acquisition == "ts":
+            logger.info(
+                "BOTORCH_TS: using direct posterior sampling for batch selection."
+            )
+            selected_local = self._select_thompson_batch(
+                torch=torch,
+                model=botorch_model,
+                X_tensor=X_tensor,
+                batch_size=batch_size,
+            )
+            return [unlabeled_pool[i] for i in selected_local]
         selected_local = self._optimize_discrete(
             torch=torch,
             acq=acq,
@@ -312,15 +330,58 @@ class BoTorchAcquisition(QueryStrategyBase):
         return acq_class(**filtered)
 
     def _optimize_discrete(self, torch, acq, candidate_set, batch_size: int):
-        from botorch.optim import optimize_acqf_discrete
+        if self.discrete_optimizer == "greedy":
+            with torch.no_grad():
+                scores = (
+                    acq(candidate_set.unsqueeze(-2)).detach().cpu().numpy().reshape(-1)
+                )
+            rank_scores = scores if self.maximize else -scores
+            top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
+            return [int(idx) for idx in top_k_local]
+        if self.discrete_optimizer == "local":
+            from botorch.optim import optimize_acqf_discrete_local_search
 
-        candidates, _ = optimize_acqf_discrete(
-            acq_function=acq,
-            choices=candidate_set,
-            q=batch_size,
-            unique=True,
-        )
+            candidates, _ = optimize_acqf_discrete_local_search(
+                acq_function=acq,
+                choices=candidate_set,
+                q=batch_size,
+                unique=True,
+            )
+        else:
+            from botorch.optim import optimize_acqf_discrete
+
+            candidates, _ = optimize_acqf_discrete(
+                acq_function=acq,
+                choices=candidate_set,
+                q=batch_size,
+                unique=True,
+            )
         return self._map_candidates_to_indices(torch, candidate_set, candidates)
+
+    def _select_thompson_batch(self, torch, model, X_tensor, batch_size: int):
+        with torch.no_grad():
+            posterior = model.posterior(X_tensor)
+            samples = posterior.rsample(sample_shape=torch.Size([batch_size]))
+        values = samples.squeeze(-1)
+        if values.ndim > 2:
+            values = values.squeeze(-1)
+        if self.maximize:
+            picks = values.argmax(dim=1)
+        else:
+            picks = values.argmin(dim=1)
+        selected: list[int] = []
+        for idx in picks.tolist():
+            if idx not in selected:
+                selected.append(int(idx))
+        if len(selected) < batch_size:
+            mean_scores = values.mean(dim=0)
+            rank_scores = mean_scores if self.maximize else -mean_scores
+            for idx in torch.argsort(rank_scores, descending=True).tolist():
+                if idx not in selected:
+                    selected.append(int(idx))
+                    if len(selected) == batch_size:
+                        break
+        return selected[:batch_size]
 
     def _map_candidates_to_indices(self, torch, candidate_set, candidates):
         indices: list[int] = []
