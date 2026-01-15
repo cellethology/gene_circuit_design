@@ -11,7 +11,7 @@ import torch
 from botorch.fit import fit_gpytorch_mll
 from botorch.models import SingleTaskGP
 from gpytorch.constraints import GreaterThan
-from gpytorch.kernels import RBFKernel, ScaleKernel
+from gpytorch.kernels import MaternKernel, RBFKernel, ScaleKernel
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.priors import GammaPrior
@@ -28,12 +28,14 @@ class BoTorchGPRegressor(RegressorMixin):
         device: str = "cpu",
         dtype: str = "float64",
         ard: bool = False,
+        kernel: str = "rbf",
         noise_constraint: float | None = None,
         noise_prior: tuple[float, float] | None = None,
     ) -> None:
         self.device = device
         self.dtype = dtype
         self.ard = ard
+        self.kernel = kernel
         self.noise_constraint = noise_constraint
         self.noise_prior = noise_prior
         self.model_: SingleTaskGP | None = None
@@ -43,6 +45,7 @@ class BoTorchGPRegressor(RegressorMixin):
             "device": self.device,
             "dtype": self.dtype,
             "ard": self.ard,
+            "kernel": self.kernel,
             "noise_constraint": self.noise_constraint,
             "noise_prior": self.noise_prior,
         }
@@ -56,8 +59,7 @@ class BoTorchGPRegressor(RegressorMixin):
         X_tensor = self._to_tensor(X)
         y_tensor = self._to_tensor(y).view(-1, 1)
 
-        ard_dims = X_tensor.shape[-1] if self.ard else None
-        covar_module = ScaleKernel(RBFKernel(ard_num_dims=ard_dims))
+        covar_module = self._build_kernel(X_tensor)
         likelihood = self._build_likelihood()
 
         self.model_ = SingleTaskGP(
@@ -128,6 +130,24 @@ class BoTorchGPRegressor(RegressorMixin):
                 "noise",
             )
         return likelihood
+
+    def _build_kernel(self, X_tensor: torch.Tensor) -> ScaleKernel:
+        ard_dims = X_tensor.shape[-1] if self.ard else None
+        kernel_key = str(self.kernel).lower()
+        if kernel_key in {"rbf", "se", "squared_exponential"}:
+            base_kernel = RBFKernel(ard_num_dims=ard_dims)
+        elif kernel_key in {"matern_12", "matern12", "matern_1/2", "matern-1/2"}:
+            base_kernel = MaternKernel(nu=0.5, ard_num_dims=ard_dims)
+        elif kernel_key in {"matern_32", "matern32", "matern_3/2", "matern-3/2"}:
+            base_kernel = MaternKernel(nu=1.5, ard_num_dims=ard_dims)
+        elif kernel_key in {"matern_52", "matern52", "matern_5/2", "matern-5/2"}:
+            base_kernel = MaternKernel(nu=2.5, ard_num_dims=ard_dims)
+        else:
+            raise ValueError(
+                "Unsupported kernel "
+                f"'{self.kernel}'. Use rbf, matern_12, matern_32, or matern_52."
+            )
+        return ScaleKernel(base_kernel)
 
     def _to_tensor(self, array: np.ndarray) -> torch.Tensor:
         device = self._resolve_device()
