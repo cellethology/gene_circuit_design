@@ -24,9 +24,10 @@ from tqdm import tqdm
 SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
     "avg_top": ("top_mean", "n_top"),
+    "rounds_to_top": ("rounds_to_top", "n_top"),
     "overall_true": ("max_overall", "normalized_true"),
     "max_train_spearman": ("max_overall", "train_spearman"),
-    "max_pool_spearman": ("max_overall", "pool_spearman"),
+    "max_extreme_value_auc": ("max_overall", "extreme_value_auc"),
 }
 
 
@@ -117,6 +118,9 @@ def _compute_summary(rows: list[dict[str, Any]]) -> dict[str, float]:
             summary[metric_name] = (
                 float(np.max(finite)) if finite.size else float("nan")
             )
+        elif rule == "rounds_to_top":
+            hits = np.where(values >= 1)[0]
+            summary[metric_name] = float(hits[0] + 1) if hits.size else float("nan")
         else:
             raise ValueError(f"Unknown summary metric rule: {rule}")
 

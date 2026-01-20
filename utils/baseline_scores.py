@@ -215,7 +215,7 @@ def compute_random_summary_metrics_history(
                 "avg_top": float(cumulative_n_top_sum[idx] / denom) if denom else 0.0,
                 "overall_true": float(cumulative_max[idx]),
                 "max_train_spearman": float("nan"),
-                "max_pool_spearman": float("nan"),
+                "max_extreme_value_auc": float("nan"),
             }
         )
     return history
@@ -312,7 +312,9 @@ def main() -> None:
                         "auc_true": summary_metrics["auc_true"],
                         "avg_top": summary_metrics["avg_top"],
                         "max_train_spearman": summary_metrics["max_train_spearman"],
-                        "max_pool_spearman": summary_metrics["max_pool_spearman"],
+                        "max_extreme_value_auc": summary_metrics[
+                            "max_extreme_value_auc"
+                        ],
                         "dataset_max_label": dataset_max_label,
                     }
                 )

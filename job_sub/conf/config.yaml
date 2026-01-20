@@ -17,7 +17,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 30
+num_seeds_per_job: 20
 parallelize_seeds: true
 
 # active learning settings
@@ -48,7 +48,7 @@ hydra:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 6
+    cpus_per_task: 20
     qos: huge
     mem_per_cpu: 16GB
     submitit_folder: slurm_logs

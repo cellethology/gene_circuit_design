@@ -6,6 +6,7 @@ import logging
 
 import numpy as np
 from scipy.stats import spearmanr
+from sklearn.metrics import roc_auc_score
 
 logger = logging.getLogger(__name__)
 
@@ -64,24 +65,31 @@ class MetricsCalculator:
             indices=train_indices,
             predictions=train_predictions,
         )
-        pool_spearman = self._compute_spearman(
-            indices=pool_indices,
-            predictions=pool_predictions,
-        )
-        if not np.isnan(train_spearman):
-            pool_text = f"{pool_spearman:.3f}" if not np.isnan(pool_spearman) else "n/a"
-            logger.info(
-                "Train Spearman: %.3f, Pool Spearman: %s",
-                train_spearman,
-                pool_text,
+
+        dataset_indices = np.concatenate([train_indices, pool_indices])
+        dataset_predictions = None
+        if train_predictions is not None and pool_predictions is not None:
+            dataset_predictions = np.concatenate(
+                [np.asarray(train_predictions), np.asarray(pool_predictions)]
             )
+        dataset_auc = self._compute_auc(
+            indices=dataset_indices,
+            predictions=dataset_predictions,
+            top_p=top_p,
+        )
+
+        logger.info(
+            "Normalized Best Label: %.3f, Extreme-value AUC: %.3f",
+            normalized_true_values,
+            dataset_auc,
+        )
 
         return {
             "n_top": n_top,
             "best_true": self._round_metric(best_value_true),
             "normalized_true": self._round_metric(normalized_true_values),
             "train_spearman": self._round_metric(train_spearman),
-            "pool_spearman": self._round_metric(pool_spearman),
+            "extreme_value_auc": self._round_metric(dataset_auc),
         }
 
     def n_selected_in_top(
@@ -94,6 +102,10 @@ class MetricsCalculator:
             selected_indices: Indices of selected sequences
             top_p: Percentage of top labels to consider
         """
+        top_labels = self._get_top_label_indices(top_p)
+        return int(len(np.intersect1d(selected_indices, top_labels)))
+
+    def _get_top_label_indices(self, top_p: float) -> np.ndarray:
         if not 0.0 < top_p <= 1.0:
             raise ValueError("top_p must be between 0.0 and 1.0")
 
@@ -102,7 +114,25 @@ class MetricsCalculator:
             num_top = max(1, int(len(self.labels) * top_p))
             top_labels = self._sorted_label_indices[-num_top:]
             self._top_cache[top_p] = top_labels
-        return int(len(np.intersect1d(selected_indices, top_labels)))
+        return top_labels
+
+    def _compute_auc(
+        self, indices: np.ndarray, predictions: np.ndarray | None, top_p: float
+    ) -> float:
+        if predictions is None or len(indices) < 2:
+            return float("nan")
+        top_labels = self._get_top_label_indices(top_p)
+        binary_labels = np.isin(indices, top_labels).astype(int)
+        if np.min(binary_labels) == np.max(binary_labels):
+            return float("nan")
+        preds = np.asarray(predictions).ravel()
+        if preds.size != len(indices):
+            return float("nan")
+        try:
+            auc = roc_auc_score(binary_labels, preds)
+        except ValueError:
+            return float("nan")
+        return float(auc)
 
     def _compute_spearman(
         self, indices: np.ndarray, predictions: np.ndarray | None
