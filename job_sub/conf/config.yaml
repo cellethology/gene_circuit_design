@@ -48,7 +48,7 @@ hydra:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 20
+    cpus_per_task: 10
     qos: huge
     mem_per_cpu: 8GB
     submitit_folder: slurm_logs
