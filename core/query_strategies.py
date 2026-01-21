@@ -333,20 +333,14 @@ class BoTorchAcquisition(QueryStrategyBase):
         if self.discrete_optimizer == "greedy":
             return self._greedy_indices(acq, candidate_set, batch_size)
         if self.discrete_optimizer == "local":
-            try:
-                from botorch.optim import optimize_acqf_discrete_local_search
+            from botorch.optim import optimize_acqf_discrete_local_search
 
-                candidates, _ = optimize_acqf_discrete_local_search(
-                    acq_function=acq,
-                    choices=candidate_set,
-                    q=batch_size,
-                    unique=True,
-                )
-            except Exception:
-                logger.exception(
-                    "Discrete local search failed; falling back to greedy selection."
-                )
-                return self._greedy_indices(acq, candidate_set, batch_size)
+            candidates, _ = optimize_acqf_discrete_local_search(
+                acq_function=acq,
+                discrete_choices=candidate_set,
+                q=batch_size,
+                unique=True,
+            )
         else:
             from botorch.optim import optimize_acqf_discrete
 
