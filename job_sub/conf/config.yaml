@@ -4,8 +4,8 @@ defaults:
   - initial_selection_strategy: core_set
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
-  - seed_mode: array
   - _self_
+  - seed_mode: array
   - override hydra/launcher: submitit_slurm
 
 # data paths
