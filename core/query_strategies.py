@@ -331,22 +331,22 @@ class BoTorchAcquisition(QueryStrategyBase):
 
     def _optimize_discrete(self, torch, acq, candidate_set, batch_size: int):
         if self.discrete_optimizer == "greedy":
-            with torch.no_grad():
-                scores = (
-                    acq(candidate_set.unsqueeze(-2)).detach().cpu().numpy().reshape(-1)
-                )
-            rank_scores = scores if self.maximize else -scores
-            top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
-            return [int(idx) for idx in top_k_local]
+            return self._greedy_indices(acq, candidate_set, batch_size)
         if self.discrete_optimizer == "local":
-            from botorch.optim import optimize_acqf_discrete_local_search
+            try:
+                from botorch.optim import optimize_acqf_discrete_local_search
 
-            candidates, _ = optimize_acqf_discrete_local_search(
-                acq_function=acq,
-                choices=candidate_set,
-                q=batch_size,
-                unique=True,
-            )
+                candidates, _ = optimize_acqf_discrete_local_search(
+                    acq_function=acq,
+                    choices=candidate_set,
+                    q=batch_size,
+                    unique=True,
+                )
+            except Exception:
+                logger.exception(
+                    "Discrete local search failed; falling back to greedy selection."
+                )
+                return self._greedy_indices(acq, candidate_set, batch_size)
         else:
             from botorch.optim import optimize_acqf_discrete
 
@@ -357,6 +357,15 @@ class BoTorchAcquisition(QueryStrategyBase):
                 unique=True,
             )
         return self._map_candidates_to_indices(torch, candidate_set, candidates)
+
+    def _greedy_indices(self, acq, candidate_set, batch_size: int) -> list[int]:
+        import torch
+
+        with torch.no_grad():
+            scores = acq(candidate_set.unsqueeze(-2)).detach().cpu().numpy().reshape(-1)
+        rank_scores = scores if self.maximize else -scores
+        top_k_local = np.argpartition(-rank_scores, batch_size - 1)[:batch_size]
+        return [int(idx) for idx in top_k_local]
 
     def _select_thompson_batch(self, torch, model, X_tensor, batch_size: int):
         with torch.no_grad():
