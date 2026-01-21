@@ -1,0 +1,7 @@
+seeds_as_jobs: true
+seed_sweep_values: ${seed_range:${num_seeds_per_job},${seed_start}}
+
+hydra:
+  sweeper:
+    params:
+      al_settings.seed: ${seed_sweep_values}

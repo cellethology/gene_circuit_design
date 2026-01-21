@@ -47,6 +47,13 @@ def ensure_resolvers() -> None:
         lambda value: Path(value).stem if value else "",
         replace=True,
     )
+    OmegaConf.register_new_resolver(
+        "seed_range",
+        lambda count, start=0: ",".join(
+            str(i) for i in range(int(start), int(start) + max(1, int(count)))
+        ),
+        replace=True,
+    )
 
     _resolvers_registered = True
 
