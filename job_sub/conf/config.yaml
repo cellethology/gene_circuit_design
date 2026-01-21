@@ -26,7 +26,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 9 # not including the initial selection
+  max_rounds: 19 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
