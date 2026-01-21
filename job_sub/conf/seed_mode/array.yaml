@@ -1,3 +1,4 @@
+# @package _global_
 seeds_as_jobs: true
 seed_sweep_values: ${seed_range:${num_seeds_per_job},${seed_start}}
 al_settings:
