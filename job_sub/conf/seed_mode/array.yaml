@@ -2,7 +2,7 @@
 seeds_as_jobs: true
 seed_sweep_values: ${seed_range:${num_seeds_per_job},${seed_start}}
 al_settings:
-  output_dir: ${hydra:sweep.dir}/${dataset_name}/${strip_override:${hydra.job.override_dirname},al_settings.seed}/seed_${al_settings.seed}
+  output_dir: ${hydra:sweep.dir}/${dataset_name}/${strip_override:${hydra:job.override_dirname},al_settings.seed}/seed_${al_settings.seed}
 
 hydra:
   sweeper:
