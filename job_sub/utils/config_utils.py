@@ -54,8 +54,23 @@ def ensure_resolvers() -> None:
         ),
         replace=True,
     )
+    OmegaConf.register_new_resolver(
+        "strip_override",
+        lambda text, key, default="default": _strip_override_entry(text, key, default),
+        replace=True,
+    )
 
     _resolvers_registered = True
+
+
+def _strip_override_entry(text: str, key: str, default: str) -> str:
+    """Remove a key=value entry from a comma-separated override list."""
+    if not text:
+        return default
+    parts = [item for item in str(text).split(",") if item]
+    filtered = [item for item in parts if not item.startswith(f"{key}=")]
+    result = ",".join(filtered).strip()
+    return result or default
 
 
 def load_dataset_configs(datasets_file: Path | None = None) -> list[DatasetConfig]:

@@ -4,7 +4,7 @@ defaults:
   - initial_selection_strategy: core_set
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
-  - seed_mode: inline
+  - seed_mode: array
   - _self_
   - override hydra/launcher: submitit_slurm
 
@@ -50,7 +50,7 @@ hydra:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 10
+    cpus_per_task: 1
     qos: huge
-    mem_per_cpu: 8GB
+    mem_per_cpu: 20GB
     submitit_folder: slurm_logs
