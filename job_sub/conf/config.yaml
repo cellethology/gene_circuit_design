@@ -42,8 +42,8 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_gibbon, topk, botorch_log_pi, botorch_qlog_nei, botorch_mes_100mv
-      predictor: botorch_gp, botorch_gp_matern_3_2
+      query_strategy: botorch_qlog_nei, botorch_mes_100mv, botorch_mes
+      predictor: botorch_gp
   launcher:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
