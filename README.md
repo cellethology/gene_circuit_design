@@ -222,7 +222,7 @@ python job_sub/aggregate_summaries.py \
 python plotting/averaged_performance_analysis.py \
   --results-base-path results/my_experiment \
   --output-dir plots/my_experiment \
-  --metric max_pool_spearman
+  --metric max_extreme_value_auc
 ```
 
 ## Data Format

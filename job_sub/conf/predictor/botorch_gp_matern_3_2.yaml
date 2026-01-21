@@ -3,5 +3,5 @@ _target_: core.botorch_models.BoTorchGPRegressor
 device: auto
 dtype: float64
 ard: true
-kernel: rbf
+kernel: "matern_3/2"
 noise_constraint: 1e-6

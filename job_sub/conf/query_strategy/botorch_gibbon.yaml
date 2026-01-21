@@ -1,5 +1,5 @@
 _target_: core.query_strategies.BoTorchAcquisition
-acquisition: mes
+acquisition: gibbon
 maximize: true
 seed: null
 num_mv_samples: 10

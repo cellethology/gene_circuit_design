@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
     "avg_top": ("top_mean", "n_top"),
+    "rounds_to_top": ("rounds_to_top", "n_top"),
     "overall_true": ("max_overall", "normalized_true"),
     "max_train_spearman": ("max_overall", "train_spearman"),
-    "max_pool_spearman": ("max_overall", "pool_spearman"),
+    "max_extreme_value_auc": ("max_overall", "extreme_value_auc"),
 }
 
 
@@ -126,6 +127,11 @@ class RoundTracker:
                 finite = values[np.isfinite(values)]
                 summary_values[metric_name] = (
                     float(np.max(finite)) if finite.size else float("nan")
+                )
+            elif rule == "rounds_to_top":
+                hits = np.where(values >= 1)[0]
+                summary_values[metric_name] = (
+                    float(hits[0] + 1) if hits.size else float("nan")
                 )
             else:
                 raise ValueError(

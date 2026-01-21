@@ -119,9 +119,10 @@ def run_one_experiment(
         "seed": seed,
         "auc_true": summary_metrics["auc_true"],
         "avg_top": summary_metrics["avg_top"],
+        "rounds_to_top": summary_metrics["rounds_to_top"],
         "overall_true": summary_metrics["overall_true"],
         "max_train_spearman": summary_metrics["max_train_spearman"],
-        "max_pool_spearman": summary_metrics["max_pool_spearman"],
+        "max_extreme_value_auc": summary_metrics["max_extreme_value_auc"],
         "summary_by_round": summary_metrics_history,
         "hydra_overrides": overrides,
     }

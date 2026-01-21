@@ -1,3 +1,4 @@
 _target_: core.query_strategies.BoTorchAcquisition
 acquisition: log_pi
 maximize: true
+discrete_optimizer: greedy

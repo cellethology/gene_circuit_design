@@ -1,7 +1,7 @@
 _target_: core.query_strategies.BoTorchAcquisition
-acquisition: mes
+acquisition: pes
 maximize: true
 seed: null
-num_mv_samples: 10
-max_value_sampling: gumbel
+num_optima: 32
+num_samples: 64
 discrete_optimizer: exact

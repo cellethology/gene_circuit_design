@@ -203,6 +203,13 @@ def compute_random_summary_metrics_history(
     selected_per_round = np.full(num_rounds, num_samples_per_round, dtype=np.float64)
     cumulative_selected = np.cumsum(selected_per_round)
     cumulative_selected_sum = np.cumsum(cumulative_selected)
+    top_hits = np.where(n_top >= 1)[0]
+    if top_hits.size:
+        first_hit = float(top_hits[0] + 1)
+        rounds_to_top_history = np.full(num_rounds, first_hit, dtype=np.float64)
+        rounds_to_top_history[: int(first_hit) - 1] = np.nan
+    else:
+        rounds_to_top_history = np.full(num_rounds, np.nan, dtype=np.float64)
 
     history: list[dict[str, float]] = []
     for idx in range(num_rounds):
@@ -213,9 +220,10 @@ def compute_random_summary_metrics_history(
                 "round": idx,
                 "auc_true": float(cumulative_max_sum[idx] / prefix_len),
                 "avg_top": float(cumulative_n_top_sum[idx] / denom) if denom else 0.0,
+                "rounds_to_top": float(rounds_to_top_history[idx]),
                 "overall_true": float(cumulative_max[idx]),
                 "max_train_spearman": float("nan"),
-                "max_pool_spearman": float("nan"),
+                "max_extreme_value_auc": float("nan"),
             }
         )
     return history
@@ -311,8 +319,11 @@ def main() -> None:
                         "overall_true": summary_metrics["overall_true"],
                         "auc_true": summary_metrics["auc_true"],
                         "avg_top": summary_metrics["avg_top"],
+                        "rounds_to_top": summary_metrics["rounds_to_top"],
                         "max_train_spearman": summary_metrics["max_train_spearman"],
-                        "max_pool_spearman": summary_metrics["max_pool_spearman"],
+                        "max_extreme_value_auc": summary_metrics[
+                            "max_extreme_value_auc"
+                        ],
                         "dataset_max_label": dataset_max_label,
                     }
                 )
