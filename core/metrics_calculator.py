@@ -30,6 +30,7 @@ class MetricsCalculator:
         )
         self._sorted_label_indices = np.argsort(self.labels)
         self._top_cache: dict[float, np.ndarray] = {}
+        self._bottom_cache: dict[float, np.ndarray] = {}
 
     def compute_metrics_for_round(
         self,
@@ -122,17 +123,34 @@ class MetricsCalculator:
         if predictions is None or len(indices) < 2:
             return float("nan")
         top_labels = self._get_top_label_indices(top_p)
-        binary_labels = np.isin(indices, top_labels).astype(int)
-        if np.min(binary_labels) == np.max(binary_labels):
+        bottom_labels = self._get_bottom_label_indices(top_p)
+        mask = np.isin(indices, np.concatenate([top_labels, bottom_labels]))
+        if np.count_nonzero(mask) < 2:
             return float("nan")
         preds = np.asarray(predictions).ravel()
         if preds.size != len(indices):
             return float("nan")
+        filtered_indices = indices[mask]
+        binary_labels = np.isin(filtered_indices, top_labels).astype(int)
+        if np.min(binary_labels) == np.max(binary_labels):
+            return float("nan")
+        preds = preds[mask]
         try:
             auc = roc_auc_score(binary_labels, preds)
         except ValueError:
             return float("nan")
         return float(auc)
+
+    def _get_bottom_label_indices(self, top_p: float) -> np.ndarray:
+        if not 0.0 < top_p <= 1.0:
+            raise ValueError("top_p must be between 0.0 and 1.0")
+
+        bottom_labels = self._bottom_cache.get(top_p)
+        if bottom_labels is None:
+            num_bottom = max(1, int(len(self.labels) * top_p))
+            bottom_labels = self._sorted_label_indices[:num_bottom]
+            self._bottom_cache[top_p] = bottom_labels
+        return bottom_labels
 
     def _compute_spearman(
         self, indices: np.ndarray, predictions: np.ndarray | None
