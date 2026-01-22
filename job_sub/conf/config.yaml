@@ -2,7 +2,7 @@ defaults:
   - predictor: botorch_gp
   - query_strategy: botorch_log_pi
   - initial_selection_strategy: core_set
-  - transforms@feature_transforms: standardize
+  - transforms@feature_transforms: none
   - transforms@target_transforms: log_standardize
   - _self_
   - override hydra/launcher: submitit_slurm
@@ -12,7 +12,7 @@ datasets_file: datasets/166k_datasets.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
-embedding_model: enformer_evo2_concat
+embedding_model: compartment_onehot
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
