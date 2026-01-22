@@ -17,7 +17,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 20
+num_seeds_per_job: 1
 parallelize_seeds: true
 
 # active learning settings
@@ -42,7 +42,7 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: compartment_onehot
-      query_strategy: botorch_qlog_nei, botorch_mes_100mv, botorch_mes
+      query_strategy: topk
       predictor: botorch_gp
   launcher:
     timeout_min: 180
