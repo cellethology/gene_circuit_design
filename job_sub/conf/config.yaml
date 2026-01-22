@@ -41,7 +41,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
+      embedding_model: compartment_onehot
       query_strategy: botorch_qlog_nei, botorch_mes_100mv, botorch_mes
       predictor: botorch_gp
   launcher:
