@@ -43,7 +43,7 @@ hydra:
       initial_selection_strategy: core_set
       embedding_model: compartment_onehot
       query_strategy: topk
-      predictor: botorch_gp
+      predictor: rf_regressor, linear_regressor, bayes_ridge
   launcher:
     timeout_min: 180
     # everything below is used only for submitting jobs to the cluster
