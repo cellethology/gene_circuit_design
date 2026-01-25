@@ -230,7 +230,7 @@ class BoTorchRobustRelevancePursuitGPRegressor(_BoTorchBaseRegressor):
         self.cache_model_trace = cache_model_trace
         self.outcome_transform = outcome_transform
         self.input_transform = input_transform
-        self.model_kwargs = model_kwargs or {}
+        self.model_kwargs = model_kwargs
 
     def get_params(self, deep: bool = True) -> dict[str, Any]:
         params = super().get_params(deep=deep)
@@ -255,7 +255,9 @@ class BoTorchRobustRelevancePursuitGPRegressor(_BoTorchBaseRegressor):
         covar_module = self._build_kernel(X_tensor)
         model_cls = _resolve_rrp_model_class()
 
-        model_kwargs: dict[str, Any] = dict(self.model_kwargs)
+        model_kwargs: dict[str, Any] = (
+            dict(self.model_kwargs) if self.model_kwargs is not None else {}
+        )
         model_kwargs.update(
             {
                 "covar_module": covar_module.to(
