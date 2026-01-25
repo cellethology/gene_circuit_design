@@ -42,10 +42,10 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
+      initial_selection_strategy: core_set, probcover
+      embedding_model: onlypart_enformer_evo2_concat
       query_strategy: botorch_qlog_nei
-      predictor: botorch_rrp_gp
+      predictor: botorch_gp
   launcher:
     timeout_min: 360
     # everything below is used only for submitting jobs to the cluster
