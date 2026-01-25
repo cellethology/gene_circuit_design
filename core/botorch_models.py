@@ -255,21 +255,21 @@ class BoTorchRobustRelevancePursuitGPRegressor(_BoTorchBaseRegressor):
         covar_module = self._build_kernel(X_tensor)
         model_cls = _resolve_rrp_model_class()
 
-        model_kwargs: dict[str, Any] = {
-            "covar_module": covar_module.to(
-                device=X_tensor.device, dtype=X_tensor.dtype
-            ),
-            "convex_parameterization": self.convex_parameterization,
-            "prior_mean_of_support": self.prior_mean_of_support,
-            "cache_model_trace": self.cache_model_trace,
-        }
+        model_kwargs: dict[str, Any] = dict(self.model_kwargs)
+        model_kwargs.update(
+            {
+                "covar_module": covar_module.to(
+                    device=X_tensor.device, dtype=X_tensor.dtype
+                ),
+                "convex_parameterization": self.convex_parameterization,
+                "prior_mean_of_support": self.prior_mean_of_support,
+                "cache_model_trace": self.cache_model_trace,
+            }
+        )
         if self.input_transform is not None:
             model_kwargs["input_transform"] = self.input_transform
         if self.outcome_transform is not _DEFAULT_OUTCOME_TRANSFORM:
             model_kwargs["outcome_transform"] = self.outcome_transform
-        if self.model_kwargs:
-            model_kwargs.update(self.model_kwargs)
-
         self.model_ = model_cls(X_tensor, y_tensor, **model_kwargs)
         self.model_.train()
         mll = ExactMarginalLogLikelihood(self.model_.likelihood, self.model_)
