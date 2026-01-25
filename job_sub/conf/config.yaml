@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/166k_datasets.yaml
+datasets_file: datasets/1m_datasets.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
@@ -31,7 +31,7 @@ al_settings:
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  label_key: "Fold Change (Induced/Basal)"
+  label_key: "Dual Induced Exp (GFP, au)"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
@@ -42,8 +42,8 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set, probcover
-      embedding_model: onlypart_enformer_evo2_concat
+      initial_selection_strategy: core_set
+      embedding_model: enformer_evo2_concat
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
