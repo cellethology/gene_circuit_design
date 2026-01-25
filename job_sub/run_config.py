@@ -20,6 +20,7 @@ from job_sub.utils.config_utils import (
 from job_sub.utils.seed_jobs import run_seed_jobs
 from job_sub.utils.slurm_utils import wait_for_slurm_jobs
 from job_sub.utils.sweep_utils import collect_user_overrides
+from run_active_learning import run_one_experiment
 
 _SCRIPT_PATH = Path(__file__).resolve()
 _HYDRA_CHILD_ENV = "GENE_CIRCUIT_HYDRA_CHILD"
@@ -57,7 +58,10 @@ def run_one_job(cfg):
     """Run a single experiment with the given configuration (Hydra entrypoint)."""
     _ensure_thread_env()
     print(OmegaConf.to_yaml(cfg.al_settings))
-    run_seed_jobs(cfg)
+    if OmegaConf.select(cfg, "seeds_as_jobs", default=False):
+        run_one_experiment(cfg)
+    else:
+        run_seed_jobs(cfg)
 
 
 def main():

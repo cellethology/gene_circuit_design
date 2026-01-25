@@ -1,0 +1,12 @@
+# @package _global_
+seeds_as_jobs: true
+seed_sweep_values: ${seed_range:${num_seeds_per_job},${seed_start}}
+al_settings:
+  output_dir: ${hydra:runtime.output_dir}
+
+hydra:
+  sweep:
+    subdir: ${dataset_name}/${strip_override:${hydra:job.override_dirname},al_settings.seed}/seed_${al_settings.seed}
+  sweeper:
+    params:
+      al_settings.seed: ${seed_sweep_values}
