@@ -8,7 +8,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/166k_datasets.yaml
+datasets_file: datasets/1m_datasets.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
@@ -42,7 +42,7 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_qlog_nei, botorch_mes_100mv, botorch_mes
+      query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
     timeout_min: 180
