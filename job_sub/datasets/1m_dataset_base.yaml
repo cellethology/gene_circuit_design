@@ -1,0 +1,4 @@
+datasets:
+- name: 1m_dataset_base
+  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_1M/base_library_data_filtered.csv
+  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_1M/base_evo2_meanpool_block28_pca.npz
