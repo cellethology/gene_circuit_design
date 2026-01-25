@@ -17,7 +17,17 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.priors import GammaPrior
 from sklearn.base import RegressorMixin
 
-_DEFAULT_OUTCOME_TRANSFORM = object()
+
+def _get_default_outcome_transform():
+    return _DEFAULT_OUTCOME_TRANSFORM
+
+
+class _DefaultOutcomeTransformSentinel:
+    def __reduce__(self):
+        return _get_default_outcome_transform, ()
+
+
+_DEFAULT_OUTCOME_TRANSFORM = _DefaultOutcomeTransformSentinel()
 
 
 def _resolve_rrp_model_class():
