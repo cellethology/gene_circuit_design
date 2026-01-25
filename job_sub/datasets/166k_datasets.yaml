@@ -1,32 +1,4 @@
 datasets:
-- name: SynTF_Prom_part1_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Prom_part1_indices.txt
-- name: SynTF_Prom_part2_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Prom_part2_indices.txt
-- name: SynTF_Prom_part3_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Prom_part3_indices.txt
-- name: SynTF_Prom_part4_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Prom_part4_indices.txt
-- name: SynTF_Term_&_Sp_part10_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Term_&_Sp_part10_indices.txt
-- name: SynTF_Term_&_Sp_part11_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Term_&_Sp_part11_indices.txt
-- name: SynTF_Term_&_Sp_part12_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/SynTF_Term_&_Sp_part12_indices.txt
 - name: SynTF_Term_&_Sp_part1_indices
   metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
   embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
