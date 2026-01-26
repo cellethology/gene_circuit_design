@@ -248,7 +248,11 @@ class ActiveLearningExperiment:
         )
 
         if not self.unlabeled_indices:
-            logger.info("All samples have been selected. Stopping.")
+            logger.info(
+                "All samples have been selected. Stopping. train=%d total=%d",
+                len(self.train_indices),
+                len(self.dataset.sample_ids),
+            )
             return self.round_tracker.rounds
 
         if max_rounds <= 0:
@@ -261,6 +265,12 @@ class ActiveLearningExperiment:
 
         for round_num in range(max_rounds):
             logger.info(f"--- Round {round_num + 1} ---")
+            logger.info(
+                "Pool size before selection: %d (train=%d total=%d)",
+                len(self.unlabeled_indices),
+                len(self.train_indices),
+                len(self.dataset.sample_ids),
+            )
 
             if requires_model:
                 X_train = self.dataset.embeddings[self.train_indices, :]
@@ -280,7 +290,12 @@ class ActiveLearningExperiment:
 
             next_batch = self._select_next_batch()
             if not next_batch:
-                logger.info("No new samples selected. Stopping.")
+                logger.info(
+                    "No new samples selected. Stopping. pool=%d train=%d total=%d",
+                    len(self.unlabeled_indices),
+                    len(self.train_indices),
+                    len(self.dataset.sample_ids),
+                )
                 break
 
             self._evaluate_and_track(
@@ -295,7 +310,11 @@ class ActiveLearningExperiment:
             self.train_indices.extend(next_batch)
 
             if len(self.train_indices) == len(self.dataset.sample_ids):
-                logger.info("All samples have been selected. Stopping.")
+                logger.info(
+                    "All samples have been selected. Stopping. train=%d total=%d",
+                    len(self.train_indices),
+                    len(self.dataset.sample_ids),
+                )
                 break
         return self.round_tracker.rounds
 

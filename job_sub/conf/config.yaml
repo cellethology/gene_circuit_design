@@ -2,14 +2,14 @@ defaults:
   - predictor: botorch_gp
   - query_strategy: botorch_log_pi
   - initial_selection_strategy: core_set
-  - transforms@feature_transforms: standardize
+  - transforms@feature_transforms: variance_threshold_standardize
   - transforms@target_transforms: log_standardize
   - _self_
   - seed_mode: array
-  - override hydra/launcher: submitit_slurm
+  - override hydra/launcher: submitit_local
 
 # data paths
-datasets_file: datasets/166k_datasets.yaml
+datasets_file: datasets/test_local.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
@@ -18,7 +18,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 20
+num_seeds_per_job: 1
 seed_start: 0
 parallelize_seeds: true
 
@@ -49,8 +49,8 @@ hydra:
   launcher:
     timeout_min: 360
     # everything below is used only for submitting jobs to the cluster
-    partition: intel-sc3,wzt_20250411 # no spacing between names
-    cpus_per_task: 1
-    qos: huge
-    mem_per_cpu: 30GB
-    submitit_folder: slurm_logs
+    # partition: intel-sc3,wzt_20250411 # no spacing between names
+    # cpus_per_task: 1
+    # qos: huge
+    # mem_per_cpu: 30GB
+    # submitit_folder: slurm_logs
