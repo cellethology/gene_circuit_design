@@ -2,7 +2,7 @@ defaults:
   - predictor: botorch_gp
   - query_strategy: botorch_log_pi
   - initial_selection_strategy: core_set
-  - transforms@feature_transforms: variance_threshold_standardize
+  - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
   - _self_
   - seed_mode: array
