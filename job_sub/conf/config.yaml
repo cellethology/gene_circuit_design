@@ -31,7 +31,7 @@ al_settings:
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  label_key: "Dual Induced Exp (GFP, au)"
+  label_key: "and_score"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
