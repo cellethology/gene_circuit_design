@@ -28,7 +28,7 @@ _DATASET_ENV = "AL_DATASET_NAME"
 _METADATA_ENV = "AL_METADATA_PATH"
 _EMBED_DIR_ENV = "AL_EMBEDDING_ROOT"
 _SUBSET_ENV = "AL_SUBSET_IDS_PATH"
-_CONFIG_PATH = _SCRIPT_PATH.parent / "conf" / "config_166k_filtered.yaml"
+_CONFIG_PATH = _SCRIPT_PATH.parent / "conf" / "config.yaml"
 DATASETS, _ = load_datasets_or_raise(sys.argv[1:], _CONFIG_PATH)
 
 _THREAD_ENV_DEFAULTS = {
