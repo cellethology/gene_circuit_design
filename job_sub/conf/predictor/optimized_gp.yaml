@@ -1,0 +1,8 @@
+# BoTorch GP regressor with more conservative defaults for stability
+_target_: core.botorch_models.BoTorchGPRegressor
+device: auto
+dtype: float64
+ard: false
+kernel: matern_32
+noise_constraint: 1e-4
+noise_prior: [1.1, 0.1]
