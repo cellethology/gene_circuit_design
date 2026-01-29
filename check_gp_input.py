@@ -185,6 +185,10 @@ def _resolve_defaults(
     )
     if isinstance(sweeper_params, dict):
         sweeper_embedding_model = sweeper_params.get("embedding_model")
+    # Prefer sweeper embedding_model to mirror multirun defaults
+    effective_embedding_model = (
+        sweeper_embedding_model if sweeper_embedding_model else embedding_model
+    )
     embedding_path_raw = cfg.get("embedding_path") or dataset_entry.get(
         "embedding_path"
     )
@@ -197,18 +201,20 @@ def _resolve_defaults(
             resolved = embedding_path_raw
             if embedding_dir:
                 resolved = resolved.replace("${embedding_dir}", str(embedding_dir))
-            if embedding_model:
-                resolved = resolved.replace("${embedding_model}", str(embedding_model))
+            if effective_embedding_model:
+                resolved = resolved.replace(
+                    "${embedding_model}", str(effective_embedding_model)
+                )
             if "${" not in resolved:
                 embeddings_path = Path(resolved)
 
     if embeddings_path is None:
-        if not embedding_model:
+        if not effective_embedding_model:
             raise ValueError("embedding_model missing in config")
-        if str(embedding_model).endswith(".npz"):
-            embeddings_path = Path(embedding_dir) / str(embedding_model)
+        if str(effective_embedding_model).endswith(".npz"):
+            embeddings_path = Path(embedding_dir) / str(effective_embedding_model)
         else:
-            embeddings_path = Path(embedding_dir) / f"{embedding_model}.npz"
+            embeddings_path = Path(embedding_dir) / f"{effective_embedding_model}.npz"
 
     label_key = cfg.get("al_settings", {}).get("label_key", "and_score")
     subset_ids_path = _resolve_env(cfg.get("subset_ids_path"))
