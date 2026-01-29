@@ -159,16 +159,9 @@ def _resolve_defaults(
     datasets_file = cfg.get("datasets_file")
     if not datasets_file:
         raise ValueError("datasets_file missing in config")
-    datasets_path = (config_path.parent / datasets_file).resolve()
+    datasets_path = Path("job_sub/datasets") / Path(datasets_file).name
     if not datasets_path.exists():
-        # fallback for local clone when datasets_file path is different
-        fallback = Path("job_sub/datasets") / Path(datasets_file).name
-        if fallback.exists():
-            datasets_path = fallback.resolve()
-        else:
-            fallback = Path("job_sub/datasets/datasets.yaml").resolve()
-            if fallback.exists():
-                datasets_path = fallback
+        datasets_path = Path("job_sub/datasets/datasets.yaml")
 
     dataset_name = _resolve_env(cfg.get("dataset_name"))
     dataset_entry = _pick_dataset(datasets_path, dataset_name)
