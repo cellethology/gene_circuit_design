@@ -153,7 +153,7 @@ def _pick_dataset(
 
 def _resolve_defaults(
     config_path: Path,
-) -> tuple[Path, Path, str, Path | None]:
+) -> tuple[Path, Path, str, Path | None, str | None, str | None]:
     cfg = _load_yaml(config_path)
 
     datasets_file = cfg.get("datasets_file")
@@ -179,6 +179,12 @@ def _resolve_defaults(
         raise ValueError("embedding_dir not resolved from config or datasets file")
 
     embedding_model = cfg.get("embedding_model")
+    sweeper_embedding_model = None
+    sweeper_params = (
+        cfg.get("hydra", {}).get("sweeper", {}).get("params", {}) if cfg else {}
+    )
+    if isinstance(sweeper_params, dict):
+        sweeper_embedding_model = sweeper_params.get("embedding_model")
     embedding_path_raw = cfg.get("embedding_path") or dataset_entry.get(
         "embedding_path"
     )
@@ -214,6 +220,8 @@ def _resolve_defaults(
         Path(metadata_path),
         str(label_key),
         Path(subset_ids_path) if subset_ids_path else None,
+        str(embedding_model) if embedding_model is not None else None,
+        str(sweeper_embedding_model) if sweeper_embedding_model is not None else None,
     )
 
 
@@ -247,6 +255,8 @@ def main() -> int:
             metadata_path,
             label_key,
             subset_ids_path,
+            base_embedding_model,
+            sweeper_embedding_model,
         ) = _resolve_defaults(args.config)
         if args.embeddings:
             embeddings_path = args.embeddings
@@ -256,11 +266,23 @@ def main() -> int:
             label_key = args.label_key
         if args.subset_ids is not None:
             subset_ids_path = args.subset_ids
+    else:
+        base_embedding_model = None
+        sweeper_embedding_model = None
 
     print(f"embeddings path: {embeddings_path}")
     print(f"metadata path: {metadata_path}")
     print(f"label key: {label_key}")
     print(f"subset ids path: {subset_ids_path}")
+    if base_embedding_model is not None:
+        print(f"config embedding_model: {base_embedding_model}")
+    if sweeper_embedding_model is not None:
+        print(f"sweeper embedding_model: {sweeper_embedding_model}")
+        if base_embedding_model and sweeper_embedding_model != base_embedding_model:
+            print(
+                "note: sweeper embedding_model differs; in a Hydra multirun (-m) "
+                "the sweeper value will override the base config."
+            )
 
     embeddings, sample_ids = _load_embeddings(embeddings_path)
     subset_ids = _load_subset_ids(subset_ids_path, sample_ids.dtype)
