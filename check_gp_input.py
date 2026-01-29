@@ -32,7 +32,7 @@ def _load_embeddings(path: Path) -> tuple[np.ndarray, np.ndarray]:
     return embeddings, sample_ids
 
 
-def _load_subset_ids(path: Path | None) -> np.ndarray | None:
+def _load_subset_ids(path: Path | None, dtype: np.dtype) -> np.ndarray | None:
     if path is None:
         return None
     if not path.exists():
@@ -45,7 +45,7 @@ def _load_subset_ids(path: Path | None) -> np.ndarray | None:
         subset_ids.append(int(text))
     if not subset_ids:
         raise ValueError(f"Subset ids file {path} did not contain any sample ids.")
-    return np.asarray(subset_ids, dtype=np.int32)
+    return np.asarray(subset_ids, dtype=dtype)
 
 
 def _apply_subset(
@@ -179,10 +179,30 @@ def _resolve_defaults(
         raise ValueError("embedding_dir not resolved from config or datasets file")
 
     embedding_model = cfg.get("embedding_model")
-    if not embedding_model:
-        raise ValueError("embedding_model missing in config")
+    embedding_path_raw = cfg.get("embedding_path") or dataset_entry.get(
+        "embedding_path"
+    )
+    embeddings_path: Path | None = None
 
-    embeddings_path = Path(embedding_dir) / f"{embedding_model}.npz"
+    if embedding_path_raw and isinstance(embedding_path_raw, str):
+        if "${" not in embedding_path_raw:
+            embeddings_path = Path(embedding_path_raw)
+        else:
+            resolved = embedding_path_raw
+            if embedding_dir:
+                resolved = resolved.replace("${embedding_dir}", str(embedding_dir))
+            if embedding_model:
+                resolved = resolved.replace("${embedding_model}", str(embedding_model))
+            if "${" not in resolved:
+                embeddings_path = Path(resolved)
+
+    if embeddings_path is None:
+        if not embedding_model:
+            raise ValueError("embedding_model missing in config")
+        if str(embedding_model).endswith(".npz"):
+            embeddings_path = Path(embedding_dir) / str(embedding_model)
+        else:
+            embeddings_path = Path(embedding_dir) / f"{embedding_model}.npz"
 
     label_key = cfg.get("al_settings", {}).get("label_key", "and_score")
     subset_ids_path = _resolve_env(cfg.get("subset_ids_path"))
@@ -243,7 +263,7 @@ def main() -> int:
     print(f"subset ids path: {subset_ids_path}")
 
     embeddings, sample_ids = _load_embeddings(embeddings_path)
-    subset_ids = _load_subset_ids(subset_ids_path)
+    subset_ids = _load_subset_ids(subset_ids_path, sample_ids.dtype)
     embeddings, sample_ids = _apply_subset(embeddings, sample_ids, subset_ids)
 
     df = pd.read_csv(metadata_path)
