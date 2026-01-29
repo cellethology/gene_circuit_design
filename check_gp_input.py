@@ -249,6 +249,8 @@ def main() -> int:
         metadata_path = args.metadata
         label_key = args.label_key
         subset_ids_path = args.subset_ids
+        base_embedding_model = None
+        sweeper_embedding_model = None
     else:
         (
             embeddings_path,
@@ -266,9 +268,6 @@ def main() -> int:
             label_key = args.label_key
         if args.subset_ids is not None:
             subset_ids_path = args.subset_ids
-    else:
-        base_embedding_model = None
-        sweeper_embedding_model = None
 
     print(f"embeddings path: {embeddings_path}")
     print(f"metadata path: {metadata_path}")
