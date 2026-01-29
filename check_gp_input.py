@@ -9,10 +9,12 @@ and reports NaN/inf issues plus basic scale/stability stats.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 
 def _load_embeddings(path: Path) -> tuple[np.ndarray, np.ndarray]:
@@ -99,11 +101,116 @@ def _report_labels(labels: np.ndarray, log1p_check: bool) -> None:
             print("labels variance: 0 (all labels identical)")
 
 
+def _load_yaml(path: Path) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(f"YAML file not found: {path}")
+    with path.open("r", encoding="utf-8") as handle:
+        data = yaml.safe_load(handle)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in {path}, got {type(data)}")
+    return data
+
+
+def _resolve_env(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value.startswith("${env:") and value.endswith("}"):
+        inner = value[len("${env:") : -1]
+        if "," in inner:
+            var, default = inner.split(",", 1)
+            var = var.strip()
+            default = default.strip()
+        else:
+            var = inner.strip()
+            default = None
+        env_value = os.environ.get(var)
+        if env_value is not None and env_value != "":
+            return env_value
+        if default in {"null", "None", ""}:
+            return None
+        return default
+    return value
+
+
+def _pick_dataset(
+    datasets_file: Path, dataset_name: str | None
+) -> dict[str, str]:
+    data = _load_yaml(datasets_file)
+    datasets = data.get("datasets", [])
+    if not datasets:
+        raise ValueError(f"No datasets found in {datasets_file}")
+    if dataset_name:
+        for entry in datasets:
+            if entry.get("name") == dataset_name:
+                return entry
+        raise ValueError(
+            f"Dataset '{dataset_name}' not found in {datasets_file} (available: {len(datasets)})"
+        )
+    return datasets[0]
+
+
+def _resolve_defaults(
+    config_path: Path,
+) -> tuple[Path, Path, str, Path | None]:
+    cfg = _load_yaml(config_path)
+
+    datasets_file = cfg.get("datasets_file")
+    if not datasets_file:
+        raise ValueError("datasets_file missing in config")
+    datasets_path = (config_path.parent / datasets_file).resolve()
+    if not datasets_path.exists():
+        # fallback for local clone when datasets_file path is different
+        fallback = Path("job_sub/datasets/datasets.yaml").resolve()
+        if fallback.exists():
+            datasets_path = fallback
+
+    dataset_name = _resolve_env(cfg.get("dataset_name"))
+    dataset_entry = _pick_dataset(datasets_path, dataset_name)
+
+    metadata_path = _resolve_env(cfg.get("metadata_path")) or dataset_entry.get(
+        "metadata_path"
+    )
+    if not metadata_path:
+        raise ValueError("metadata_path not resolved from config or datasets file")
+
+    embedding_dir = _resolve_env(cfg.get("embedding_dir")) or dataset_entry.get(
+        "embedding_dir"
+    )
+    if not embedding_dir:
+        raise ValueError("embedding_dir not resolved from config or datasets file")
+
+    embedding_model = cfg.get("embedding_model")
+    if not embedding_model:
+        raise ValueError("embedding_model missing in config")
+
+    embeddings_path = Path(embedding_dir) / f"{embedding_model}.npz"
+
+    label_key = cfg.get("al_settings", {}).get("label_key", "and_score")
+    subset_ids_path = _resolve_env(cfg.get("subset_ids_path"))
+    if subset_ids_path is None:
+        subset_ids_path = dataset_entry.get("subset_ids_path")
+
+    return (
+        embeddings_path,
+        Path(metadata_path),
+        str(label_key),
+        Path(subset_ids_path) if subset_ids_path else None,
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--embeddings", required=True, type=Path)
-    parser.add_argument("--metadata", required=True, type=Path)
-    parser.add_argument("--label-key", default="and_score")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("job_sub/conf/config.yaml"),
+        help="Hydra config to resolve default dataset paths.",
+    )
+    parser.add_argument("--embeddings", type=Path)
+    parser.add_argument("--metadata", type=Path)
+    parser.add_argument("--label-key")
     parser.add_argument("--subset-ids", type=Path, default=None)
     parser.add_argument(
         "--check-log1p",
@@ -112,16 +219,42 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    embeddings, sample_ids = _load_embeddings(args.embeddings)
-    subset_ids = _load_subset_ids(args.subset_ids)
+    if args.embeddings and args.metadata and args.label_key:
+        embeddings_path = args.embeddings
+        metadata_path = args.metadata
+        label_key = args.label_key
+        subset_ids_path = args.subset_ids
+    else:
+        (
+            embeddings_path,
+            metadata_path,
+            label_key,
+            subset_ids_path,
+        ) = _resolve_defaults(args.config)
+        if args.embeddings:
+            embeddings_path = args.embeddings
+        if args.metadata:
+            metadata_path = args.metadata
+        if args.label_key:
+            label_key = args.label_key
+        if args.subset_ids is not None:
+            subset_ids_path = args.subset_ids
+
+    print(f"embeddings path: {embeddings_path}")
+    print(f"metadata path: {metadata_path}")
+    print(f"label key: {label_key}")
+    print(f"subset ids path: {subset_ids_path}")
+
+    embeddings, sample_ids = _load_embeddings(embeddings_path)
+    subset_ids = _load_subset_ids(subset_ids_path)
     embeddings, sample_ids = _apply_subset(embeddings, sample_ids, subset_ids)
 
-    df = pd.read_csv(args.metadata)
-    if args.label_key not in df.columns:
+    df = pd.read_csv(metadata_path)
+    if label_key not in df.columns:
         raise ValueError(
-            f"label_key '{args.label_key}' not found in metadata columns"
+            f"label_key '{label_key}' not found in metadata columns"
         )
-    labels = df.iloc[sample_ids][args.label_key].to_numpy()
+    labels = df.iloc[sample_ids][label_key].to_numpy()
 
     print(f"sample_ids count: {len(sample_ids)}")
     print(f"sample_ids unique: {len(np.unique(sample_ids))}")
