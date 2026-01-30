@@ -41,6 +41,7 @@ def _ensure_thread_env() -> None:
     """Cap per-process thread pools to avoid CPU oversubscription."""
     for key, value in _THREAD_ENV_DEFAULTS.items():
         os.environ.setdefault(key, value)
+    os.environ.setdefault("HYDRA_FULL_ERROR", "1")
 
 
 seed_env_from_datasets(
