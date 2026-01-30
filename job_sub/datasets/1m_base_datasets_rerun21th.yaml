@@ -1,0 +1,5 @@
+datasets:
+- name: base_Prom_SynTF_A_part2.0_indices
+  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_1M/base_data_with_scores.csv
+  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_1M/1m_base
+  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_1M/1m_subsets/1m_base_subsets/base_Prom_SynTF_A_part2.0_indices.txt
