@@ -275,20 +275,28 @@ class ActiveLearningExperiment:
             if requires_model:
                 X_train = self.dataset.embeddings[self.train_indices, :]
                 y_train = self.dataset.labels[self.train_indices]
-                self.trainer.train(X_train=X_train, y_train=y_train)
+                try:
+                    self.trainer.train(X_train=X_train, y_train=y_train)
+                except Exception:
+                    logger.exception("Training failed at round %d", round_num + 1)
+                    raise
             elif round_num == 0:
                 logger.info(
                     "Skipping model training because query strategy does not require a predictor."
                 )
 
-            (
-                train_indices,
-                train_predictions,
-                pool_indices,
-                pool_predictions,
-            ) = self._get_round_predictions(requires_model)
+            try:
+                (
+                    train_indices,
+                    train_predictions,
+                    pool_indices,
+                    pool_predictions,
+                ) = self._get_round_predictions(requires_model)
 
-            next_batch = self._select_next_batch()
+                next_batch = self._select_next_batch()
+            except Exception:
+                logger.exception("Selection failed at round %d", round_num + 1)
+                raise
             if not next_batch:
                 logger.info(
                     "No new samples selected. Stopping. pool=%d train=%d total=%d",

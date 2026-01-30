@@ -1,6 +1,6 @@
 defaults:
   - predictor: botorch_gp
-  - query_strategy: botorch_log_pi
+  - query_strategy: botorch_qlog_nei
   - initial_selection_strategy: core_set
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
@@ -43,7 +43,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat, compartment_onehot_pca
+      embedding_model: enformer_evo2_concat
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
