@@ -1,6 +1,6 @@
 defaults:
   - predictor: botorch_gp
-  - query_strategy: botorch_log_pi
+  - query_strategy: botorch_qlog_nei
   - initial_selection_strategy: core_set
   - transforms@feature_transforms: standardize
   - transforms@target_transforms: log_standardize
@@ -18,7 +18,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 20
+num_seeds_per_job: 50
 seed_start: 0
 parallelize_seeds: true
 
@@ -26,7 +26,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 9 # not including the initial selection
+  max_rounds: 24 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -42,8 +42,8 @@ hydra:
     subdir: ${dataset_name}/${hydra.job.override_dirname}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set, probcover
-      embedding_model: onlypart_enformer_evo2_concat
+      initial_selection_strategy: core_set
+      embedding_model: enformer_evo2_concat
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
