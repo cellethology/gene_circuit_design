@@ -1,12 +1,4 @@
 datasets:
-- name: Orientation_part1_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/Orientation_part1_indices.txt
-- name: Orientation_part2_indices
-  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
-  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
-  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/Orientation_part2_indices.txt
 - name: Rep_Term_Sp_part1_indices
   metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
   embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
@@ -107,3 +99,11 @@ datasets:
   metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
   embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
   subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/pMin_part3_indices.txt
+- name: Orientation_part1_indices
+  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
+  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/Orientation_part1_indices.txt
+- name: Orientation_part2_indices
+  metadata_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+  embedding_dir: /storage/wangzitongLab_tmp/share/Rai_2024_166k
+  subset_ids_path: /storage/wangzitongLab_tmp/share/Rai_2024_166k/166k_subsets/Orientation_part2_indices.txt
