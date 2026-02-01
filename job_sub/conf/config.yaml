@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/1m_base_datasets_rerun0131.yaml
+datasets_file: datasets/1m_base_datasets_onehot1.yaml
 dataset_name: ${env:AL_DATASET_NAME}
 metadata_path: ${env:AL_METADATA_PATH}
 embedding_dir: ${env:AL_EMBEDDING_ROOT}
@@ -43,7 +43,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
+      embedding_model: base_compartment_onehot
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
