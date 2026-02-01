@@ -18,7 +18,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 70
+num_seeds_per_job: 50
 seed_start: 0
 parallelize_seeds: true
 
@@ -43,7 +43,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
+      embedding_model: enformer_evo2_concat, evo2_meanpool_block28_pca8, enformer_pca32, generanno_meanpool_pca, ntv3_pca, evo2_7b_262k_meanpool_block28_pca
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
