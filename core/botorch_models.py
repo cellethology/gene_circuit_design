@@ -61,13 +61,11 @@ class _BoTorchBaseRegressor(RegressorMixin):
         dtype: str = "float64",
         ard: bool = False,
         kernel: str = "rbf",
-        fit_method: str = "torch",
     ) -> None:
         self.device = device
         self.dtype = dtype
         self.ard = ard
         self.kernel = kernel
-        self.fit_method = fit_method
         self.model_: Any | None = None
 
     def get_params(self, deep: bool = True) -> dict[str, Any]:
@@ -76,7 +74,6 @@ class _BoTorchBaseRegressor(RegressorMixin):
             "dtype": self.dtype,
             "ard": self.ard,
             "kernel": self.kernel,
-            "fit_method": self.fit_method,
         }
 
     def set_params(self, **params: Any):
@@ -151,23 +148,7 @@ class _BoTorchBaseRegressor(RegressorMixin):
             )
 
     def _fit_mll(self, mll: ExactMarginalLogLikelihood) -> None:
-        method = str(self.fit_method).lower().strip()
-        if method in {"torch", "fit_gpytorch_mll"}:
-            fit_gpytorch_mll(mll)
-            return
-        if method in {"scipy", "fit_gpytorch_mll_scipy"}:
-            try:
-                from botorch.fit import fit_gpytorch_mll_scipy
-            except Exception as exc:  # pragma: no cover - import guard
-                raise ImportError(
-                    "fit_gpytorch_mll_scipy is not available. Install scipy and "
-                    "use a BoTorch version that provides fit_gpytorch_mll_scipy."
-                ) from exc
-            fit_gpytorch_mll_scipy(mll)
-            return
-        raise ValueError(
-            f"Unsupported fit_method '{self.fit_method}'. Use 'torch' or 'scipy'."
-        )
+        fit_gpytorch_mll(mll)
 
 
 class BoTorchGPRegressor(_BoTorchBaseRegressor):
@@ -183,14 +164,12 @@ class BoTorchGPRegressor(_BoTorchBaseRegressor):
         kernel: str = "rbf",
         noise_constraint: float | None = None,
         noise_prior: tuple[float, float] | None = None,
-        fit_method: str = "torch",
     ) -> None:
         super().__init__(
             device=device,
             dtype=dtype,
             ard=ard,
             kernel=kernel,
-            fit_method=fit_method,
         )
         self.noise_constraint = noise_constraint
         self.noise_prior = noise_prior
@@ -262,14 +241,12 @@ class BoTorchRobustRelevancePursuitGPRegressor(_BoTorchBaseRegressor):
         outcome_transform: Any = _DEFAULT_OUTCOME_TRANSFORM,
         input_transform: Any | None = None,
         model_kwargs: dict[str, Any] | None = None,
-        fit_method: str = "torch",
     ) -> None:
         super().__init__(
             device=device,
             dtype=dtype,
             ard=ard,
             kernel=kernel,
-            fit_method=fit_method,
         )
         self.convex_parameterization = convex_parameterization
         self.prior_mean_of_support = prior_mean_of_support
