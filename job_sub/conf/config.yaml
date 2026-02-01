@@ -18,7 +18,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 5
+num_seeds_per_job: 50
 seed_start: 0
 parallelize_seeds: true
 
