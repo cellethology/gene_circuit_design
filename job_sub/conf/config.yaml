@@ -43,7 +43,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat, evo2_meanpool_block28_pca8, enformer_pca32, generanno_meanpool_pca, 650M-post_after_transformer_pca, evo2_7b_262k_meanpool_block28_pca
+      embedding_model: enformer_evo2_concat, evo2_meanpool_block28_pca8, enformer_pca32
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
