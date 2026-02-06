@@ -10,15 +10,17 @@ defaults:
 
 # data paths
 datasets_file: datasets/166k_datasets.yaml
-dataset_name: ${env:AL_DATASET_NAME}
-metadata_path: ${env:AL_METADATA_PATH}
-embedding_dir: ${env:AL_EMBEDDING_ROOT}
+single_array_across_datasets: false
+dataset_index: ${env:AL_DATASET_INDEX,0}
+dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
+metadata_path: ${dataset_field:${datasets_file},${dataset_index},metadata_path}
+embedding_dir: ${dataset_field:${datasets_file},${dataset_index},embedding_dir}
 embedding_model: enformer_evo2_concat
 embedding_path: ${embedding_dir}/${embedding_model}.npz
-subset_ids_path: ${env:AL_SUBSET_IDS_PATH,null}
+subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 40
+num_seeds_per_job: 30
 seed_start: 0
 parallelize_seeds: true
 
@@ -43,16 +45,15 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat, ntv3_650M_post_after_transformer_pca40
-      query_strategy: botorch_qlog_nei
+      embedding_model: enformer_evo2_concat
+      query_strategy: botorch_mes
       predictor: botorch_gp
-      query_strategy.discrete_optimizer: greedy
-      transforms@feature_transforms: minmax, standardize
+      query_strategy.discrete_optimizer: exact
   launcher:
     timeout_min: 160
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
     qos: huge
-    mem_per_cpu: 25GB
+    mem_per_cpu: 30GB
     submitit_folder: slurm_logs

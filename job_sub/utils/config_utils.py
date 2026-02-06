@@ -9,8 +9,15 @@ from omegaconf import OmegaConf
 _MODULE_PATH = Path(__file__).resolve()
 _JOB_SUB_PATH = _MODULE_PATH.parents[1]
 _DEFAULT_DATASETS_FILE = _JOB_SUB_PATH / "datasets" / "datasets.yaml"
+_DATASET_FIELD_MAP = {
+    "name": "name",
+    "metadata_path": "metadata_path",
+    "embedding_dir": "embedding_dir",
+    "subset_ids_path": "subset_ids_path",
+}
 
 _resolvers_registered = False
+_datasets_cache: dict[str, list["DatasetConfig"]] = {}
 
 
 @dataclass
@@ -59,6 +66,11 @@ def ensure_resolvers() -> None:
         lambda text, key, default="default": _strip_override_entry(text, key, default),
         replace=True,
     )
+    OmegaConf.register_new_resolver(
+        "dataset_field",
+        _resolve_dataset_field,
+        replace=True,
+    )
 
     _resolvers_registered = True
 
@@ -73,6 +85,48 @@ def _strip_override_entry(text: str, key: str, default: str) -> str:
     return result or default
 
 
+def _resolve_dataset_field(
+    datasets_file: str | None,
+    index: int | str,
+    field: str,
+    default: str | None = None,
+):
+    """Resolve a dataset field by index from a datasets YAML file."""
+    datasets = load_dataset_configs(datasets_file)
+    try:
+        idx = int(index)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Invalid dataset index: {index}") from exc
+    if idx < 0 or idx >= len(datasets):
+        if default is not None:
+            return _normalize_optional_value(default)
+        raise IndexError(
+            f"Dataset index {idx} out of range for {len(datasets)} configured datasets"
+        )
+
+    attr = _DATASET_FIELD_MAP.get(str(field))
+    if not attr:
+        raise ValueError(
+            f"Unknown dataset field '{field}'. Expected one of: "
+            f"{', '.join(sorted(_DATASET_FIELD_MAP))}"
+        )
+
+    value = getattr(datasets[idx], attr)
+    if value in (None, ""):
+        return _normalize_optional_value(default)
+    return value
+
+
+def _normalize_optional_value(value):
+    """Convert common null-like strings to None for resolver defaults."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"none", "null"}:
+        return None
+    return value
+
+
 def load_dataset_configs(datasets_file: Path | None = None) -> list[DatasetConfig]:
     """Load dataset definitions with metadata and available embedding models."""
     ensure_resolvers()
@@ -81,6 +135,11 @@ def load_dataset_configs(datasets_file: Path | None = None) -> list[DatasetConfi
         datasets_path = _DEFAULT_DATASETS_FILE
     elif not datasets_path.is_absolute():
         datasets_path = (_JOB_SUB_PATH / datasets_path).resolve()
+
+    cache_key = str(datasets_path)
+    cached = _datasets_cache.get(cache_key)
+    if cached is not None:
+        return cached
 
     if not datasets_path.exists():
         return []
@@ -121,6 +180,7 @@ def load_dataset_configs(datasets_file: Path | None = None) -> list[DatasetConfi
             )
         )
 
+    _datasets_cache[cache_key] = dataset_configs
     return dataset_configs
 
 
