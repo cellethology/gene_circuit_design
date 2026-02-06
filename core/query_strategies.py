@@ -176,10 +176,8 @@ class BoTorchAcquisition(QueryStrategyBase):
         self.num_optima = max(1, int(num_optima))
         self.num_samples = max(1, int(num_samples)) if num_samples is not None else None
         optimizer = str(discrete_optimizer).lower()
-        if optimizer not in {"exact", "local", "greedy"}:
-            raise ValueError(
-                "discrete_optimizer must be 'exact', 'local', or 'greedy'."
-            )
+        if optimizer not in {"exact", "greedy"}:
+            raise ValueError("discrete_optimizer must be 'exact' or 'greedy'.")
         self.discrete_optimizer = optimizer
 
     def _select_batch(
@@ -332,24 +330,14 @@ class BoTorchAcquisition(QueryStrategyBase):
     def _optimize_discrete(self, torch, acq, candidate_set, batch_size: int):
         if self.discrete_optimizer == "greedy":
             return self._greedy_indices(acq, candidate_set, batch_size)
-        if self.discrete_optimizer == "local":
-            from botorch.optim import optimize_acqf_discrete_local_search
+        from botorch.optim import optimize_acqf_discrete
 
-            candidates, _ = optimize_acqf_discrete_local_search(
-                acq_function=acq,
-                discrete_choices=candidate_set,
-                q=batch_size,
-                unique=True,
-            )
-        else:
-            from botorch.optim import optimize_acqf_discrete
-
-            candidates, _ = optimize_acqf_discrete(
-                acq_function=acq,
-                choices=candidate_set,
-                q=batch_size,
-                unique=True,
-            )
+        candidates, _ = optimize_acqf_discrete(
+            acq_function=acq,
+            choices=candidate_set,
+            q=batch_size,
+            unique=True,
+        )
         return self._map_candidates_to_indices(torch, candidate_set, candidates)
 
     def _greedy_indices(self, acq, candidate_set, batch_size: int) -> list[int]:
