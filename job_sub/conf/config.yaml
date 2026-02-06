@@ -46,7 +46,7 @@ hydra:
       embedding_model: enformer_evo2_concat, ntv3_650M_post_after_transformer_pca40
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
-      query_strategy.discrete_optimizer: greedy, local
+      query_strategy.discrete_optimizer: greedy
       transforms@feature_transforms: minmax, standardize
   launcher:
     timeout_min: 160
@@ -54,5 +54,5 @@ hydra:
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
     qos: huge
-    mem_per_cpu: 15GB
+    mem_per_cpu: 25GB
     submitit_folder: slurm_logs
