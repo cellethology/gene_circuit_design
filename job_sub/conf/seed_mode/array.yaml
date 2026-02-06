@@ -6,7 +6,7 @@ al_settings:
 
 hydra:
   sweep:
-    subdir: ${dataset_name}/${strip_override:${hydra:job.override_dirname},al_settings.seed}/seed_${al_settings.seed}
+    subdir: ${dataset_name}/${override_values:${hydra:job.override_dirname},dataset_index|single_array_across_datasets|al_settings.seed,default}/seed_${al_settings.seed}
   sweeper:
     params:
       al_settings.seed: ${seed_sweep_values}

@@ -67,6 +67,11 @@ def ensure_resolvers() -> None:
         replace=True,
     )
     OmegaConf.register_new_resolver(
+        "override_values",
+        _override_values,
+        replace=True,
+    )
+    OmegaConf.register_new_resolver(
         "dataset_field",
         _resolve_dataset_field,
         replace=True,
@@ -82,6 +87,40 @@ def _strip_override_entry(text: str, key: str, default: str) -> str:
     parts = [item for item in str(text).split(",") if item]
     filtered = [item for item in parts if not item.startswith(f"{key}=")]
     result = ",".join(filtered).strip()
+    return result or default
+
+
+def _override_values(
+    text: str,
+    exclude_keys: str = "",
+    default: str = "default",
+) -> str:
+    """Return comma-separated override values, optionally excluding keys."""
+    if not text:
+        return default
+
+    excluded: set[str] = set()
+    if exclude_keys:
+        normalized = str(exclude_keys).replace(";", "|").replace(",", "|")
+        excluded = {item.strip() for item in normalized.split("|") if item.strip()}
+
+    values: list[str] = []
+    for item in str(text).split(","):
+        part = item.strip()
+        if not part:
+            continue
+        if "=" in part:
+            key, value = part.split("=", 1)
+            if key in excluded:
+                continue
+            if value:
+                values.append(value)
+            continue
+        if part in excluded:
+            continue
+        values.append(part)
+
+    result = ",".join(values).strip()
     return result or default
 
 
