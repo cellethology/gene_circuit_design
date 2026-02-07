@@ -1,0 +1,4 @@
+_target_: core.query_strategies.BoTorchAcquisition
+acquisition: qlog_ei
+maximize: true
+discrete_optimizer: exact

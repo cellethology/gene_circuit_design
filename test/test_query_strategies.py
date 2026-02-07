@@ -5,8 +5,10 @@ Unit tests for query strategy implementations.
 from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 from core.query_strategies import (
+    BoTorchAcquisition,
     PredStdHybrid,
     Random,
     TopPredictions,
@@ -121,3 +123,56 @@ class TestPredStdHybridStrategy:
         )
 
         assert PredStdHybrid(alpha=0.75).select(exp) == unlabeled
+
+
+class TestBoTorchAcquisition:
+    def test_resolve_qlog_ei_class(self):
+        strategy = BoTorchAcquisition(acquisition="qlog_ei", discrete_optimizer="exact")
+        acq_class = strategy._resolve_acquisition_class()
+        assert acq_class.__name__ == "qLogExpectedImprovement"
+
+    def test_resolve_q_ucb_class(self):
+        strategy = BoTorchAcquisition(acquisition="q_ucb", discrete_optimizer="exact")
+        acq_class = strategy._resolve_acquisition_class()
+        assert acq_class.__name__ == "qUpperConfidenceBound"
+
+    def test_exact_discrete_falls_back_to_greedy_for_x_pending_errors(
+        self, monkeypatch
+    ):
+        strategy = BoTorchAcquisition(acquisition="log_ei", discrete_optimizer="exact")
+
+        def _raise_x_pending(*args, **kwargs):
+            raise AttributeError(
+                "'LogExpectedImprovement' object has no attribute 'X_pending'"
+            )
+
+        monkeypatch.setattr("botorch.optim.optimize_acqf_discrete", _raise_x_pending)
+        monkeypatch.setattr(
+            strategy,
+            "_greedy_indices",
+            lambda acq, candidate_set, batch_size: [2, 0],
+        )
+
+        selected = strategy._optimize_discrete(
+            torch=None,
+            acq=object(),
+            candidate_set=object(),
+            batch_size=2,
+        )
+        assert selected == [2, 0]
+
+    def test_exact_discrete_reraises_unrelated_errors(self, monkeypatch):
+        strategy = BoTorchAcquisition(acquisition="log_ei", discrete_optimizer="exact")
+
+        def _raise_unrelated(*args, **kwargs):
+            raise AttributeError("some other acquisition error")
+
+        monkeypatch.setattr("botorch.optim.optimize_acqf_discrete", _raise_unrelated)
+
+        with pytest.raises(AttributeError, match="some other acquisition error"):
+            strategy._optimize_discrete(
+                torch=None,
+                acq=object(),
+                candidate_set=object(),
+                batch_size=2,
+            )
