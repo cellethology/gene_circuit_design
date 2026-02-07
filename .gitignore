@@ -118,3 +118,7 @@ slurm_logs/
 # local data
 **/test_local.yaml
 **/local_166k.yaml
+job_sub/datasets/*_local
+job_sub/datasets/*_local.*
+job_sub/datasets/**/*_local
+job_sub/datasets/**/*_local.*
