@@ -10,7 +10,7 @@ defaults:
 
 # data paths
 datasets_file: datasets/166k_datasets.yaml
-single_array_across_datasets: false
+single_array_across_datasets: true
 dataset_index: ${env:AL_DATASET_INDEX,0}
 dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
 metadata_path: ${dataset_field:${datasets_file},${dataset_index},metadata_path}
@@ -41,14 +41,13 @@ al_settings:
 # hydra settings
 hydra:
   sweep:
-    subdir: ${dataset_name}/${hydra.job.override_dirname}
+    subdir: ${dataset_name}/${override_values:${hydra.job.override_dirname},dataset_index|single_array_across_datasets|al_settings.seed,default}
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_mes
+      query_strategy: botorch_qlog_nei
       predictor: botorch_gp
-      query_strategy.discrete_optimizer: exact
   launcher:
     timeout_min: 360
     # everything below is used only for submitting jobs to the cluster
