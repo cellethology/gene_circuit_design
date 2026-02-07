@@ -46,7 +46,8 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_qlog_nei
+      query_strategy: botorch_mes
+      query_strategy.discrete_optimizer: exact
       predictor: botorch_gp
   launcher:
     timeout_min: 360
