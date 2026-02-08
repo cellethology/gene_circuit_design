@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/166k_datasets.yaml
+datasets_file: datasets/1m_base_datasets.yaml
 single_array_across_datasets: true
 dataset_index: ${env:AL_DATASET_INDEX,0}
 dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
@@ -33,7 +33,7 @@ al_settings:
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  label_key: "Fold Change (Induced/Basal)"
+  label_key: "and_score"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
@@ -46,7 +46,7 @@ hydra:
     params:
       initial_selection_strategy: core_set
       embedding_model: enformer_evo2_concat
-      query_strategy: botorch_qlog_ei, botorch_q_ucb
+      query_strategy: botorch_qlog_ei, botorch_q_ucb, botorch_ucb_0p5, botorch_ucb_0p8, botorch_mes
       predictor: botorch_gp
   launcher:
     timeout_min: 360
