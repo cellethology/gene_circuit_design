@@ -28,7 +28,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 9 # not including the initial selection
+  max_rounds: 29 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -45,8 +45,8 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
-      query_strategy: botorch_qlog_ei, botorch_mes
+      embedding_model: enformer_pca32, evo2_meanpool_block28_pca8, one_hot_pca3200
+      query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
     timeout_min: 360
