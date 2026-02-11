@@ -104,7 +104,7 @@ class DataLoader:
                 f"'embeddings' array not found in {self.embeddings_path}. "
                 f"Available keys: {list(data.keys())}"
             )
-        embeddings = data["embeddings"]
+        embeddings = data["embeddings"].astype(np.float32, copy=False)
         sample_ids = data["ids"].astype(
             np.int32
         )  # sample_ids is row index of csv, so we need to convert it to integer

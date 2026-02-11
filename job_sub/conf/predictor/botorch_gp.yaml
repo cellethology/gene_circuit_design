@@ -1,6 +1,6 @@
 # BoTorch GP regressor (SingleTaskGP wrapper)
 _target_: core.botorch_models.BoTorchGPRegressor
 device: auto
-dtype: float64
+dtype: float32
 ard: true
 kernel: rbf
