@@ -140,6 +140,9 @@ def run_one_experiment(
         "max_train_spearman": summary_metrics["max_train_spearman"],
         "max_extreme_value_auc": summary_metrics["max_extreme_value_auc"],
         "summary_by_round": summary_metrics_history,
+        "completed_rounds": len(experiment.round_tracker.rounds),
+        "stopped_early": experiment.failure_info is not None,
+        "failure_info": experiment.failure_info,
         "hydra_overrides": overrides,
     }
 

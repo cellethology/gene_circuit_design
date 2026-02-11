@@ -182,3 +182,35 @@ class TestActiveLearningExperiment:
         assert isinstance(experiment.train_indices, list)
         assert isinstance(experiment.unlabeled_indices, list)
         assert isinstance(experiment.round_tracker.rounds, list)
+
+    def test_training_failure_stops_early_and_preserves_partial_results(
+        self, tmp_path, monkeypatch
+    ):
+        """Training errors stop the loop but keep rounds already tracked."""
+        emb_path, csv_path = self.create_dataset(tmp_path, n_samples=20)
+        experiment = self._build_experiment(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            query_strategy=TopPredictions(),
+            starting_batch_size=5,
+            batch_size=3,
+        )
+
+        def fail_train(X_train, y_train):
+            raise RuntimeError("all attempts to fit model have failed")
+
+        monkeypatch.setattr(experiment.trainer, "train", fail_train)
+
+        rounds = experiment.run_experiment(max_rounds=3)
+
+        # Only the initial selection round should be present.
+        assert len(rounds) == 1
+        assert len(experiment.round_tracker.rounds) == 1
+        assert experiment.failure_info is not None
+        assert experiment.failure_info["stage"] == "train"
+        assert experiment.failure_info["round"] == 1
+
+        output_path = Path(tmp_path) / "partial_results.csv"
+        experiment.save_results(output_path)
+        saved = pd.read_csv(output_path)
+        assert len(saved) == 1
