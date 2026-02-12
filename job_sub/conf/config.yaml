@@ -33,7 +33,7 @@ al_settings:
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  label_key: "or_score"
+  label_key: "and_score"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
@@ -45,7 +45,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: base_enformer_center_pca, base_evo2_meanpool_block28_pca, enformer_evo2_concat
+      embedding_model: base_evo2_meanpool_block28_pca
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
