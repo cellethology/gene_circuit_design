@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: datasets/1m_base_datasets.yaml
+datasets_file: datasets/166k_datasets.yaml
 single_array_across_datasets: true
 dataset_index: ${env:AL_DATASET_INDEX,0}
 dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
@@ -45,7 +45,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: base_evo2_meanpool_block28_pca, base_evo2_meanpool_block28_pca6, enformer_evo2_pca6_concat
+      embedding_model: evo2_meanpool_block28_updated_pca, 166k_enformer_center_pca, enformer_evo2_concat_updated
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
