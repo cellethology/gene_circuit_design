@@ -45,7 +45,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: one_hot_pca3500
+      embedding_model: one_hot_pca3200
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
