@@ -197,12 +197,14 @@ class BoTorchAcquisition(QueryStrategyBase):
         X_pool = experiment.dataset.embeddings[unlabeled_pool, :]
         if feature_transformer is not None:
             X_pool = feature_transformer.transform(X_pool)
-        X_pool = np.asarray(X_pool)
+        if not isinstance(X_pool, np.ndarray):
+            X_pool = np.asarray(X_pool)
 
         X_train = experiment.dataset.embeddings[experiment.train_indices, :]
         if feature_transformer is not None:
             X_train = feature_transformer.transform(X_train)
-        X_train = np.asarray(X_train)
+        if not isinstance(X_train, np.ndarray):
+            X_train = np.asarray(X_train)
 
         train_labels = experiment.dataset.labels[experiment.train_indices]
         train_labels = self._transform_targets(train_labels, target_transformer)
