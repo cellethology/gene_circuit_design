@@ -20,7 +20,7 @@ embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 25
+num_seeds_per_job: 30
 seed_start: 0
 parallelize_seeds: true
 
@@ -28,7 +28,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 29 # not including the initial selection
+  max_rounds: 9 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -45,14 +45,14 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: one_hot_pca3200
+      embedding_model: enformer_evo2_concat
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
-    timeout_min: 2880
+    timeout_min: 360
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
     qos: huge
-    mem_per_cpu: 150GB
+    mem_per_cpu: 30GB
     submitit_folder: slurm_logs
