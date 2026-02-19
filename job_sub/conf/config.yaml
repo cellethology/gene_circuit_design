@@ -19,7 +19,7 @@ embedding_model: enformer_evo2_concat
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
 # base directory for Hydra run outputs (can be overridden in config/CLI)
-results_root_dir: job_sub/multirun
+results_root_dir: /storage2/wangzitongLab/share/deepdraw_opt/jerry
 
 # number of random seeds to run for each active learning experiment
 num_seeds_per_job: 30
@@ -30,7 +30,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 9 # not including the initial selection
+  max_rounds: 29 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}

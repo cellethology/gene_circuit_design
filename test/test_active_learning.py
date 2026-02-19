@@ -126,3 +126,17 @@ def test_make_steps_builds_pipeline(monkeypatch):
     name, transformer = steps[0]
     assert name == "dummy"
     assert isinstance(transformer, DummyTransformer)
+
+
+def test_run_single_experiment_logs_dataset_name(tmp_path, monkeypatch, caplog):
+    cfg = _build_cfg(tmp_path)
+    cfg.dataset_name = "demo_dataset"
+    _patch_make_steps(monkeypatch)
+
+    with caplog.at_level("INFO", logger="run_active_learning"):
+        run_one_experiment(cfg)
+
+    assert any(
+        "RUN_CONTEXT dataset_name=demo_dataset" in record.message
+        for record in caplog.records
+    )

@@ -5,6 +5,7 @@ This script implements an active learning approach to design circuit with specif
 """
 
 import json
+import logging
 import traceback
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,8 @@ from hydra.utils import instantiate
 from omegaconf import ListConfig, OmegaConf
 
 from core.experiment import ActiveLearningExperiment
+
+logger = logging.getLogger(__name__)
 
 
 def run_one_experiment(
@@ -37,6 +40,15 @@ def run_one_experiment(
         raise ValueError("al_settings.output_dir must be provided in the config.")
     output_dir_path = Path(output_dir)
     output_dir_path.mkdir(parents=True, exist_ok=True)
+    dataset_name = getattr(cfg, "dataset_name", "")
+    embedding_model_name = getattr(cfg, "embedding_model", "")
+    seed = al_settings.get("seed", 0)
+    logger.info(
+        "RUN_CONTEXT dataset_name=%s seed=%s output_dir=%s",
+        dataset_name,
+        seed,
+        output_dir_path,
+    )
 
     try:
         # Instantiate components
@@ -48,15 +60,12 @@ def run_one_experiment(
 
         # Extract active learning settings
         embeddings_path = cfg.embedding_path
-        dataset_name = getattr(cfg, "dataset_name", "")
-        embedding_model_name = getattr(cfg, "embedding_model", "")
         metadata_path = cfg.metadata_path
         subset_ids_path = getattr(cfg, "subset_ids_path", None)
         batch_size = al_settings.get("batch_size")
         starting_batch_size = al_settings.get("starting_batch_size", batch_size)
         max_rounds = al_settings.get("max_rounds")
         label_key = al_settings.get("label_key", None)
-        seed = al_settings.get("seed", 0)
 
         # Check embedding path matches embedding model
         if not embeddings_path.endswith(f"{embedding_model_name}.npz"):
@@ -95,8 +104,8 @@ def run_one_experiment(
         error_path = output_dir_path / "error.txt"
         error_details = [
             f"timestamp: {datetime.now().isoformat(timespec='seconds')}",
-            f"dataset_name: {getattr(cfg, 'dataset_name', '')}",
-            f"seed: {al_settings.get('seed', '')}",
+            f"dataset_name: {dataset_name}",
+            f"seed: {seed}",
             "",
             traceback.format_exc(),
         ]
