@@ -18,6 +18,8 @@ embedding_dir: ${dataset_field:${datasets_file},${dataset_index},embedding_dir}
 embedding_model: enformer_evo2_concat
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
+# base directory for Hydra run outputs (can be overridden in config/CLI)
+results_root_dir: job_sub/multirun
 
 # number of random seeds to run for each active learning experiment
 num_seeds_per_job: 30
@@ -41,6 +43,7 @@ al_settings:
 # hydra settings
 hydra:
   sweep:
+    dir: ${results_root_dir}/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${dataset_name}/${override_values:${hydra.job.override_dirname},dataset_index|single_array_across_datasets|al_settings.seed,default}
   sweeper: # multirun mode sweeps over these parameters
     params:
