@@ -4,10 +4,7 @@ from pathlib import Path
 
 from omegaconf import OmegaConf
 
-
-_CONFIG_PATH = (
-    Path(__file__).resolve().parents[1] / "job_sub" / "conf" / "config.yaml"
-)
+_CONFIG_PATH = Path(__file__).resolve().parents[1] / "job_sub" / "conf" / "config.yaml"
 
 
 def _register_now_resolver_for_tests() -> None:
@@ -34,7 +31,9 @@ def test_hydra_sweep_dir_defaults_to_job_sub_multirun() -> None:
 
     resolved_sweep_dir = OmegaConf.select(cfg, "hydra.sweep.dir")
     assert resolved_sweep_dir == "job_sub/multirun/2099-12-31/23-59-58"
-    assert OmegaConf.select(cfg, "al_settings.output_dir") == "/tmp/hydra_runtime_output"
+    assert (
+        OmegaConf.select(cfg, "al_settings.output_dir") == "/tmp/hydra_runtime_output"
+    )
 
 
 def test_hydra_sweep_dir_uses_configured_results_root_dir() -> None:
