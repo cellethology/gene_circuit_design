@@ -197,12 +197,14 @@ class BoTorchAcquisition(QueryStrategyBase):
         X_pool = experiment.dataset.embeddings[unlabeled_pool, :]
         if feature_transformer is not None:
             X_pool = feature_transformer.transform(X_pool)
-        X_pool = np.asarray(X_pool)
+        if not isinstance(X_pool, np.ndarray):
+            X_pool = np.asarray(X_pool)
 
         X_train = experiment.dataset.embeddings[experiment.train_indices, :]
         if feature_transformer is not None:
             X_train = feature_transformer.transform(X_train)
-        X_train = np.asarray(X_train)
+        if not isinstance(X_train, np.ndarray):
+            X_train = np.asarray(X_train)
 
         train_labels = experiment.dataset.labels[experiment.train_indices]
         train_labels = self._transform_targets(train_labels, target_transformer)
@@ -289,10 +291,18 @@ class BoTorchAcquisition(QueryStrategyBase):
             from botorch.acquisition.analytic import UpperConfidenceBound
 
             return UpperConfidenceBound
+        if self.acquisition in {"q_ucb", "qucb"}:
+            from botorch.acquisition.monte_carlo import qUpperConfidenceBound
+
+            return qUpperConfidenceBound
         if self.acquisition == "ts":
             from botorch.acquisition.thompson_sampling import PathwiseThompsonSampling
 
             return PathwiseThompsonSampling
+        if self.acquisition == "qlog_ei":
+            from botorch.acquisition.logei import qLogExpectedImprovement
+
+            return qLogExpectedImprovement
         if self.acquisition in {"log_nei", "qlog_nei"}:
             from botorch.acquisition.logei import qLogNoisyExpectedImprovement
 
@@ -319,7 +329,7 @@ class BoTorchAcquisition(QueryStrategyBase):
             return qJointEntropySearch
         raise ValueError(
             f"Unsupported acquisition '{self.acquisition}'. Use one of: "
-            "log_ei, log_pi, qlog_nei, ucb, ts, mes, gibbon, pes, jes."
+            "log_ei, log_pi, qlog_ei, qlog_nei, ucb, q_ucb, ts, mes, gibbon, pes, jes."
         )
 
     def _init_acquisition(self, acq_class, **kwargs):
@@ -330,15 +340,30 @@ class BoTorchAcquisition(QueryStrategyBase):
     def _optimize_discrete(self, torch, acq, candidate_set, batch_size: int):
         if self.discrete_optimizer == "greedy":
             return self._greedy_indices(acq, candidate_set, batch_size)
+        from botorch.exceptions.errors import UnsupportedError
         from botorch.optim import optimize_acqf_discrete
 
-        candidates, _ = optimize_acqf_discrete(
-            acq_function=acq,
-            choices=candidate_set,
-            q=batch_size,
-            unique=True,
-        )
+        try:
+            candidates, _ = optimize_acqf_discrete(
+                acq_function=acq,
+                choices=candidate_set,
+                q=batch_size,
+                unique=True,
+            )
+        except (AttributeError, UnsupportedError) as exc:
+            if not self._is_x_pending_compat_error(exc):
+                raise
+            logger.warning(
+                "BoTorch exact discrete optimization is incompatible with %s "
+                "(%s). Falling back to greedy selection.",
+                self.acquisition,
+                exc,
+            )
+            return self._greedy_indices(acq, candidate_set, batch_size)
         return self._map_candidates_to_indices(torch, candidate_set, candidates)
+
+    def _is_x_pending_compat_error(self, exc: Exception) -> bool:
+        return "x_pending" in str(exc).lower()
 
     def _greedy_indices(self, acq, candidate_set, batch_size: int) -> list[int]:
         import torch

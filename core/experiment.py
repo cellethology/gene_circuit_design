@@ -78,6 +78,7 @@ class ActiveLearningExperiment:
         self.subset_ids_path = subset_ids_path
         self.feature_transforms = feature_transforms
         self.target_transforms = target_transforms
+        self.failure_info: dict[str, Any] | None = None
         if starting_batch_size is None:
             self.starting_batch_size = self.batch_size
         else:
@@ -225,6 +226,15 @@ class ActiveLearningExperiment:
             pool_predictions = None
         return train_indices, train_predictions, pool_indices, pool_predictions
 
+    def _set_failure_info(self, stage: str, round_num: int, exc: Exception) -> None:
+        """Record failure metadata for downstream reporting/summary output."""
+        self.failure_info = {
+            "stage": stage,
+            "round": round_num,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+        }
+
     def run_experiment(
         self, max_rounds: int = 30, top_p: float = 0.01
     ) -> list[dict[str, Any]]:
@@ -277,9 +287,16 @@ class ActiveLearningExperiment:
                 y_train = self.dataset.labels[self.train_indices]
                 try:
                     self.trainer.train(X_train=X_train, y_train=y_train)
-                except Exception:
+                except Exception as exc:
                     logger.exception("Training failed at round %d", round_num + 1)
-                    raise
+                    self._set_failure_info("train", round_num + 1, exc)
+                    logger.warning(
+                        "Stopping early after training failure at round %d. "
+                        "Returning partial results with %d completed rounds.",
+                        round_num + 1,
+                        len(self.round_tracker.rounds),
+                    )
+                    break
             elif round_num == 0:
                 logger.info(
                     "Skipping model training because query strategy does not require a predictor."

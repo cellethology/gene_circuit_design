@@ -1,5 +1,47 @@
+import ast
+
 import numpy as np
 from scipy import stats
+
+
+def strip_overrides(hydra_overrides):
+    value = hydra_overrides
+    if isinstance(value, str):
+        try:
+            value = ast.literal_eval(value)
+        except Exception:
+            return hydra_overrides
+
+    if isinstance(value, list):
+        filtered = [
+            x
+            for x in value
+            if not (
+                isinstance(x, str)
+                and (
+                    x.startswith("al_settings.seed=")
+                    or x.startswith("dataset_index=")
+                    or x.startswith("single_array_across_datasets=")
+                )
+            )
+        ]
+        ordered = sorted(filtered, key=_override_sort_key)
+        values_only = []
+        for override in ordered:
+            if isinstance(override, str):
+                _, sep, val = override.partition("=")
+                values_only.append(val if sep else override)
+            else:
+                values_only.append(str(override))
+        return "|".join(values_only)
+    return hydra_overrides
+
+
+def _override_sort_key(override):
+    if not isinstance(override, str):
+        return (1, str(override), "")
+    key, _, value = override.partition("=")
+    return (0, key, value)
 
 
 def mannwhitney_p(
