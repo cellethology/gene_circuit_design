@@ -47,12 +47,12 @@ hydra:
     subdir: ${dataset_name}/${override_values:${hydra.job.override_dirname},dataset_index|single_array_across_datasets|al_settings.seed,default}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: core_set, probcover, typiclust
-      embedding_model: 166k_alphagenome_128bp_pca11, 166k_alphagenome_128bp_pca16, 166k_alphagenome_1bp_pca7, 166k_alphagenome_1bp_pca8
-      query_strategy: botorch_qlog_nei
+      initial_selection_strategy: probcover
+      embedding_model: 166k_alphagenome_1bp_pca7
+      query_strategy: botorch_qlog_nei, botorch_qlog_ei, botorch_mes, botorch_q_ucb, botorch_jes, botorch_pes
       predictor: botorch_gp
   launcher:
-    timeout_min: 360
+    timeout_min: 540
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
