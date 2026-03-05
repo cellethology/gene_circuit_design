@@ -48,7 +48,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: enformer_evo2_concat
+      embedding_model: 166k_alphagenome_1bp_embedding
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
       datasets_file: /storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_elbow.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_kneedle.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_20260305_0926.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_l-method.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_98.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_parallel-analysis.yaml
