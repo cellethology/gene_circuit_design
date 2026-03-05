@@ -80,8 +80,7 @@ if __name__ == "__main__":
     args = parse_args()
 
     generate_subsets_yaml(
-        subset_dir=Path(args.subset_dir),
+        embedding_parent_dir=args.embedding_parent_dir,
         output_yaml=Path(args.output_yaml),
         metadata_path=str(args.metadata_path.expanduser().resolve()),
-        embedding_dir=str(args.embedding_dir.expanduser().resolve()),
     )
