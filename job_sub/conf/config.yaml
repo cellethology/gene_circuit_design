@@ -15,7 +15,7 @@ dataset_index: ${env:AL_DATASET_INDEX,0}
 dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
 metadata_path: ${dataset_field:${datasets_file},${dataset_index},metadata_path}
 embedding_dir: ${dataset_field:${datasets_file},${dataset_index},embedding_dir}
-embedding_model: enformer_evo2_concat
+embedding_model: 166k_alphagenome_1bp_embedding
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
 # base directory for Hydra run outputs (can be overridden in config/CLI)
