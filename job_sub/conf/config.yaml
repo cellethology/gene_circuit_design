@@ -19,7 +19,7 @@ embedding_model: enformer_evo2_concat
 embedding_path: ${embedding_dir}/${embedding_model}.npz
 subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_path,null}
 # base directory for Hydra run outputs (can be overridden in config/CLI)
-results_root_dir: /storage2/wangzitongLab/share/deepdraw_opt/jerry
+results_root_dir: /storage2/wangzitongLab/share/xuyin_tmp/al_results
 
 # number of random seeds to run for each active learning experiment
 num_seeds_per_job: 30
