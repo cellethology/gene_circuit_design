@@ -9,7 +9,7 @@ defaults:
   - override hydra/launcher: submitit_slurm
 
 # data paths
-datasets_file: /storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_kneedle.yaml
+datasets_file: /storage2/wangzitongLab/share/xuyin_tmp/166k_npz_pca_compare.yaml
 single_array_across_datasets: true
 dataset_index: ${env:AL_DATASET_INDEX,0}
 dataset_name: ${dataset_field:${datasets_file},${dataset_index},name}
@@ -48,10 +48,9 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: core_set
-      embedding_model: 166k_alphagenome_1bp_embedding
+      embedding_model: 166k_alphagenome_1bp_embeddingdefault,166k_alphagenome_1bp_embeddingelbow,166k_alphagenome_1bp_embeddingl-method,166k_alphagenome_1bp_embeddingkneedle,166k_alphagenome_1bp_embeddingparallel-analysis,166k_alphagenome_1bp_embedding98
       query_strategy: botorch_qlog_nei
       predictor: botorch_gp
-      datasets_file: /storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_elbow.yaml,/storage2/wangzitongLab/share/xuyin_tmp/166k_npz_per_subset_kneedle.yaml
   launcher:
     timeout_min: 360
     # everything below is used only for submitting jobs to the cluster
