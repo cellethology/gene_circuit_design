@@ -2,7 +2,7 @@
 generate a YAML file automatically for running experiments over all *_indices.txt files in a subset directory
 
 Usage:
-python make_subset_npz_yaml.py --embedding-parent-dir /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_subsets --output-yaml 166k_datasets.yaml --metadata-path /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
+python make_subset_npz_yaml.py --embedding-parent-dir /share/home/wangzitongLab/liuxuyin/gLMs_embeddings_retrieval/pca/subset_outputs/20260305_0926/ --output-yaml 166k_npz_per_subset.yaml --metadata-path /storage2/wangzitongLab/share/gene_circuit_design_data/data_new/Rai_2024_166k/166k_Library_CLASSIC_Data.csv
 
 This will generate a YAML file like this:
 
