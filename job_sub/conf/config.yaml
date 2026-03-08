@@ -22,7 +22,7 @@ subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_pa
 results_root_dir: /storage2/wangzitongLab/share/deepdraw_opt/jerry
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 20
+num_seeds_per_job: 25
 seed_start: 0
 parallelize_seeds: true
 
@@ -30,7 +30,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 29 # not including the initial selection
+  max_rounds: 9 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -47,9 +47,9 @@ hydra:
     subdir: ${dataset_name}/${override_values:${hydra.job.override_dirname},dataset_index|single_array_across_datasets|al_settings.seed,default}
   sweeper: # multirun mode sweeps over these parameters
     params:
-      initial_selection_strategy: probcover
-      embedding_model: 166k_alphagenome_1bp_pca7
-      query_strategy: botorch_qlog_ei, botorch_mes, botorch_q_ucb, botorch_jes, botorch_pes
+      initial_selection_strategy: core_set
+      embedding_model: 166k_enformer_center_default
+      query_strategy: botorch_qlog_nei
       predictor: botorch_gp
   launcher:
     timeout_min: 540
