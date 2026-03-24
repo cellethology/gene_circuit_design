@@ -67,10 +67,10 @@ class MetricsCalculator:
             predictions=train_predictions,
         )
 
-        test_spearman = self._compute_spearman(
-        indices=pool_indices,
-        predictions=pool_predictions,
-    )
+        pool_spearman = self._compute_spearman(
+            indices=pool_indices,
+            predictions=pool_predictions,
+        )
         
         dataset_indices = np.concatenate([train_indices, pool_indices])
         dataset_predictions = None
@@ -95,7 +95,7 @@ class MetricsCalculator:
             "best_true": self._round_metric(best_value_true),
             "normalized_true": self._round_metric(normalized_true_values),
             "train_spearman": self._round_metric(train_spearman),
-            "test_spearman" : self._round_metric(test_spearman),
+            "pool_spearman": self._round_metric(pool_spearman),
             "extreme_value_auc": self._round_metric(dataset_auc),
         }
 
@@ -174,4 +174,3 @@ class MetricsCalculator:
         if np.isnan(value):
             return value
         return round(float(value), digits)
-
