@@ -168,3 +168,8 @@ class MetricsCalculator:
         if np.isnan(value):
             return value
         return round(float(value), digits)
+
+    test_spearman = self._compute_spearman(
+        indices=test_indices,
+        predictions=test_predictions,
+    )
