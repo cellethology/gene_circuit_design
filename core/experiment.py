@@ -224,7 +224,7 @@ class ActiveLearningExperiment:
         else:
             train_predictions = None
             pool_predictions = None
-        return train_indices, train_predictions, pool_indices, pool_predictions,pool_indices
+        return train_indices, train_predictions, pool_indices, pool_predictions
 
     def _set_failure_info(self, stage: str, round_num: int, exc: Exception) -> None:
         """Record failure metadata for downstream reporting/summary output."""
