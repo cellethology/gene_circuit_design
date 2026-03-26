@@ -311,9 +311,16 @@ class ActiveLearningExperiment:
                 ) = self._get_round_predictions(requires_model)
 
                 next_batch = self._select_next_batch()
-            except Exception:
+            except Exception as exc:
                 logger.exception("Selection failed at round %d", round_num + 1)
-                raise
+                self._set_failure_info("select", round_num + 1, exc)
+                logger.warning(
+                    "Stopping early after selection failure at round %d. "
+                    "Returning partial results with %d completed rounds.",
+                    round_num + 1,
+                    len(self.round_tracker.rounds),
+                )
+                break
             if not next_batch:
                 logger.info(
                     "No new samples selected. Stopping. pool=%d train=%d total=%d",
