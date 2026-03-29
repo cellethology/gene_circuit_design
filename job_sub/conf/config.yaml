@@ -35,7 +35,7 @@ al_settings:
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
   query_strategy: ${query_strategy}
-  label_key: "or_score"
+  label_key: "and_score"
   predictor: ${predictor}
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
@@ -49,7 +49,7 @@ hydra:
     params:
       initial_selection_strategy: probcover_euclidean
       embedding_model: 1m_alphagenome_1bp_embeddings_kneedle, 1m_alphagenome_1bp_embeddings_default
-      query_strategy: botorch_qlog_nei
+      query_strategy: botorch_mes
       predictor: botorch_gp
   launcher:
     timeout_min: 360
