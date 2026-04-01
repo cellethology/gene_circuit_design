@@ -65,8 +65,8 @@ def test_botorch_gp_kernel_selection_and_dtype():
 
     reg.kernel = "linear"
     kernel = reg._build_kernel(X_tensor)
-    assert kernel.base_kernel.__class__.__name__ == "LinearKernel"
-    assert kernel.base_kernel.ard_num_dims == 3
+    assert kernel.__class__.__name__ == "LinearKernel"
+    assert kernel.ard_num_dims == 3
 
     reg.kernel = "infinite_width_bnn"
     kernel = reg._build_kernel(X_tensor)

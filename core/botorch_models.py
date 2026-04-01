@@ -150,13 +150,17 @@ class _BoTorchBaseRegressor(RegressorMixin):
             return torch.float
         raise ValueError(f"Unsupported dtype '{self.dtype}'.")
 
-    def _build_kernel(self, X_tensor: torch.Tensor) -> ScaleKernel:
+    def _build_kernel(self, X_tensor: torch.Tensor):
         ard_dims = X_tensor.shape[-1] if self.ard else None
         kernel_key = str(self.kernel).lower()
         if kernel_key in {"rbf", "se", "squared_exponential"}:
             base_kernel = RBFKernel(ard_num_dims=ard_dims)
+            return ScaleKernel(base_kernel)
         elif kernel_key in {"linear"}:
-            base_kernel = LinearKernel(ard_num_dims=ard_dims)
+            # LinearKernel already has its own variance parameter, so wrapping it
+            # again in ScaleKernel adds a redundant output scale and makes fitting
+            # less stable on tiny high-dimensional batches.
+            return LinearKernel(ard_num_dims=ard_dims)
         elif kernel_key in {
             "infinite_width_bnn",
             "infinitewidthbnn",
@@ -164,19 +168,22 @@ class _BoTorchBaseRegressor(RegressorMixin):
             "bnn",
         }:
             base_kernel = InfiniteWidthBNNKernel()
+            return ScaleKernel(base_kernel)
         elif kernel_key in {"matern_12", "matern12", "matern_1/2", "matern-1/2"}:
             base_kernel = MaternKernel(nu=0.5, ard_num_dims=ard_dims)
+            return ScaleKernel(base_kernel)
         elif kernel_key in {"matern_32", "matern32", "matern_3/2", "matern-3/2"}:
             base_kernel = MaternKernel(nu=1.5, ard_num_dims=ard_dims)
+            return ScaleKernel(base_kernel)
         elif kernel_key in {"matern_52", "matern52", "matern_5/2", "matern-5/2"}:
             base_kernel = MaternKernel(nu=2.5, ard_num_dims=ard_dims)
+            return ScaleKernel(base_kernel)
         else:
             raise ValueError(
                 "Unsupported kernel "
                 f"'{self.kernel}'. Use linear, infinite_width_bnn, rbf, "
                 "matern_12, matern_32, or matern_52."
             )
-        return ScaleKernel(base_kernel)
 
     def _to_tensor(self, array: np.ndarray) -> torch.Tensor:
         device = self._resolve_device()
