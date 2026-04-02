@@ -22,7 +22,7 @@ subset_ids_path: ${dataset_field:${datasets_file},${dataset_index},subset_ids_pa
 results_root_dir: /storage2/wangzitongLab/share/deepdraw_opt/jerry
 
 # number of random seeds to run for each active learning experiment
-num_seeds_per_job: 1
+num_seeds_per_job: 30
 seed_start: 0
 parallelize_seeds: true
 
@@ -30,7 +30,7 @@ parallelize_seeds: true
 al_settings:
   batch_size: 12
   starting_batch_size: 12
-  max_rounds: 1 # not including the initial selection
+  max_rounds: 29 # not including the initial selection
   feature_transforms: ${feature_transforms}
   target_transforms: ${target_transforms}
   output_dir: ${hydra:runtime.output_dir}
@@ -48,11 +48,11 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: probcover_euclidean, core_set, random
-      embedding_model: 1m_alphagenome_1bp_embeddingkneedle, evo1_131k_kneedle, onlypart_enformer_center_kneedle, gLM2_166k_kneedle, one_hot_2048_kneedle
+      embedding_model: 1m_alphagenome_1bp_embeddingkneedle
       query_strategy: botorch_qlog_nei, topk, botorch_q_ucb
-      predictor: botorch_gp, botorch_linear_gp, botorch_infinite_width_bnn_gp, botorch_rf_ensemble
+      predictor: botorch_gp, botorch_infinite_width_bnn_gp, botorch_rf_ensemble
   launcher:
-    timeout_min: 2880
+    timeout_min: 1440
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
