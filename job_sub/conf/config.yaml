@@ -48,7 +48,7 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: probcover_euclidean
-      embedding_model: 1m_alphagenome_1bp_embeddings_kneedle
+      embedding_model: 166k_alphagenome_1bp_embeddingkneedle
       query_strategy: botorch_qlog_nei, botorch_mes
       predictor: botorch_gp
   launcher:
