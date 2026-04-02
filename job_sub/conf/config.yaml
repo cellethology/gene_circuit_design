@@ -50,7 +50,7 @@ hydra:
       initial_selection_strategy: probcover_euclidean, core_set, random
       embedding_model: 166k_alphagenome_1bp_embeddingkneedle
       query_strategy: botorch_qlog_nei, topk, botorch_q_ucb
-      predictor: botorch_gp, botorch_infinite_width_bnn_gp, botorch_rf_ensemble
+      predictor: botorch_rf_ensemble
   launcher:
     timeout_min: 1440
     # everything below is used only for submitting jobs to the cluster
