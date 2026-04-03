@@ -48,11 +48,11 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: probcover_euclidean, core_set, random
-      embedding_model: 166k_alphagenome_1bp_embeddingkneedle
+      embedding_model: gLM2_166k_kneedle
       query_strategy: botorch_qlog_nei, topk, botorch_q_ucb
-      predictor: botorch_gp, botorch_infinite_width_bnn_gp, botorch_rf_ensemble
+      predictor: botorch_gp
   launcher:
-    timeout_min: 1440
+    timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
     partition: intel-sc3,wzt_20250411 # no spacing between names
     cpus_per_task: 1
