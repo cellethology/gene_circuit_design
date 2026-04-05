@@ -48,9 +48,9 @@ hydra:
   sweeper: # multirun mode sweeps over these parameters
     params:
       initial_selection_strategy: probcover_euclidean, core_set, random
-      embedding_model: gLM2_166k_kneedle
+      embedding_model: one_hot_2048_kneedle
       query_strategy: botorch_qlog_nei, topk, botorch_q_ucb
-      predictor: botorch_rf_ensemble
+      predictor: botorch_gp
   launcher:
     timeout_min: 720
     # everything below is used only for submitting jobs to the cluster
