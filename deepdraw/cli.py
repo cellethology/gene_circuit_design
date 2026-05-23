@@ -6,6 +6,8 @@ import argparse
 import logging
 from pathlib import Path
 
+from deepdraw.embeddings.alphagenome import embed_design_pool, embed_fasta
+from deepdraw.embeddings.pca import reduce_embeddings_pca
 from deepdraw.workflow import initialize_run, suggest_next_batch
 
 _LOG_LEVEL_CHOICES = ("DEBUG", "INFO", "WARNING", "ERROR")
@@ -88,6 +90,88 @@ def build_parser() -> argparse.ArgumentParser:
     suggest_parser.add_argument("--measurements", required=True, type=Path)
     suggest_parser.add_argument("--label-column")
     suggest_parser.add_argument("--measurement-id-column")
+
+    embed_parser = subparsers.add_parser(
+        "embed-alphagenome",
+        help="Generate AlphaGenome embeddings for a design pool or FASTA file.",
+    )
+    _add_log_level_argument(embed_parser)
+    input_group = embed_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--pool-csv", type=Path)
+    input_group.add_argument("--fasta", type=Path)
+    embed_parser.add_argument("--output", required=True, type=Path)
+    embed_parser.add_argument("--sequence-column")
+    embed_parser.add_argument("--id-column")
+    embed_parser.add_argument("--model-version", default="all_folds")
+    embed_parser.add_argument("--batch-size", type=int, default=1)
+    embed_parser.add_argument("--pooling", choices=["mean", "none"], default="mean")
+    embed_parser.add_argument("--resolution", type=int, choices=[1, 128], default=128)
+    embed_parser.add_argument(
+        "--species",
+        choices=["human", "mouse"],
+        default="human",
+    )
+    embed_parser.add_argument(
+        "--no-pad-to-multiple",
+        action="store_true",
+        help="Disable AlphaGenome input padding to multiples of 2048 bp.",
+    )
+    embed_parser.add_argument(
+        "--no-validate",
+        action="store_true",
+        help="Disable DNA sequence validation before embedding.",
+    )
+    embed_parser.add_argument(
+        "--device",
+        choices=["cpu", "gpu", "tpu"],
+        help="Force an AlphaGenome runtime device. Defaults to GPU/TPU if available.",
+    )
+
+    pca_parser = subparsers.add_parser(
+        "pca",
+        help="Reduce an embedding NPZ with PCA and kneedle component selection.",
+    )
+    _add_log_level_argument(pca_parser)
+    pca_parser.add_argument("--input", dest="input_file", required=True, type=Path)
+    pca_parser.add_argument("--output", required=True, type=Path)
+    pca_parser.add_argument(
+        "--n-components",
+        type=int,
+        help=(
+            "Number of PCA components to fit. By default this also keeps exactly "
+            "that many PCs unless --select-components is passed."
+        ),
+    )
+    pca_parser.set_defaults(exact_n_components=None)
+    pca_parser.add_argument(
+        "--exact-n-components",
+        dest="exact_n_components",
+        action="store_true",
+        help="Keep exactly --n-components.",
+    )
+    pca_parser.add_argument(
+        "--select-components",
+        dest="exact_n_components",
+        action="store_false",
+        help="Use --selection-method after fitting --n-components as an upper cap.",
+    )
+    pca_parser.add_argument("--target-variance", type=float, default=0.95)
+    pca_parser.add_argument(
+        "--selection-method",
+        choices=["target-variance", "elbow", "kneedle", "l-method"],
+        default="kneedle",
+    )
+    pca_parser.add_argument(
+        "--power-of-two",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Round target-variance selection to a power of two.",
+    )
+    pca_parser.add_argument(
+        "--use-mean-pooling",
+        action="store_true",
+        help="Mean-pool 3D or ragged embeddings over sequence positions before PCA.",
+    )
     return parser
 
 
@@ -102,7 +186,7 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         _run_command(args, parser)
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
         if log_level == "DEBUG":
             raise
         parser.exit(1, f"Error: {exc}\n")
@@ -140,6 +224,56 @@ def _run_command(args: argparse.Namespace, parser: argparse.ArgumentParser) -> N
         latest_round = state.rounds[-1]["round"]
         round_path = state.output_path / f"round_{latest_round:03d}_to_measure.csv"
         print(f"Wrote Deepdraw round {latest_round}: {round_path}")
+        return
+
+    if args.command == "embed-alphagenome":
+        if args.pool_csv is not None:
+            embed_design_pool(
+                pool_csv=args.pool_csv,
+                output_path=args.output,
+                sequence_column=args.sequence_column,
+                id_column=args.id_column,
+                model_version=args.model_version,
+                batch_size=args.batch_size,
+                pooling=args.pooling,
+                resolution=args.resolution,
+                species=args.species,
+                pad_to_multiple=not args.no_pad_to_multiple,
+                validate=not args.no_validate,
+                device=args.device,
+            )
+        else:
+            embed_fasta(
+                fasta_path=args.fasta,
+                output_path=args.output,
+                model_version=args.model_version,
+                batch_size=args.batch_size,
+                pooling=args.pooling,
+                resolution=args.resolution,
+                species=args.species,
+                pad_to_multiple=not args.no_pad_to_multiple,
+                validate=not args.no_validate,
+                device=args.device,
+            )
+        print(f"Wrote AlphaGenome embeddings: {args.output}")
+        return
+
+    if args.command == "pca":
+        summary = reduce_embeddings_pca(
+            input_file=args.input_file,
+            output_file=args.output,
+            n_components=args.n_components,
+            target_variance=args.target_variance,
+            use_mean_pooling=args.use_mean_pooling,
+            exact_n_components=args.exact_n_components,
+            power_of_two=args.power_of_two,
+            selection_method=args.selection_method.replace("-", "_"),
+        )
+        print(
+            f"Wrote PCA embeddings: {args.output} "
+            f"({summary.n_components} PCs, "
+            f"{summary.cumulative_explained_variance:.2%} variance)"
+        )
         return
 
     parser.error(f"Unknown command {args.command}")

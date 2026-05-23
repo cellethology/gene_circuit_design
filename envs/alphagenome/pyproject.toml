@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "deepdraw-alphagenome-env"
+version = "0.1.0"
+description = "Isolated runtime for Deepdraw AlphaGenome embedding extraction"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "deepdraw",
+    "alphagenome>=0.6.1",
+    "alphagenome_research",
+    "dm-haiku",
+    "huggingface_hub",
+    "jax>=0.6.0; platform_system != 'Linux'",
+    "jax[cuda12]>=0.6.0; platform_system == 'Linux'",
+    "numpy",
+    "pandas",
+    "socksio",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+deepdraw = { path = "../..", editable = true }
+alphagenome_research = { git = "https://github.com/google-deepmind/alphagenome_research.git" }
