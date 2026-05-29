@@ -49,7 +49,7 @@ hydra:
     params:
       initial_selection_strategy: probcover_euclidean
       embedding_model: 166k_alphagenome_1bp_embedding_default
-      query_strategy: botorch_mes
+      query_strategy: topk
       predictor: botorch_gp
   launcher:
     timeout_min: 1440
