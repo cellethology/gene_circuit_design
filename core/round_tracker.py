@@ -17,6 +17,7 @@ SUMMARY_METRIC_RULES = {
     "avg_top": ("top_mean", "n_top"),
     "rounds_to_top": ("rounds_to_top", "n_top"),
     "rounds_to_confirm_top": ("rounds_to_top", "n_confirmed_top"),
+    "best_true_score_found": ("max_overall", "best_true_score_found"),
     "overall_true": ("max_overall", "normalized_true"),
     "max_train_spearman": ("max_overall", "train_spearman"),
     "max_extreme_value_auc": ("max_overall", "extreme_value_auc"),
@@ -58,11 +59,26 @@ class RoundTracker:
         )
         unlabeled_pool_size = len(self.sample_ids) - train_size - len(selected_indices)
         selected_ids = [int(self.sample_ids[idx]) for idx in selected_indices]
+        round_best_true = float(metrics.get("best_true", float("nan")))
+        previous_best_true = (
+            float(self.rounds[-1]["best_true_score_found"])
+            if self.rounds
+            else float("nan")
+        )
+        finite_best_values = [
+            value
+            for value in (previous_best_true, round_best_true)
+            if np.isfinite(value)
+        ]
+        best_true_score_found = (
+            max(finite_best_values) if finite_best_values else float("nan")
+        )
         self.rounds.append(
             {
                 "round": self.round_num,
                 "train_size": train_size,
                 **metrics,
+                "best_true_score_found": best_true_score_found,
                 "selected_sample_ids": selected_ids,
                 "unlabeled_pool_size": unlabeled_pool_size,
             }

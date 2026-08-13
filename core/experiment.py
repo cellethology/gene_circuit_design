@@ -216,7 +216,7 @@ class ActiveLearningExperiment:
         Returns:
             Metrics for the round
         """
-        confirmed_top_indices = np.asarray([], dtype=int)
+        confirmed_top_indices = None
         if self.measurement_simulator is not None:
             confirmed_top_indices = (
                 self.measurement_simulator.confirmed_true_top_indices(

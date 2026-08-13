@@ -148,6 +148,7 @@ def run_one_experiment(
         "avg_top": summary_metrics["avg_top"],
         "rounds_to_top": summary_metrics["rounds_to_top"],
         "rounds_to_confirm_top": summary_metrics["rounds_to_confirm_top"],
+        "best_true_score_found": summary_metrics["best_true_score_found"],
         "overall_true": summary_metrics["overall_true"],
         "max_train_spearman": summary_metrics["max_train_spearman"],
         "max_extreme_value_auc": summary_metrics["max_extreme_value_auc"],

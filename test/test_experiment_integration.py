@@ -179,6 +179,87 @@ class TestActiveLearningExperiment:
         assert len(training) == 4
         assert "n_confirmed_top" in pd.read_csv(output_path).columns
 
+    def test_zero_noise_expression_simulation_matches_disabled_behavior(self, tmp_path):
+        rng = np.random.default_rng(17)
+        n_samples = 30
+        embeddings = rng.normal(size=(n_samples, 6)).astype(np.float32)
+        ids = np.arange(n_samples, dtype=np.int32)
+        embedding_path = tmp_path / "fc_embeddings.npz"
+        np.savez_compressed(embedding_path, embeddings=embeddings, ids=ids)
+
+        basal = np.linspace(100.0, 400.0, n_samples)
+        fold_change = np.linspace(1.0, 12.0, n_samples)
+        induced = basal * fold_change
+        label_key = "Fold Change (Induced/Basal)"
+        metadata_path = tmp_path / "fc_metadata.csv"
+        pd.DataFrame(
+            {
+                "Sequence": [f"ATGC{i}" for i in range(n_samples)],
+                "Basal Exp (GFP, au)": basal,
+                "Induced Exp (GFP, au)": induced,
+                label_key: fold_change,
+            }
+        ).to_csv(metadata_path, index=False)
+
+        def build_experiment(measurement_simulation=None):
+            return ActiveLearningExperiment(
+                embeddings_path=str(embedding_path),
+                metadata_path=str(metadata_path),
+                initial_selection_strategy=RandomInitialSelection(
+                    seed=5, starting_batch_size=6
+                ),
+                query_strategy=TopPredictions(),
+                predictor=LinearRegression(),
+                starting_batch_size=6,
+                batch_size=4,
+                random_seed=5,
+                feature_transforms=[("scaler", StandardScaler())],
+                target_transforms=[("log", FunctionTransformer(np.log1p, np.expm1))],
+                label_key=label_key,
+                measurement_simulation=measurement_simulation,
+            )
+
+        baseline = build_experiment()
+        zero_noise = build_experiment(
+            {
+                "enabled": True,
+                "replicates_per_construct": 1,
+                "noise_sigma_log10_expression": 0.0,
+                "expression_columns": (
+                    "Basal Exp (GFP, au)",
+                    "Induced Exp (GFP, au)",
+                ),
+                "score_mode": "induced_over_basal",
+            }
+        )
+
+        baseline.run_experiment(max_rounds=3)
+        zero_noise.run_experiment(max_rounds=3)
+
+        assert baseline.train_indices == zero_noise.train_indices
+        assert baseline.unlabeled_indices == zero_noise.unlabeled_indices
+        pd.testing.assert_frame_equal(
+            pd.DataFrame(baseline.round_tracker.rounds),
+            pd.DataFrame(zero_noise.round_tracker.rounds),
+        )
+        np.testing.assert_allclose(
+            baseline.get_training_targets(baseline.train_indices),
+            zero_noise.get_training_targets(zero_noise.train_indices),
+            rtol=0.0,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(
+            baseline.trainer.predict(embeddings),
+            zero_noise.trainer.predict(embeddings),
+            rtol=0.0,
+            atol=1e-12,
+        )
+        cumulative_best = [
+            record["best_true_score_found"]
+            for record in zero_noise.round_tracker.rounds
+        ]
+        assert cumulative_best == sorted(cumulative_best)
+
     def test_label_key_required(self, tmp_path):
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=5)
         with pytest.raises(ValueError):

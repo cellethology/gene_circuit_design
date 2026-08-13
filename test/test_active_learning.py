@@ -94,6 +94,7 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
         "avg_top",
         "rounds_to_top",
         "rounds_to_confirm_top",
+        "best_true_score_found",
         "overall_true",
         "max_train_spearman",
         "max_extreme_value_auc",
