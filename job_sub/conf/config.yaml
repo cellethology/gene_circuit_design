@@ -44,7 +44,9 @@ al_settings:
 measurement_simulation:
   replicates_per_construct: 1
   noise_sigma_log10_expression: 0.0
-  expression_columns: []
+  expression_columns:
+    - "Basal Exp (GFP, au)"
+    - "Induced Exp (GFP, au)"
   score_mode: label
   basal_column: null
   induced_column: null
