@@ -11,6 +11,7 @@ import pandas as pd
 
 _EXPRESSION_SCORE_MODES = {"induced_over_basal", "and_score", "or_score"}
 _SCORE_MODES = {"label", *_EXPRESSION_SCORE_MODES}
+_LN_10_SQUARED = float(np.log(10.0) ** 2)
 
 
 @dataclass(frozen=True)
@@ -86,6 +87,7 @@ class MeasurementSimulator:
 
         n_samples = len(self.true_labels)
         self.observed_means = np.full(n_samples, np.nan, dtype=float)
+        self.replicate_score_means = np.full(n_samples, np.nan, dtype=float)
         self.observed_vars = np.full(n_samples, np.nan, dtype=float)
         self.replicate_counts = np.zeros(n_samples, dtype=int)
         self.selected_rounds = np.full(n_samples, -1, dtype=int)
@@ -93,6 +95,19 @@ class MeasurementSimulator:
         self.training_observation_rows: list[dict[str, Any]] = []
 
         self._validate_metadata()
+        expression_columns = self._expression_columns_to_simulate()
+        self.expression_replicates = {
+            column: np.full(
+                (n_samples, self.config.replicates_per_construct),
+                np.nan,
+                dtype=float,
+            )
+            for column in expression_columns
+        }
+        self.observed_expression_means = {
+            column: np.full(n_samples, np.nan, dtype=float)
+            for column in expression_columns
+        }
 
     def measure(self, indices: list[int] | np.ndarray, round_num: int) -> None:
         """Simulate replicate measurements for newly selected constructs."""
@@ -103,10 +118,18 @@ class MeasurementSimulator:
             if self.selected_rounds[sample_index] < 0:
                 self.selected_rounds[sample_index] = int(round_num)
 
+            measurement_row_start = len(self.measurement_rows)
             replicate_scores = []
             for replicate_index in range(self.config.replicates_per_construct):
-                score, row_values = self._simulate_one_measurement(sample_index)
+                score, row_values, expression_values = self._simulate_one_measurement(
+                    sample_index
+                )
                 replicate_scores.append(score)
+                if expression_values is not None:
+                    for column, value in expression_values.items():
+                        self.expression_replicates[column][
+                            sample_index, replicate_index
+                        ] = value
                 self.measurement_rows.append(
                     {
                         "round": int(round_num),
@@ -127,13 +150,39 @@ class MeasurementSimulator:
                 )
 
             values = np.asarray(replicate_scores, dtype=float)
-            self.observed_means[sample_index] = float(np.mean(values))
+            self.replicate_score_means[sample_index] = float(np.mean(values))
             self.replicate_counts[sample_index] = int(values.size)
             if values.size >= 2:
                 self.observed_vars[sample_index] = float(np.var(values, ddof=1))
 
+            if self.config.score_mode in _EXPRESSION_SCORE_MODES:
+                mean_expressions = {
+                    column: float(
+                        np.mean(self.expression_replicates[column][sample_index, :])
+                    )
+                    for column in self.expression_replicates
+                }
+                for column, value in mean_expressions.items():
+                    self.observed_expression_means[column][sample_index] = value
+                observed_score = self._score_from_expression(mean_expressions)
+            else:
+                mean_expressions = {}
+                observed_score = self.replicate_score_means[sample_index]
+            self.observed_means[sample_index] = observed_score
+
+            aggregate_values = {
+                "aggregate_observed_score": observed_score,
+                "replicate_score_mean": self.replicate_score_means[sample_index],
+                **{
+                    f"mean_observed_expression_{column}": value
+                    for column, value in mean_expressions.items()
+                },
+            }
+            for row in self.measurement_rows[measurement_row_start:]:
+                row.update(aggregate_values)
+
     def training_targets(self, indices: list[int] | np.ndarray) -> np.ndarray:
-        """Return observed replicate means for measured training constructs."""
+        """Return aggregate observed scores for measured training constructs."""
         values = self.observed_means[np.asarray(indices, dtype=int)]
         if np.any(~np.isfinite(values)):
             raise ValueError(
@@ -142,16 +191,32 @@ class MeasurementSimulator:
         return values
 
     def training_y_var(self, indices: list[int] | np.ndarray) -> np.ndarray | None:
-        """Return replicate-estimated variance of each observed mean, if available."""
+        """Return replicate-estimated variance of each aggregate score."""
+        index_array = np.asarray(indices, dtype=int)
+        return self._score_y_var(index_array, apply_floor=True)
+
+    def _score_y_var(
+        self,
+        index_array: np.ndarray,
+        *,
+        apply_floor: bool,
+    ) -> np.ndarray | None:
+        counts = self.replicate_counts[index_array]
+        if np.any(counts < 1):
+            raise ValueError("Training variance requested for unmeasured samples.")
+
+        if self.config.score_mode in _EXPRESSION_SCORE_MODES:
+            return self._expression_score_y_var(
+                index_array,
+                apply_floor=apply_floor,
+            )
+
         pooled_var = self.pooled_within_construct_variance()
         if pooled_var is None:
             return None
 
-        counts = self.replicate_counts[np.asarray(indices, dtype=int)]
-        if np.any(counts < 1):
-            raise ValueError("Training variance requested for unmeasured samples.")
         y_var = pooled_var / counts.astype(float)
-        if self.config.train_yvar_floor > 0:
+        if apply_floor and self.config.train_yvar_floor > 0:
             y_var = np.maximum(y_var, self.config.train_yvar_floor)
         return y_var
 
@@ -171,26 +236,41 @@ class MeasurementSimulator:
         )
         pooled_var = self.pooled_within_construct_variance()
         pooled_value = float(pooled_var) if pooled_var is not None else np.nan
+        pooled_log10_vars = self.pooled_log10_expression_variances() or {}
 
         for sample_index, train_var in zip(index_array, y_var_values, strict=True):
-            self.training_observation_rows.append(
-                {
-                    "training_round": int(training_round),
-                    "sample_index": int(sample_index),
-                    "sample_id": self._sample_id(int(sample_index)),
-                    "selected_round": int(self.selected_rounds[int(sample_index)]),
-                    "replicate_count": int(self.replicate_counts[int(sample_index)]),
-                    "true_score": float(self.true_labels[int(sample_index)]),
-                    "observed_score_mean": float(
-                        self.observed_means[int(sample_index)]
-                    ),
-                    "observed_score_var": _finite_or_nan(
-                        self.observed_vars[int(sample_index)]
-                    ),
-                    "pooled_observed_score_var": pooled_value,
-                    "train_yvar": _finite_or_nan(train_var),
-                }
-            )
+            sample_index = int(sample_index)
+            row = {
+                "training_round": int(training_round),
+                "sample_index": sample_index,
+                "sample_id": self._sample_id(sample_index),
+                "selected_round": int(self.selected_rounds[sample_index]),
+                "replicate_count": int(self.replicate_counts[sample_index]),
+                "aggregation_method": (
+                    "score_from_mean_expression"
+                    if self.config.score_mode in _EXPRESSION_SCORE_MODES
+                    else "mean_replicate_score"
+                ),
+                "true_score": float(self.true_labels[sample_index]),
+                "observed_score": float(self.observed_means[sample_index]),
+                # Retained for compatibility with earlier simulation outputs.
+                "observed_score_mean": float(self.observed_means[sample_index]),
+                "replicate_score_mean": float(self.replicate_score_means[sample_index]),
+                "replicate_score_var": _finite_or_nan(self.observed_vars[sample_index]),
+                "observed_score_var": _finite_or_nan(self.observed_vars[sample_index]),
+                "pooled_observed_score_var": pooled_value,
+                "train_yvar": _finite_or_nan(train_var),
+            }
+            for column, means in self.observed_expression_means.items():
+                row[f"mean_observed_expression_{column}"] = _finite_or_nan(
+                    means[sample_index]
+                )
+                log10_var = pooled_log10_vars.get(column, np.nan)
+                row[f"pooled_log10_expression_var_{column}"] = _finite_or_nan(log10_var)
+                row[f"estimated_sigma_log10_expression_{column}"] = (
+                    float(np.sqrt(log10_var)) if np.isfinite(log10_var) else np.nan
+                )
+            self.training_observation_rows.append(row)
 
     def confirmed_true_top_indices(
         self, indices: list[int] | np.ndarray, top_p: float
@@ -198,9 +278,10 @@ class MeasurementSimulator:
         """Return selected indices that are truly top and confirmed by observations."""
         threshold = self.top_threshold(top_p)
         confirmed = []
-        pooled_var = self.pooled_within_construct_variance()
+        index_array = np.asarray(indices, dtype=int)
+        y_var_values = self._score_y_var(index_array, apply_floor=False)
 
-        for sample_index in np.asarray(indices, dtype=int):
+        for position, sample_index in enumerate(index_array):
             mean = self.observed_means[sample_index]
             if not np.isfinite(mean):
                 continue
@@ -208,12 +289,10 @@ class MeasurementSimulator:
             if self.replicate_counts[sample_index] <= 1:
                 called_top = mean >= threshold
             else:
-                var = pooled_var
-                if var is None or not np.isfinite(var):
-                    var = self.observed_vars[sample_index]
+                var = y_var_values[position] if y_var_values is not None else np.nan
                 if not np.isfinite(var):
                     var = 0.0
-                se = float(np.sqrt(max(var, 0.0) / self.replicate_counts[sample_index]))
+                se = float(np.sqrt(max(var, 0.0)))
                 called_top = mean - self.config.confirmation_z * se >= threshold
             if true_top and called_top:
                 confirmed.append(int(sample_index))
@@ -228,7 +307,7 @@ class MeasurementSimulator:
         return float(np.sort(self.true_labels)[-count])
 
     def pooled_within_construct_variance(self) -> float | None:
-        """Estimate shared assay variance from replicated constructs."""
+        """Estimate shared replicate-score variance for label-mode simulations."""
         mask = (self.replicate_counts >= 2) & np.isfinite(self.observed_vars)
         if not np.any(mask):
             return None
@@ -237,6 +316,41 @@ class MeasurementSimulator:
             return None
         variance = np.sum(weights * self.observed_vars[mask]) / np.sum(weights)
         return float(max(variance, 0.0))
+
+    def pooled_log10_expression_variances(self) -> dict[str, float] | None:
+        """Estimate each state's log10 expression noise from measured replicates."""
+        if not self.expression_replicates:
+            return None
+
+        estimates: dict[str, float] = {}
+        total_sum_squares = 0.0
+        total_degrees_of_freedom = 0
+        for column, replicate_matrix in self.expression_replicates.items():
+            sum_squares = 0.0
+            degrees_of_freedom = 0
+            for sample_index in np.flatnonzero(self.replicate_counts >= 2):
+                count = int(self.replicate_counts[sample_index])
+                values = replicate_matrix[sample_index, :count]
+                if np.any(~np.isfinite(values)) or np.any(values <= 0):
+                    continue
+                log_values = np.log10(values)
+                sum_squares += float(np.sum((log_values - np.mean(log_values)) ** 2))
+                degrees_of_freedom += count - 1
+            if degrees_of_freedom > 0:
+                estimates[column] = max(sum_squares / degrees_of_freedom, 0.0)
+                total_sum_squares += sum_squares
+                total_degrees_of_freedom += degrees_of_freedom
+
+        if total_degrees_of_freedom <= 0:
+            return None
+        global_variance = max(
+            total_sum_squares / total_degrees_of_freedom,
+            0.0,
+        )
+        return {
+            column: estimates.get(column, global_variance)
+            for column in self.expression_replicates
+        }
 
     def save_outputs(self, output_dir: Path) -> None:
         """Write replicate-level and training-observation records."""
@@ -252,14 +366,14 @@ class MeasurementSimulator:
 
     def _simulate_one_measurement(
         self, sample_index: int
-    ) -> tuple[float, dict[str, Any]]:
+    ) -> tuple[float, dict[str, Any], dict[str, float] | None]:
         if self.config.score_mode == "induced_over_basal":
             return self._simulate_induced_over_basal(sample_index)
         if self.config.score_mode in {"and_score", "or_score"}:
             return self._simulate_multi_input_score(sample_index)
         return self._simulate_label(sample_index)
 
-    def _simulate_label(self, sample_index: int) -> tuple[float, dict[str, Any]]:
+    def _simulate_label(self, sample_index: int) -> tuple[float, dict[str, Any], None]:
         true_score = float(self.true_labels[sample_index])
         if self.config.noise_sigma_log10_expression == 0:
             observed_score = true_score
@@ -274,41 +388,86 @@ class MeasurementSimulator:
                 self.rng.normal(0.0, self.config.noise_sigma_log10_expression)
             )
             observed_score = true_score + log10_noise
-        return observed_score, {"score_log10_noise": log10_noise}
+        return observed_score, {"score_log10_noise": log10_noise}, None
 
     def _simulate_induced_over_basal(
         self, sample_index: int
-    ) -> tuple[float, dict[str, Any]]:
-        basal_column, induced_column = self._two_state_columns()
+    ) -> tuple[float, dict[str, Any], dict[str, float]]:
         noisy_by_column, values = self._simulate_expression_values(sample_index)
-        score = _safe_ratio(
-            noisy_by_column[induced_column], noisy_by_column[basal_column]
-        )
-        return score, values
+        score = self._score_from_expression(noisy_by_column)
+        return score, values, noisy_by_column
 
     def _simulate_multi_input_score(
         self, sample_index: int
-    ) -> tuple[float, dict[str, Any]]:
+    ) -> tuple[float, dict[str, Any], dict[str, float]]:
+        noisy_by_column, values = self._simulate_expression_values(sample_index)
+        score = self._score_from_expression(noisy_by_column)
+        return score, values, noisy_by_column
+
+    def _score_from_expression(self, expression: dict[str, float]) -> float:
+        numerator_column, denominator_column = self._score_ratio_columns(expression)
+        return _safe_ratio(
+            expression[numerator_column],
+            expression[denominator_column],
+        )
+
+    def _score_ratio_columns(self, expression: dict[str, float]) -> tuple[str, str]:
+        if self.config.score_mode == "induced_over_basal":
+            basal_column, induced_column = self._two_state_columns()
+            return induced_column, basal_column
+
         basal_column, input_a_column, input_b_column, dual_column = (
             self._multi_input_columns()
         )
-        noisy_by_column, values = self._simulate_expression_values(sample_index)
-
         if self.config.score_mode == "and_score":
-            denominator = max(
-                noisy_by_column[basal_column],
-                noisy_by_column[input_a_column],
-                noisy_by_column[input_b_column],
+            denominator_candidates = (
+                basal_column,
+                input_a_column,
+                input_b_column,
             )
-            score = _safe_ratio(noisy_by_column[dual_column], denominator)
-        else:
-            numerator = min(
-                noisy_by_column[input_a_column],
-                noisy_by_column[input_b_column],
-                noisy_by_column[dual_column],
+            denominator_column = max(
+                denominator_candidates,
+                key=lambda column: expression[column],
             )
-            score = _safe_ratio(numerator, noisy_by_column[basal_column])
-        return score, values
+            return dual_column, denominator_column
+
+        numerator_candidates = (input_a_column, input_b_column, dual_column)
+        numerator_column = min(
+            numerator_candidates,
+            key=lambda column: expression[column],
+        )
+        return numerator_column, basal_column
+
+    def _expression_score_y_var(
+        self,
+        index_array: np.ndarray,
+        *,
+        apply_floor: bool,
+    ) -> np.ndarray | None:
+        pooled_variances = self.pooled_log10_expression_variances()
+        if pooled_variances is None:
+            return None
+
+        y_var = np.empty(len(index_array), dtype=float)
+        for position, sample_index in enumerate(index_array):
+            count = int(self.replicate_counts[sample_index])
+            expression = {
+                column: means[sample_index]
+                for column, means in self.observed_expression_means.items()
+            }
+            numerator_column, denominator_column = self._score_ratio_columns(expression)
+            relative_variance = (
+                np.expm1(_LN_10_SQUARED * pooled_variances[numerator_column]) / count
+                + np.expm1(_LN_10_SQUARED * pooled_variances[denominator_column])
+                / count
+            )
+            y_var[position] = self.observed_means[sample_index] ** 2 * float(
+                relative_variance
+            )
+
+        if apply_floor and self.config.train_yvar_floor > 0:
+            y_var = np.maximum(y_var, self.config.train_yvar_floor)
+        return y_var
 
     def _simulate_expression_values(
         self, sample_index: int
@@ -404,6 +563,8 @@ class MeasurementSimulator:
         return resolved[0], resolved[1], resolved[2], resolved[3]
 
     def _expression_columns_to_simulate(self) -> tuple[str, ...]:
+        if self.config.score_mode not in _EXPRESSION_SCORE_MODES:
+            return ()
         return tuple(
             dict.fromkeys((*self.config.expression_columns, *self._score_columns()))
         )

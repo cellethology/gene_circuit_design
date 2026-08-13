@@ -44,6 +44,7 @@ al_settings:
 # Keep disabled for normal active-learning use.
 measurement_simulation:
   enabled: false
+  # Expression-based modes average each state across replicates before scoring.
   replicates_per_construct: 1
   noise_sigma_log10_expression: 0.0
   expression_columns:
@@ -58,6 +59,8 @@ measurement_simulation:
   single_input_a_column: null
   single_input_b_column: null
   dual_input_column: null
+  # With 2+ replicates, train_Yvar is estimated from pooled within-construct
+  # log10 expression variance. AND/OR propagation uses the active max/min state.
   confirmation_z: 1.96
   train_yvar_floor: 1e-12
 
