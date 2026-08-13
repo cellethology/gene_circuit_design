@@ -40,8 +40,10 @@ al_settings:
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
 
-# simulated measurement settings for retrospective noise/replicate experiments
+# Simulated measurement settings for retrospective noise/replicate experiments.
+# Keep disabled for normal active-learning use.
 measurement_simulation:
+  enabled: false
   replicates_per_construct: 1
   noise_sigma_log10_expression: 0.0
   expression_columns:

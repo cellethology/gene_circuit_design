@@ -143,8 +143,8 @@ class TestActiveLearningExperiment:
         experiment.save_results(output_path)
 
         assert output_path.exists()
-        assert (Path(tmp_path) / "simulated_measurements.csv").exists()
-        assert (Path(tmp_path) / "training_observations.csv").exists()
+        assert not (Path(tmp_path) / "simulated_measurements.csv").exists()
+        assert not (Path(tmp_path) / "training_observations.csv").exists()
 
     def test_replicate_measurements_are_recorded_and_used_for_training(self, tmp_path):
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=12)
@@ -162,6 +162,7 @@ class TestActiveLearningExperiment:
             target_transforms=[("log", FunctionTransformer(np.log1p, np.expm1))],
             label_key="Expression",
             measurement_simulation={
+                "enabled": True,
                 "replicates_per_construct": 3,
                 "noise_sigma_log10_expression": 0.0,
             },

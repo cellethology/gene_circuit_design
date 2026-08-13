@@ -81,15 +81,14 @@ def test_run_single_experiment_creates_summary(tmp_path, monkeypatch):
     out_dir = Path(cfg.al_settings["output_dir"])
     summary_path = out_dir / "summary.json"
     results_path = out_dir / "results.csv"
-    measurements_path = out_dir / "simulated_measurements.csv"
-    training_observations_path = out_dir / "training_observations.csv"
 
     assert results_path.exists()
     assert summary_path.exists()
-    assert measurements_path.exists()
-    assert training_observations_path.exists()
+    assert not (out_dir / "simulated_measurements.csv").exists()
+    assert not (out_dir / "training_observations.csv").exists()
     saved_summary = json.loads(summary_path.read_text())
     assert saved_summary["query_strategy"] == summary["query_strategy"]
+    assert saved_summary["measurement_simulation"] == {}
     for key in (
         "auc_true",
         "avg_top",

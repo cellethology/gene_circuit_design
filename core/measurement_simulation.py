@@ -14,6 +14,7 @@ import pandas as pd
 class MeasurementSimulationConfig:
     """Configuration for simulated assay measurements."""
 
+    enabled: bool = False
     replicates_per_construct: int = 1
     noise_sigma_log10_expression: float = 0.0
     expression_columns: tuple[str, ...] = ()

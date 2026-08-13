@@ -137,17 +137,18 @@ class ActiveLearningExperiment:
         # Initialize metrics calculator
         self.metrics_calculator = MetricsCalculator(self.dataset.labels)
 
-        # Initialize simulated measurements. Defaults are one noiseless replicate,
-        # which preserves the previous retrospective behavior while still writing
-        # explicit measurement records.
-        self.measurement_simulator = MeasurementSimulator(
-            sample_ids=self.dataset.sample_ids,
-            true_labels=self.dataset.labels,
-            metadata=self.dataset.metadata,
-            label_key=self.label_key,
-            config=self.measurement_simulation_config,
-            random_seed=random_seed,
-        )
+        # Keep reviewer-style noisy measurement simulations opt-in so normal
+        # active-learning runs continue to use the historical labels directly.
+        self.measurement_simulator: MeasurementSimulator | None = None
+        if self.measurement_simulation_config.enabled:
+            self.measurement_simulator = MeasurementSimulator(
+                sample_ids=self.dataset.sample_ids,
+                true_labels=self.dataset.labels,
+                metadata=self.dataset.metadata,
+                label_key=self.label_key,
+                config=self.measurement_simulation_config,
+                random_seed=random_seed,
+            )
 
         # Initialize round tracker
         self.round_tracker = RoundTracker(
@@ -215,10 +216,14 @@ class ActiveLearningExperiment:
         Returns:
             Metrics for the round
         """
-        confirmed_top_indices = self.measurement_simulator.confirmed_true_top_indices(
-            indices=indices,
-            top_p=top_p,
-        )
+        confirmed_top_indices = np.asarray([], dtype=int)
+        if self.measurement_simulator is not None:
+            confirmed_top_indices = (
+                self.measurement_simulator.confirmed_true_top_indices(
+                    indices=indices,
+                    top_p=top_p,
+                )
+            )
         round_metrics = self.metrics_calculator.compute_metrics_for_round(
             selected_indices=np.asarray(indices),
             train_indices=np.asarray(train_indices)
@@ -237,10 +242,14 @@ class ActiveLearningExperiment:
 
     def get_training_targets(self, indices: list[int] | np.ndarray) -> np.ndarray:
         """Return observed labels used to train the predictor."""
-        return self.measurement_simulator.training_targets(indices)
+        if self.measurement_simulator is not None:
+            return self.measurement_simulator.training_targets(indices)
+        return self.dataset.labels[np.asarray(indices, dtype=int)]
 
     def get_training_y_var(self, indices: list[int] | np.ndarray) -> np.ndarray | None:
         """Return observation variances for predictor training, when estimable."""
+        if self.measurement_simulator is None:
+            return None
         return self.measurement_simulator.training_y_var(indices)
 
     def _get_round_predictions(
@@ -288,7 +297,8 @@ class ActiveLearningExperiment:
         requires_model = getattr(self.query_strategy, "requires_model", True)
 
         logger.info("--- Initial selection ---")
-        self.measurement_simulator.measure(self.train_indices, round_num=0)
+        if self.measurement_simulator is not None:
+            self.measurement_simulator.measure(self.train_indices, round_num=0)
         self._evaluate_and_track(
             indices=self.train_indices,
             top_p=top_p,
@@ -323,11 +333,12 @@ class ActiveLearningExperiment:
                 X_train = self.dataset.embeddings[self.train_indices, :]
                 y_train = self.get_training_targets(self.train_indices)
                 y_var_train = self.get_training_y_var(self.train_indices)
-                self.measurement_simulator.record_training_observations(
-                    indices=self.train_indices,
-                    training_round=round_num + 1,
-                    train_y_var=y_var_train,
-                )
+                if self.measurement_simulator is not None:
+                    self.measurement_simulator.record_training_observations(
+                        indices=self.train_indices,
+                        training_round=round_num + 1,
+                        train_y_var=y_var_train,
+                    )
                 logger.info("Starting model training for round %d", round_num + 1)
                 try:
                     self.trainer.train(
@@ -381,7 +392,11 @@ class ActiveLearningExperiment:
                 )
                 break
 
-            self.measurement_simulator.measure(next_batch, round_num=round_num + 1)
+            if self.measurement_simulator is not None:
+                self.measurement_simulator.measure(
+                    next_batch,
+                    round_num=round_num + 1,
+                )
             self._evaluate_and_track(
                 indices=next_batch,
                 top_p=top_p,
@@ -411,7 +426,8 @@ class ActiveLearningExperiment:
         """
         output_path = Path(output_path)
         self.round_tracker.save_to_csv(output_path=output_path)
-        self.measurement_simulator.save_outputs(output_path.parent)
+        if self.measurement_simulator is not None:
+            self.measurement_simulator.save_outputs(output_path.parent)
 
     @property
     def unlabeled_indices(self) -> list[int]:

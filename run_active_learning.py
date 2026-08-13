@@ -260,6 +260,7 @@ def _measurement_simulation_summary(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
     keys = (
+        "enabled",
         "replicates_per_construct",
         "noise_sigma_log10_expression",
         "expression_columns",
