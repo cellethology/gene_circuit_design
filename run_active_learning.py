@@ -66,6 +66,7 @@ def run_one_experiment(
         starting_batch_size = al_settings.get("starting_batch_size", batch_size)
         max_rounds = al_settings.get("max_rounds")
         label_key = al_settings.get("label_key", None)
+        measurement_simulation = getattr(cfg, "measurement_simulation", None)
 
         # Check embedding path matches embedding model
         if not embeddings_path.endswith(f"{embedding_model_name}.npz"):
@@ -87,6 +88,7 @@ def run_one_experiment(
             label_key=label_key,
             initial_selection_strategy=initial_selection_strategy,
             subset_ids_path=subset_ids_path,
+            measurement_simulation=measurement_simulation,
         )
 
         # Run experiment
@@ -145,10 +147,14 @@ def run_one_experiment(
         "auc_true": summary_metrics["auc_true"],
         "avg_top": summary_metrics["avg_top"],
         "rounds_to_top": summary_metrics["rounds_to_top"],
+        "rounds_to_confirm_top": summary_metrics["rounds_to_confirm_top"],
         "overall_true": summary_metrics["overall_true"],
         "max_train_spearman": summary_metrics["max_train_spearman"],
         "max_extreme_value_auc": summary_metrics["max_extreme_value_auc"],
         "summary_by_round": summary_metrics_history,
+        "measurement_simulation": _measurement_simulation_summary(
+            measurement_simulation
+        ),
         "completed_rounds": len(experiment.round_tracker.rounds),
         "stopped_early": experiment.failure_info is not None,
         "failure_info": experiment.failure_info,
@@ -240,3 +246,27 @@ def _normalize_override_values(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(item) for item in value]
     return [str(value)]
+
+
+def _measurement_simulation_summary(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    try:
+        container = OmegaConf.to_container(value, resolve=True)
+    except Exception:
+        container = None
+    if isinstance(container, dict):
+        return dict(container)
+    if isinstance(value, dict):
+        return dict(value)
+    keys = (
+        "replicates_per_construct",
+        "noise_sigma_log10_expression",
+        "expression_columns",
+        "score_mode",
+        "basal_column",
+        "induced_column",
+        "confirmation_z",
+        "train_yvar_floor",
+    )
+    return {key: getattr(value, key) for key in keys if hasattr(value, key)}

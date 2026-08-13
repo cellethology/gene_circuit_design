@@ -16,6 +16,7 @@ SUMMARY_METRIC_RULES = {
     "auc_true": ("max_accumulate", "normalized_true"),
     "avg_top": ("top_mean", "n_top"),
     "rounds_to_top": ("rounds_to_top", "n_top"),
+    "rounds_to_confirm_top": ("rounds_to_top", "n_confirmed_top"),
     "overall_true": ("max_overall", "normalized_true"),
     "max_train_spearman": ("max_overall", "train_spearman"),
     "max_extreme_value_auc": ("max_overall", "extreme_value_auc"),

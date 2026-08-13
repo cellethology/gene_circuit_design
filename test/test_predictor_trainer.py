@@ -5,12 +5,23 @@ Tests model training, prediction, and normalization functionality.
 """
 
 import numpy as np
+from sklearn.base import BaseEstimator, RegressorMixin
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
 from core.predictor_trainer import PredictorTrainer
+
+
+class VarianceAwareRegressor(BaseEstimator, RegressorMixin):
+    def fit(self, X, y, y_var=None):
+        self.y_mean_ = float(np.mean(y))
+        self.y_var_ = None if y_var is None else np.asarray(y_var, dtype=float)
+        return self
+
+    def predict(self, X):
+        return np.full(len(X), self.y_mean_)
 
 
 class TestPredictorTrainer:
@@ -82,3 +93,33 @@ class TestPredictorTrainer:
 
         preds = trainer.predict(np.array([[5.0], [6.0]]))
         assert preds.shape == (2,)
+
+    def test_train_passes_observation_variance_to_supported_estimator(self):
+        trainer = PredictorTrainer(VarianceAwareRegressor())
+
+        X_train = np.array([[1.0], [2.0], [3.0]])
+        y_train = np.array([1.0, 2.0, 3.0])
+        y_var_train = np.array([0.1, 0.2, 0.3])
+        trainer.train(X_train, y_train, y_var_train=y_var_train)
+
+        model = trainer.get_model()
+        np.testing.assert_allclose(model.y_var_, y_var_train)
+
+    def test_train_transforms_observation_variance_with_target_transform(self):
+        target_steps = [
+            ("log", FunctionTransformer(np.log1p, np.expm1)),
+            ("scaler", StandardScaler()),
+        ]
+        trainer = PredictorTrainer(
+            VarianceAwareRegressor(),
+            target_transform=target_steps,
+        )
+
+        X_train = np.array([[1.0], [2.0], [3.0]])
+        y_train = np.array([1.0, 2.0, 3.0])
+        y_var_train = np.array([0.1, 0.1, 0.1])
+        trainer.train(X_train, y_train, y_var_train=y_var_train)
+
+        model = trainer.get_model()
+        assert np.all(np.isfinite(model.regressor_.y_var_))
+        assert not np.allclose(model.regressor_.y_var_, y_var_train)

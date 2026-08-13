@@ -221,7 +221,10 @@ class BoTorchAcquisition(QueryStrategyBase):
         if not isinstance(X_train, np.ndarray):
             X_train = np.asarray(X_train)
 
-        train_labels = experiment.dataset.labels[experiment.train_indices]
+        if hasattr(experiment, "get_training_targets"):
+            train_labels = experiment.get_training_targets(experiment.train_indices)
+        else:
+            train_labels = experiment.dataset.labels[experiment.train_indices]
         train_labels = self._transform_targets(train_labels, target_transformer)
         best_f = train_labels.max() if self.maximize else train_labels.min()
 

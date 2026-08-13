@@ -143,6 +143,40 @@ class TestActiveLearningExperiment:
         experiment.save_results(output_path)
 
         assert output_path.exists()
+        assert (Path(tmp_path) / "simulated_measurements.csv").exists()
+        assert (Path(tmp_path) / "training_observations.csv").exists()
+
+    def test_replicate_measurements_are_recorded_and_used_for_training(self, tmp_path):
+        emb_path, csv_path = self.create_dataset(tmp_path, n_samples=12)
+        experiment = ActiveLearningExperiment(
+            embeddings_path=emb_path,
+            metadata_path=csv_path,
+            initial_selection_strategy=RandomInitialSelection(
+                seed=0, starting_batch_size=4
+            ),
+            query_strategy=TopPredictions(),
+            predictor=LinearRegression(),
+            starting_batch_size=4,
+            batch_size=2,
+            feature_transforms=[("scaler", StandardScaler())],
+            target_transforms=[("log", FunctionTransformer(np.log1p, np.expm1))],
+            label_key="Expression",
+            measurement_simulation={
+                "replicates_per_construct": 3,
+                "noise_sigma_log10_expression": 0.0,
+            },
+        )
+
+        experiment.run_experiment(max_rounds=1)
+        output_path = Path(tmp_path) / "replicate_results.csv"
+        experiment.save_results(output_path)
+
+        measurements = pd.read_csv(Path(tmp_path) / "simulated_measurements.csv")
+        training = pd.read_csv(Path(tmp_path) / "training_observations.csv")
+        assert len(measurements) == 18
+        assert set(measurements["replicate"]) == {0, 1, 2}
+        assert len(training) == 4
+        assert "n_confirmed_top" in pd.read_csv(output_path).columns
 
     def test_label_key_required(self, tmp_path):
         emb_path, csv_path = self.create_dataset(tmp_path, n_samples=5)

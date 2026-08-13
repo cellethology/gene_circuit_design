@@ -233,19 +233,36 @@ class BoTorchGPRegressor(_BoTorchBaseRegressor):
         )
         return params
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> BoTorchGPRegressor:
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        y_var: np.ndarray | None = None,
+    ) -> BoTorchGPRegressor:
         X_tensor = self._to_tensor(X)
         y_tensor = self._to_tensor(y).view(-1, 1)
+        y_var_tensor = None
+        if y_var is not None:
+            y_var_tensor = self._to_tensor(y_var).view(-1, 1)
+            y_var_tensor = y_var_tensor.clamp_min(1e-12)
 
         covar_module = self._build_kernel(X_tensor)
-        likelihood = self._build_likelihood()
+        model_kwargs = {
+            "covar_module": covar_module.to(
+                device=X_tensor.device,
+                dtype=X_tensor.dtype,
+            ),
+        }
+        if y_var_tensor is None:
+            likelihood = self._build_likelihood()
+            model_kwargs["likelihood"] = likelihood.to(
+                device=X_tensor.device,
+                dtype=X_tensor.dtype,
+            )
+        else:
+            model_kwargs["train_Yvar"] = y_var_tensor
 
-        self.model_ = SingleTaskGP(
-            X_tensor,
-            y_tensor,
-            covar_module=covar_module.to(device=X_tensor.device, dtype=X_tensor.dtype),
-            likelihood=likelihood.to(device=X_tensor.device, dtype=X_tensor.dtype),
-        )
+        self.model_ = SingleTaskGP(X_tensor, y_tensor, **model_kwargs)
         self.model_.train()
         mll = ExactMarginalLogLikelihood(self.model_.likelihood, self.model_)
         self._fit_mll(mll)

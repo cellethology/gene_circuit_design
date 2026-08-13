@@ -40,6 +40,17 @@ al_settings:
   initial_selection_strategy: ${initial_selection_strategy}
   seed: 0
 
+# simulated measurement settings for retrospective noise/replicate experiments
+measurement_simulation:
+  replicates_per_construct: 1
+  noise_sigma_log10_expression: 0.0
+  expression_columns: []
+  score_mode: label
+  basal_column: null
+  induced_column: null
+  confirmation_z: 1.96
+  train_yvar_floor: 1e-12
+
 # hydra settings
 hydra:
   sweep:
