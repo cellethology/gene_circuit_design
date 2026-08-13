@@ -124,6 +124,63 @@ def test_induced_over_basal_simulation_uses_expression_columns():
     assert simulator.training_y_var([0]) is None
 
 
+def test_zero_noise_expression_score_is_exactly_anchored_to_historical_score():
+    metadata = pd.DataFrame({"basal": [2.0], "induced": [10.0]})
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([7]),
+        true_labels=np.array([5.25]),
+        metadata=metadata,
+        label_key="Fold Change",
+        config=MeasurementSimulationConfig(
+            replicates_per_construct=1,
+            noise_sigma_log10_expression=0.0,
+            expression_columns=("basal", "induced"),
+            score_mode="induced_over_basal",
+        ),
+        random_seed=0,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    measurement = simulator.measurement_rows[0]
+    assert measurement["expression_derived_score"] == 5.0
+    assert measurement["historical_score_calibration_factor"] == 1.05
+    assert measurement["observed_score"] == 5.25
+    assert measurement["aggregate_observed_score"] == 5.25
+    assert simulator.training_targets([0])[0] == 5.25
+
+
+def test_noisy_expression_scores_preserve_historical_score_calibration():
+    metadata = pd.DataFrame({"basal": [2.0], "induced": [10.0]})
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([7]),
+        true_labels=np.array([5.25]),
+        metadata=metadata,
+        label_key="Fold Change",
+        config=MeasurementSimulationConfig(
+            replicates_per_construct=2,
+            noise_sigma_log10_expression=0.1,
+            expression_columns=("basal", "induced"),
+            score_mode="induced_over_basal",
+        ),
+        random_seed=4,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    for measurement in simulator.measurement_rows:
+        assert measurement["historical_score_calibration_factor"] == 1.05
+        assert measurement["observed_score"] == pytest.approx(
+            measurement["expression_derived_score"] * 1.05
+        )
+    aggregate_derived_score = simulator.measurement_rows[0][
+        "aggregate_expression_derived_score"
+    ]
+    assert simulator.training_targets([0])[0] == pytest.approx(
+        aggregate_derived_score * 1.05
+    )
+
+
 def test_induced_over_basal_averages_expression_before_scoring_and_propagates_yvar():
     metadata = pd.DataFrame({"basal": [2.0], "induced": [10.0]})
     simulator = MeasurementSimulator(

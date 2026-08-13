@@ -45,6 +45,7 @@ al_settings:
 measurement_simulation:
   enabled: false
   # Expression-based modes average each state across replicates before scoring.
+  # Relative perturbations are anchored to each historical score as the true mean.
   replicates_per_construct: 1
   noise_sigma_log10_expression: 0.0
   expression_columns:

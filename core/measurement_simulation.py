@@ -164,14 +164,20 @@ class MeasurementSimulator:
                 }
                 for column, value in mean_expressions.items():
                     self.observed_expression_means[column][sample_index] = value
-                observed_score = self._score_from_expression(mean_expressions)
+                aggregate_derived_score = self._score_from_expression(mean_expressions)
+                observed_score = self._calibrated_expression_score(
+                    sample_index,
+                    aggregate_derived_score,
+                )
             else:
                 mean_expressions = {}
+                aggregate_derived_score = np.nan
                 observed_score = self.replicate_score_means[sample_index]
             self.observed_means[sample_index] = observed_score
 
             aggregate_values = {
                 "aggregate_observed_score": observed_score,
+                "aggregate_expression_derived_score": aggregate_derived_score,
                 "replicate_score_mean": self.replicate_score_means[sample_index],
                 **{
                     f"mean_observed_expression_{column}": value
@@ -394,15 +400,61 @@ class MeasurementSimulator:
         self, sample_index: int
     ) -> tuple[float, dict[str, Any], dict[str, float]]:
         noisy_by_column, values = self._simulate_expression_values(sample_index)
-        score = self._score_from_expression(noisy_by_column)
+        derived_score = self._score_from_expression(noisy_by_column)
+        score = self._calibrated_expression_score(sample_index, derived_score)
+        values["expression_derived_score"] = derived_score
+        values["historical_score_calibration_factor"] = (
+            self._historical_score_calibration_factor(sample_index)
+        )
         return score, values, noisy_by_column
 
     def _simulate_multi_input_score(
         self, sample_index: int
     ) -> tuple[float, dict[str, Any], dict[str, float]]:
         noisy_by_column, values = self._simulate_expression_values(sample_index)
-        score = self._score_from_expression(noisy_by_column)
+        derived_score = self._score_from_expression(noisy_by_column)
+        score = self._calibrated_expression_score(sample_index, derived_score)
+        values["expression_derived_score"] = derived_score
+        values["historical_score_calibration_factor"] = (
+            self._historical_score_calibration_factor(sample_index)
+        )
         return score, values, noisy_by_column
+
+    def _calibrated_expression_score(
+        self,
+        sample_index: int,
+        derived_score: float,
+    ) -> float:
+        if self.config.noise_sigma_log10_expression == 0:
+            return float(self.true_labels[sample_index])
+        return derived_score * self._historical_score_calibration_factor(sample_index)
+
+    def _historical_score_calibration_factor(self, sample_index: int) -> float:
+        if self.metadata is None:
+            raise ValueError(
+                f"metadata is required for {self.config.score_mode} simulation."
+            )
+        row = self.metadata.iloc[sample_index]
+        true_expression = {
+            column: float(row[column])
+            for column in self._expression_columns_to_simulate()
+        }
+        expression_score = self._score_from_expression(true_expression)
+        historical_score = float(self.true_labels[sample_index])
+        if expression_score == 0:
+            if historical_score == 0:
+                return 1.0
+            raise ValueError(
+                "Cannot anchor a nonzero historical score to a zero expression-derived "
+                f"score for sample {self._sample_id(sample_index)}."
+            )
+        factor = historical_score / expression_score
+        if not np.isfinite(factor):
+            raise ValueError(
+                "Historical score calibration must be finite for sample "
+                f"{self._sample_id(sample_index)}."
+            )
+        return float(factor)
 
     def _score_from_expression(self, expression: dict[str, float]) -> float:
         numerator_column, denominator_column = self._score_ratio_columns(expression)
