@@ -212,12 +212,14 @@ class PredictorTrainer:
     ) -> np.ndarray:
         y = np.asarray(y, dtype=float).reshape(-1)
         y_var = np.asarray(y_var, dtype=float).reshape(-1)
-        deltas = np.maximum(np.sqrt(np.maximum(y_var, 0.0)), 1e-6)
-        base = np.asarray(transformer.transform(y.reshape(-1, 1))).reshape(-1)
-        upper = np.asarray(transformer.transform((y + deltas).reshape(-1, 1))).reshape(
+        steps = np.cbrt(np.finfo(float).eps) * np.maximum(1.0, np.abs(y))
+        upper = np.asarray(transformer.transform((y + steps).reshape(-1, 1))).reshape(
             -1
         )
-        slopes = (upper - base) / deltas
+        lower = np.asarray(transformer.transform((y - steps).reshape(-1, 1))).reshape(
+            -1
+        )
+        slopes = (upper - lower) / (2.0 * steps)
         transformed = np.maximum((slopes**2) * y_var, 0.0)
         return transformed
 

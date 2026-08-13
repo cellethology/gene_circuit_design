@@ -121,5 +121,6 @@ class TestPredictorTrainer:
         trainer.train(X_train, y_train, y_var_train=y_var_train)
 
         model = trainer.get_model()
-        assert np.all(np.isfinite(model.regressor_.y_var_))
-        assert not np.allclose(model.regressor_.y_var_, y_var_train)
+        log_scale = np.std(np.log1p(y_train), ddof=0)
+        expected = y_var_train / ((1.0 + y_train) ** 2 * log_scale**2)
+        np.testing.assert_allclose(model.regressor_.y_var_, expected, rtol=1e-9)
