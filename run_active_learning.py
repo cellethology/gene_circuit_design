@@ -267,6 +267,9 @@ def _measurement_simulation_summary(value: Any) -> dict[str, Any]:
         "score_mode",
         "basal_column",
         "induced_column",
+        "single_input_a_column",
+        "single_input_b_column",
+        "dual_input_column",
         "confirmation_z",
         "train_yvar_floor",
     )

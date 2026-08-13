@@ -94,3 +94,141 @@ def test_induced_over_basal_simulation_uses_expression_columns():
     assert simulator.measurement_rows[0][
         "observed_expression_induced"
     ] == pytest.approx(10.0)
+
+
+@pytest.mark.parametrize(
+    ("score_mode", "expected_score"),
+    [("and_score", 1.5), ("or_score", 3.0)],
+)
+def test_multi_input_score_modes_recompute_scores_from_four_states(
+    score_mode, expected_score
+):
+    metadata = pd.DataFrame(
+        {
+            "basal": [2.0],
+            "input_a": [8.0],
+            "input_b": [6.0],
+            "dual": [12.0],
+        }
+    )
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([0]),
+        true_labels=np.array([expected_score]),
+        metadata=metadata,
+        label_key=score_mode,
+        config=MeasurementSimulationConfig(
+            replicates_per_construct=1,
+            noise_sigma_log10_expression=0.0,
+            expression_columns=("basal", "input_a", "input_b", "dual"),
+            score_mode=score_mode,
+        ),
+        random_seed=0,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    measurement = simulator.measurement_rows[0]
+    assert measurement["observed_score"] == pytest.approx(expected_score)
+    for column in ("basal", "input_a", "input_b", "dual"):
+        assert measurement[f"true_expression_{column}"] == pytest.approx(
+            metadata.loc[0, column]
+        )
+        assert measurement[f"observed_expression_{column}"] == pytest.approx(
+            metadata.loc[0, column]
+        )
+
+
+@pytest.mark.parametrize("score_mode", ["and_score", "or_score"])
+def test_multi_input_replicates_use_noisy_derived_scores(score_mode):
+    metadata = pd.DataFrame(
+        {
+            "basal": [2.0],
+            "input_a": [8.0],
+            "input_b": [6.0],
+            "dual": [12.0],
+        }
+    )
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([0]),
+        true_labels=np.array([1.5 if score_mode == "and_score" else 3.0]),
+        metadata=metadata,
+        label_key=score_mode,
+        config=MeasurementSimulationConfig(
+            replicates_per_construct=3,
+            noise_sigma_log10_expression=0.1,
+            expression_columns=("basal", "input_a", "input_b", "dual"),
+            score_mode=score_mode,
+        ),
+        random_seed=7,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    observed_scores = []
+    for measurement in simulator.measurement_rows:
+        observed = {
+            column: measurement[f"observed_expression_{column}"]
+            for column in ("basal", "input_a", "input_b", "dual")
+        }
+        if score_mode == "and_score":
+            expected = observed["dual"] / max(
+                observed["basal"], observed["input_a"], observed["input_b"]
+            )
+        else:
+            expected = (
+                min(observed["input_a"], observed["input_b"], observed["dual"])
+                / observed["basal"]
+            )
+        assert measurement["observed_score"] == pytest.approx(expected)
+        observed_scores.append(expected)
+
+    assert simulator.training_targets([0])[0] == pytest.approx(np.mean(observed_scores))
+    assert simulator.training_y_var([0])[0] == pytest.approx(
+        np.var(observed_scores, ddof=1) / 3
+    )
+
+
+def test_multi_input_named_columns_do_not_depend_on_expression_column_order():
+    metadata = pd.DataFrame(
+        {"dual": [12.0], "input_b": [6.0], "basal": [2.0], "input_a": [8.0]}
+    )
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([0]),
+        true_labels=np.array([1.5]),
+        metadata=metadata,
+        label_key="and_score",
+        config=MeasurementSimulationConfig(
+            score_mode="and_score",
+            basal_column="basal",
+            single_input_a_column="input_a",
+            single_input_b_column="input_b",
+            dual_input_column="dual",
+        ),
+        random_seed=0,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    assert simulator.measurement_rows[0]["observed_score"] == pytest.approx(1.5)
+
+
+def test_multi_input_mode_allows_zero_expression():
+    metadata = pd.DataFrame(
+        {"basal": [0.0], "input_a": [2.0], "input_b": [3.0], "dual": [6.0]}
+    )
+    simulator = MeasurementSimulator(
+        sample_ids=np.array([0]),
+        true_labels=np.array([2.0]),
+        metadata=metadata,
+        label_key="and_score",
+        config=MeasurementSimulationConfig(
+            expression_columns=("basal", "input_a", "input_b", "dual"),
+            score_mode="and_score",
+            noise_sigma_log10_expression=0.1,
+        ),
+        random_seed=0,
+    )
+
+    simulator.measure([0], round_num=0)
+
+    assert simulator.measurement_rows[0]["observed_expression_basal"] == 0.0

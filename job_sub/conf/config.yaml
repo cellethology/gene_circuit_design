@@ -49,9 +49,15 @@ measurement_simulation:
   expression_columns:
     - "Basal Exp (GFP, au)"
     - "Induced Exp (GFP, au)"
+  # label | induced_over_basal | and_score | or_score
   score_mode: label
   basal_column: null
   induced_column: null
+  # Optional explicit mappings for four-state AND/OR simulations. Otherwise,
+  # expression_columns must be ordered basal, input A, input B, dual input.
+  single_input_a_column: null
+  single_input_b_column: null
+  dual_input_column: null
   confirmation_z: 1.96
   train_yvar_floor: 1e-12
 
