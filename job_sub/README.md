@@ -119,8 +119,8 @@ Cluster settings live under `hydra.launcher` in [conf/config.yaml](conf/config.y
 ```yaml
 hydra:
   launcher:
-    timeout_min: 720
-    partition: intel-sc3,wzt_20250411
+    timeout_min: 1440
+    partition: intel-sc3,amd-ep2,amd-ep5
     cpus_per_task: 1
     qos: huge
     mem_per_cpu: 30GB
