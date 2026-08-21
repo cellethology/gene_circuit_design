@@ -1,33 +1,19 @@
-# OR MES Noise Sweep Handoff
+# OR MES Noise Sweep: Run Instructions
 
-This branch contains a reproducible Westlake submission for the retrospective
-OR task with simulated clonal variation.
+This guide runs the Deepdraw OR experiment with:
 
-## Fixed Experiment
+- MES selection
+- sigma = 0.10 noise in log10 expression space
+- 30 evaluated rounds
+- 30 random seeds
+- allocations `24x1`, `12x2`, and `8x3`
+- 33 OR datasets
+- 2,970 total runs
 
-- Dataset file: `job_sub/datasets/1m_base_datasets.yaml`
-- 33 structural subsets from the 1M library
-- Embedding: `1m_alphagenome_1bp_embeddings_kneedle`
-- Query strategy: MES
-- Predictor: BoTorch GP
-- Initial selection: ProbCover Euclidean
-- Score: `or_score`
-- Noise: independent Gaussian noise with sigma 0.10 in log10 expression space
-- Expression states: basal, 4-OHT, GZV, and dual induction
-- Allocations: 24 constructs x 1 replicate, 12 x 2, and 8 x 3
-- Assay budget: 24 measurements per round
-- Evaluated rounds: 30 (`al_settings.max_rounds=29` after the initial round)
-- Seeds: 0 through 29
-- Full size: 33 datasets x 3 allocations x 30 seeds = 2,970 tasks
+The submission commands are lightweight and may run on the login node. The
+experiments and validation must run through Slurm on compute nodes.
 
-The GP is not given sigma 0.10. For the replicated allocations, its observation
-variance is estimated from the simulated replicate measurements accumulated
-through the current round. The 24x1 allocation uses the observed-only path.
-
-## 1. Obtain The Branch
-
-For a fresh clone, this checks out the branch directly and does not require
-`git switch`:
+## 1. Download The Code And Install The Environment
 
 ```bash
 git clone \
@@ -35,75 +21,40 @@ git clone \
   --single-branch \
   https://github.com/cellethology/deepdraw.git \
   deepdraw-or-mes
+
 cd deepdraw-or-mes
-```
-
-For an existing clone:
-
-```bash
-cd ~/deepdraw
-git fetch origin
-git checkout -b codex/or-sigma0p1-mes-30rounds \
-  origin/codex/or-sigma0p1-mes-30rounds
-```
-
-If that local branch already exists, use:
-
-```bash
-git checkout codex/or-sigma0p1-mes-30rounds
-git pull --ff-only origin codex/or-sigma0p1-mes-30rounds
-```
-
-Verify the checkout:
-
-```bash
-git branch --show-current
-git status --short
-```
-
-## 2. Install The Environment
-
-With `uv` available:
-
-```bash
 uv sync --python 3.10 --extra cluster
 ```
 
-Without `uv`:
+Keep all remaining commands in this `deepdraw-or-mes` directory.
+
+## 2. Choose The Shared Output Directory
 
 ```bash
-python3.10 -m venv .venv
-.venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -e '.[cluster]'
-```
+umask 002
 
-All commands below deliberately use `.venv/bin/python` so Submitit records the
-same interpreter that will run on the compute nodes.
+export OR_SWEEP_ROOT="/storage2/wangzitongLab/share/deepdraw_opt/jerry/20260821_sigma0p1_mes_or_30rounds_${USER}"
+export SLURM_BIN=/soft/slurm/slurm-25.05.2_installation/bin
 
-## 3. Choose A Shared Output Directory
-
-Use a path without spaces that the submitting account can write and the analysis
-account can later read:
-
-```bash
-export OR_SWEEP_ROOT=/storage2/wangzitongLab/share/deepdraw_opt/SHARED_OWNER/or_sigma0p1_mes_30rounds
 mkdir -p "$OR_SWEEP_ROOT"
+test -w "$OR_SWEEP_ROOT"
+echo "$OR_SWEEP_ROOT"
 ```
 
-Replace `SHARED_OWNER` with the agreed shared location. Do not place outputs
-inside the Git checkout.
+Use this same `OR_SWEEP_ROOT` for the smoke test, full run, recovery, and final
+validation. Do not create a second output directory for retries.
 
-## 4. Validate Inputs And Preview The Full Submission
+## 3. Preview The Submission
 
-This command reads metadata headers and checks every subset and embedding path.
-It does not submit work:
+This checks the input files and prints the planned jobs. It does not submit
+anything.
 
 ```bash
 .venv/bin/python job_sub/submit_or_mes_allocations.py \
   --output-root "$OR_SWEEP_ROOT"
 ```
 
-A new output directory should report:
+For a new output directory, confirm that it reports:
 
 ```text
 datasets=33
@@ -115,19 +66,11 @@ active_tasks_skipped=0
 submit=False
 ```
 
-The default Slurm request is one CPU, 30 GB per task, 48 hours, QoS `huge`, and
-partitions `intel-sc3,amd-ep2,amd-ep5`. Override these when the account has
-different permissions, for example:
+Stop and report the error if input validation fails or these counts differ.
 
-```bash
---partitions amd-ep5 --qos huge --mem-per-cpu 30GB --timeout-min 2880
-```
+## 4. Run A Three-Job Smoke Test
 
-## 5. Submit A Three-Task Smoke Test
-
-This submits seed 0 from dataset 0 under all three allocations. The Python
-submission process runs on the login node, but all three experiments run as
-Slurm compute tasks.
+Submit seed 0 from the first dataset for all three allocation schemes:
 
 ```bash
 .venv/bin/python job_sub/submit_or_mes_allocations.py \
@@ -137,39 +80,14 @@ Slurm compute tasks.
   --submit
 ```
 
-The three array parent IDs are appended to:
-
-```text
-$OR_SWEEP_ROOT/submission_manifest.jsonl
-```
-
-Inspect their terminal state with the cluster's Slurm binary:
+Monitor the jobs:
 
 ```bash
-SLURM_BIN=/soft/slurm/slurm-25.05.2_installation/bin
-tail -n 3 "$OR_SWEEP_ROOT/submission_manifest.jsonl"
-$SLURM_BIN/squeue -u "$USER" -n dd_or_mes_24x1,dd_or_mes_12x2,dd_or_mes_8x3
+$SLURM_BIN/squeue -u "$USER" \
+  -n dd_or_mes_24x1,dd_or_mes_12x2,dd_or_mes_8x3
 ```
 
-After they leave `squeue`, obtain the three parent IDs and check accounting:
-
-```bash
-PARENTS=$(
-  tail -n 3 "$OR_SWEEP_ROOT/submission_manifest.jsonl" |
-  .venv/bin/python -c \
-    'import json,sys; print(",".join(json.loads(x)["array_parent_id"] for x in sys.stdin))'
-)
-$SLURM_BIN/sacct -X -j "$PARENTS" \
-  --format=JobIDRaw,JobName,State,Elapsed,ExitCode
-```
-
-All three parents must be `COMPLETED` with exit code `0:0`.
-
-## 6. Validate The Smoke Outputs On A Compute Node
-
-The validator checks all scientific invariants, including the 24-assay budget,
-replicate counts, four-state noise equation, replicate-averaged OR score,
-historical-score calibration, GP variance availability, and round counts.
+After all three jobs leave `squeue`, validate their outputs on a compute node:
 
 ```bash
 $SLURM_BIN/srun \
@@ -183,36 +101,61 @@ $SLURM_BIN/srun \
     --expected-runs 3
 ```
 
-Success prints `status=VALID` and writes:
+Continue only if the validator prints:
 
 ```text
-$OR_SWEEP_ROOT/validation_report.json
+status=VALID
 ```
 
-Do not launch the full sweep if this command reports `INVALID`.
+## 5. Submit The Full Sweep
 
-## 7. Submit The Full Sweep
-
-Run the short submission command in `tmux` so an SSH disconnect cannot interrupt
-the 99 parent submissions:
+Start a `tmux` session so the submission is not interrupted by an SSH
+disconnect:
 
 ```bash
 tmux new -s or_mes_submit
+```
+
+Inside `tmux`, run:
+
+```bash
 .venv/bin/python job_sub/submit_or_mes_allocations.py \
   --output-root "$OR_SWEEP_ROOT" \
   --submit
 ```
 
-The three completed smoke runs are detected and skipped, so this submits the
-remaining 2,967 tasks. Detach with `Ctrl-b`, then `d`.
+The scheduler will skip the three completed smoke runs and submit the remaining
+2,967 runs. After submission finishes, detach from `tmux` with `Ctrl-b`,
+followed by `d`.
 
-The scheduler also reads its manifest and skips tasks that are still pending or
-running. It is therefore safe to preview the command again while the sweep is
-active, but do not use a different output root for a recovery submission.
+## 6. Monitor The Run
 
-## 8. Validate And Aggregate The Complete Sweep
+Check the queue:
 
-Only run final validation after all `dd_or_mes_*` jobs have left `squeue`:
+```bash
+$SLURM_BIN/squeue -u "$USER" \
+  -n dd_or_mes_24x1,dd_or_mes_12x2,dd_or_mes_8x3
+```
+
+Count completed outputs:
+
+```bash
+find "$OR_SWEEP_ROOT" -name summary.json | wc -l
+```
+
+The final count must be `2970`.
+
+To preview missing runs without submitting anything, use:
+
+```bash
+.venv/bin/python job_sub/submit_or_mes_allocations.py \
+  --output-root "$OR_SWEEP_ROOT"
+```
+
+## 7. Validate And Aggregate The Complete Sweep
+
+Wait until all `dd_or_mes_*` jobs have left `squeue`. Then run the full
+validator on a compute node:
 
 ```bash
 $SLURM_BIN/srun \
@@ -226,10 +169,7 @@ $SLURM_BIN/srun \
     --expected-runs 2970
 ```
 
-The full validator additionally requires every one of the 2,970 unique
-dataset/allocation/seed combinations.
-
-After validation succeeds, aggregate all per-round summaries:
+Continue only if it prints `status=VALID`. Then aggregate the outputs:
 
 ```bash
 $SLURM_BIN/srun \
@@ -243,6 +183,23 @@ $SLURM_BIN/srun \
     --overwrite
 ```
 
-This creates one `combined_summaries.by_round.csv` under each allocation
-directory. Return the sweep path and `validation_report.json` to the analysis
-account.
+This creates `combined_summaries.by_round.csv` inside each allocation
+directory.
+
+## If A Job Fails
+
+1. Wait until the current OR jobs are no longer running or pending.
+2. Keep the same `OR_SWEEP_ROOT`.
+3. Run the preview command from Step 6 and report its missing-run count.
+4. Rerun the full submission command from Step 5.
+
+The scheduler preserves completed outputs and submits only genuinely missing
+runs. Do not manually delete completed run directories.
+
+## What To Send Back
+
+After validation and aggregation, send Jerry:
+
+- the value printed by `echo "$OR_SWEEP_ROOT"`
+- confirmation that the final validator printed `status=VALID`
+- `$OR_SWEEP_ROOT/validation_report.json`
