@@ -291,7 +291,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--seeds", default="all", help="Comma-separated seeds or 'all'."
     )
-    parser.add_argument("--partitions", default="intel-sc3,amd-ep2,amd-ep5")
+    parser.add_argument("--partitions", default="amd-ep2")
     parser.add_argument("--qos", default="huge")
     parser.add_argument("--mem-per-cpu", default="30GB")
     parser.add_argument("--timeout-min", type=int, default=2880)
