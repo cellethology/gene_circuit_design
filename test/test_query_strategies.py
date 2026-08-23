@@ -171,6 +171,18 @@ class TestBoTorchAcquisition:
         acq_class = strategy._resolve_acquisition_class()
         assert acq_class.__name__ == "qUpperConfidenceBound"
 
+    def test_maps_identical_candidates_to_distinct_pool_rows(self):
+        torch = pytest.importorskip("torch")
+        strategy = BoTorchAcquisition(acquisition="mes")
+        candidate_set = torch.tensor([[1.0, 2.0], [1.0, 2.0], [3.0, 4.0]])
+        candidates = torch.tensor([[1.0, 2.0], [1.0, 2.0]])
+
+        selected = strategy._map_candidates_to_indices(
+            torch, candidate_set, candidates
+        )
+
+        assert selected == [0, 1]
+
     def test_exact_discrete_falls_back_to_greedy_for_x_pending_errors(
         self, monkeypatch
     ):

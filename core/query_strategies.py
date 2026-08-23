@@ -438,10 +438,14 @@ class BoTorchAcquisition(QueryStrategyBase):
         indices: list[int] = []
         for cand in candidates:
             matches = (candidate_set == cand).all(dim=-1)
+            if indices:
+                matches[indices] = False
             if matches.any():
                 indices.append(int(matches.nonzero(as_tuple=True)[0][0]))
             else:
                 distances = torch.cdist(cand.unsqueeze(0), candidate_set)
+                if indices:
+                    distances[:, indices] = float("inf")
                 indices.append(int(distances.argmin(dim=1)[0]))
         return indices
 
